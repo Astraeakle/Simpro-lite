@@ -1,0 +1,45 @@
+// File: web/assets/css/dashboard.css
+/* Estilos para el dashboard */
+
+/* Widgets */
+.widget-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    margin-bottom: 1.5rem;
+}
+
+.widget-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.widget-card .card-header {
+    font-weight: 500;
+}
+
+/* Gráficos */
+.chart-container {
+    position: relative;
+    height: 300px;
+}
+
+/* Tablas en widgets */
+.widget-table {
+    font-size: 0.85rem;
+}
+
+.widget-table th {
+    background-color: #f8f9fa;
+    border-top: none;
+}
+
+/* Progress bars */
+.progress-thin {
+    height: 5px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .widget-card {
+        margin-bottom: 1rem;
+    }
+}

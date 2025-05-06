@@ -1,0 +1,65 @@
+// File: web/assets/css/tablas.css
+/* Estilos para tablas - SIMPRO Lite */
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    background-color: transparent;
+}
+
+table th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    vertical-align: bottom;
+    padding: .75rem;
+    text-align: left;
+}
+
+table td {
+    padding: .75rem;
+    vertical-align: top;
+    border-top: 1px solid #dee2e6;
+}
+
+table tr:hover td {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.table-sm th, .table-sm td {
+    padding: 0.3rem;
+}
+
+/* Colores para estados */
+.badge-estado {
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    border-radius: 0.25rem;
+}
+
+.badge-activo {
+    color: #fff;
+    background-color: #28a745;
+}
+
+.badge-inactivo {
+    color: #fff;
+    background-color: #6c757d;
+}
+
+.badge-pendiente {
+    color: #212529;
+    background-color: #ffc107;
+}

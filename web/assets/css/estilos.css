@@ -1,0 +1,35 @@
+// File: web/assets/css/login.css
+
+:root {
+    --primary: #3498db;
+    --secondary: #2ecc71;
+    --danger: #e74c3c;
+}
+
+body {
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.login-container {
+    max-width: 400px;
+    margin: 5% auto;
+}
+
+.logo {
+    max-height: 80px;
+    display: block;
+    margin: 0 auto;
+}
+
+.card {
+    border-radius: 10px;
+    border: none;
+}
+
+.widget-card {
+    transition: all 0.3s;
+}
+.widget-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}

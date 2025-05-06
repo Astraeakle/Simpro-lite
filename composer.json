@@ -1,0 +1,12 @@
+{
+    "_comment": ["File: composer.json"],
+    "require": {
+        "firebase/php-jwt": "^6.0",
+        "phpmailer/phpmailer": "^6.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Core\\": "web/core/"
+        }
+    }
+}

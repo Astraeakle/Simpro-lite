@@ -1,0 +1,71 @@
+# Ignorar archivos del sistema
+.DS_Store
+Thumbs.db
+*.lnk
+
+# Entorno XAMPP
+/xampp/
+*.log
+*.tmp
+
+# Configuraciones locales
+/web/config/config.php
+/monitor/config/config.json
+.env
+*.env.local
+
+# Base de datos y backups
+*.sql
+*.myd
+*.myi
+*.ibd
+/db/backups/
+
+# Logs del sistema
+/logs/*
+!/logs/.gitkeep
+/tmp/
+
+# Dependencias
+/vendor/
+/node_modules/
+/composer.lock
+package-lock.json
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Archivos de usuario
+/uploads/
+*.cache
+
+# Cliente Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de sesión PHP
+/session/
+
+# Archivos de depuración
+*.stackdump
+*.core
+
+# Archivos temporales de Windows
+~$*
+*.tmp
+*.temp
+
+# Archivos de desarrollo
+*.sublime-*
+*.code-workspace
+
+# Ignorar archivos de caché de VS Code
+.history/
+
+# Ignorar archivos de configuración personalizados
+*.user.ini

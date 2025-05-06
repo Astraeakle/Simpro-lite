@@ -1,0 +1,30 @@
+# File: web/.htaccess
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /Simpro-lite/web/
+    
+    # Evitar listado de directorios
+    Options -Indexes
+    
+    # Redirigir todo al router principal (excepto archivos reales)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php?ruta=$1 [QSA,L]
+    
+    # Bloquear archivos sensibles (regex mejorada)
+    <FilesMatch "\.(env|log|sql|config\.php|htaccess)$">
+        Require all denied
+    </FilesMatch>
+    
+    # Configuración PHP (solo si AllowOverride incluye Options/FileInfo)
+    <IfModule mod_php.c>
+        php_value upload_max_filesize 20M
+        php_value post_max_size 22M
+        php_value memory_limit 256M
+    </IfModule>
+</IfModule>
+
+# Manejo de errores (rutas relativas al directorio web)
+ErrorDocument 404 /simpro-lite/web/modulos/error/404.php
+ErrorDocument 403 /simpro-lite/web/modulos/error/403.php
+ErrorDocument 500 /simpro-lite/web/modulos/error/500.php

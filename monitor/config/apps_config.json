@@ -1,0 +1,27 @@
+ {
+    "__comment": "File: monitor/config/apps_config.json",
+    "apps_productivas": [
+        "chrome.exe",
+        "firefox.exe",
+        "code.exe",
+        "word.exe",
+        "excel.exe",
+        "powerpoint.exe",
+        "outlook.exe",
+        "teams.exe",
+        "zoom.exe",
+        "slack.exe"
+    ],
+    "apps_distractoras": [
+        "steam.exe",
+        "discord.exe",
+        "spotify.exe",
+        "netflix.exe",
+        "tiktok.exe",
+        "facebook.exe",
+        "twitter.exe",
+        "instagram.exe"
+    ],
+    "intervalo_monitoreo": 30,
+    "capturar_screenshots": false
+}
