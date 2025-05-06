@@ -6,27 +6,26 @@ document.addEventListener('DOMContentLoaded', function() {
         loginForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Limpiar mensajes de error anteriores
-            const errorDiv = document.getElementById('error-message');
-            if (errorDiv) {
-                errorDiv.style.display = 'none';
+            // Mostrar indicador de carga
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Procesando...';
+            submitBtn.disabled = true;
+            
+            // Ocultar mensajes previos
+            const mensajeDiv = document.getElementById('mensaje');
+            if (mensajeDiv) {
+                mensajeDiv.style.display = 'none';
             }
             
             // Obtener los datos del formulario
             const formData = {
-                usuario: this.querySelector('[name="usuario"]').value,
-                password: this.querySelector('[name="password"]').value
+                usuario: this.usuario.value,
+                password: this.password.value
             };
             
-            console.log('Intentando autenticar con:', formData.usuario);
-            
             try {
-                // Mostrar mensaje de carga
-                mostrarMensaje('Autenticando...', 'info');
-                
-                // Realizar la solicitud al servidor
-                console.log('Enviando solicitud a:', '/simpro-lite/api/v1/autenticar.php');
-                
+                // Realizar la solicitud de autenticación
                 const response = await fetch('/simpro-lite/api/v1/autenticar.php', {
                     method: 'POST',
                     headers: {
@@ -35,122 +34,94 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: JSON.stringify(formData)
                 });
                 
-                console.log('Código de estado HTTP:', response.status);
-                
-                // Primero obtenemos la respuesta como texto
+                // Primero leemos la respuesta como texto
                 const responseText = await response.text();
-                console.log('Respuesta recibida:', responseText);
                 
-                // Verificar si la respuesta está vacía
+                // Verificamos si hay contenido en la respuesta
                 if (!responseText.trim()) {
                     throw new Error('El servidor devolvió una respuesta vacía');
                 }
                 
-                // Intentar parsear el texto como JSON
+                // Intentamos parsear el texto como JSON
                 let data;
                 try {
                     data = JSON.parse(responseText);
-                    console.log('Datos JSON parseados:', data);
                 } catch (e) {
-                    console.error('Error al parsear JSON:', e);
+                    console.error('Error al parsear la respuesta JSON:', e);
+                    console.log('Respuesta recibida:', responseText);
                     throw new Error('La respuesta del servidor no es un JSON válido');
                 }
                 
+                // Verificar el resultado de la autenticación
                 if (data.success) {
-                    // Autenticación exitosa
-                    mostrarMensaje('Autenticación exitosa. Redirigiendo...', 'success');
-                    
-                    // Guardar el token y datos del usuario
+                    // Guardar el token y los datos del usuario
                     localStorage.setItem('auth_token', data.token);
                     localStorage.setItem('user_data', JSON.stringify(data.usuario));
                     
-                    // Redirigir después de un breve retraso
+                    // Mostrar mensaje de éxito
+                    mostrarMensaje('Autenticación exitosa. Redirigiendo...', 'success');
+                    
+                    // Redirigir al dashboard (usando la ruta correcta)
                     setTimeout(() => {
-                        window.location.href = '/simpro-lite/web/modulos/dashboard/main.php';
+                        window.location.href = '/simpro-lite/web/index.php?modulo=dashboard';
                     }, 1000);
                 } else {
-                    // Error de autenticación
-                    mostrarMensaje(data.error || 'Error en la autenticación', 'error');
+                    // Mostrar mensaje de error
+                    mostrarMensaje(data.error || 'Error en la autenticación', 'danger');
                 }
             } catch (error) {
-                console.error('Error:', error);
-                mostrarMensaje(error.message || 'Error de conexión con el servidor', 'error');
+                console.error('Error en la autenticación:', error);
+                mostrarMensaje(error.message || 'Error al conectar con el servidor', 'danger');
+            } finally {
+                // Restaurar el botón
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
             }
         });
     }
 });
 
-/**
- * Muestra un mensaje al usuario
- * @param {string} mensaje - El mensaje a mostrar
- * @param {string} tipo - Tipo de mensaje: 'error', 'success', 'info'
- */
-function mostrarMensaje(mensaje, tipo = 'error') {
-    // Buscar o crear el elemento de mensaje
-    let msgDiv = document.getElementById('mensaje');
-    
-    if (!msgDiv) {
-        msgDiv = document.createElement('div');
-        msgDiv.id = 'mensaje';
-        
-        const loginForm = document.getElementById('loginForm');
-        if (loginForm) {
-            loginForm.insertAdjacentElement('afterend', msgDiv);
-        } else {
-            document.body.appendChild(msgDiv);
-        }
-    }
-    
-    // Configurar el estilo según el tipo
-    let clase = 'alert ';
-    switch (tipo) {
-        case 'error':
-            clase += 'alert-danger';
-            break;
-        case 'success':
-            clase += 'alert-success';
-            break;
-        default:
-            clase += 'alert-info';
-    }
-    
-    msgDiv.className = clase;
-    msgDiv.textContent = mensaje;
-    msgDiv.style.display = 'block';
-    
-    // Auto-ocultar mensajes de éxito después de 3 segundos
-    if (tipo === 'success') {
-        setTimeout(() => {
-            msgDiv.style.display = 'none';
-        }, 3000);
+// Función para mostrar mensajes
+function mostrarMensaje(mensaje, tipo) {
+    const mensajeDiv = document.getElementById('mensaje');
+    if (mensajeDiv) {
+        mensajeDiv.textContent = mensaje;
+        mensajeDiv.className = `alert alert-${tipo}`;
+        mensajeDiv.style.display = 'block';
     }
 }
 
-// Verificar si hay un token al cargar la página
+// Verificar si hay un token almacenado al cargar la página
 function verificarAutenticacion() {
     const token = localStorage.getItem('auth_token');
     
+    // Verificar si estamos en la página de login
+    const esLoginPage = window.location.pathname.includes('/auth/login') || 
+                        window.location.pathname.endsWith('/simpro-lite/web/') ||
+                        window.location.pathname.endsWith('/simpro-lite/web/index.php');
+    
     if (token) {
-        // Si estamos en la página de login y ya hay token, redirigir al dashboard
-        if (window.location.pathname.includes('/auth/login')) {
-            window.location.href = '/simpro-lite/web/modulos/dashboard/main.php';
+        // Si estamos en la página de login pero ya hay un token, redirigir al dashboard
+        if (esLoginPage) {
+            window.location.href = '/simpro-lite/web/index.php?modulo=dashboard';
         }
     } else {
         // Si no hay token y no estamos en login, redirigir a login
-        if (!window.location.pathname.includes('/auth/login')) {
-            window.location.href = '/simpro-lite/web/modulos/auth/login.php';
+        if (!esLoginPage) {
+            window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login';
         }
     }
 }
 
-/**
- * Cerrar sesión eliminando el token
- */
+// Función para cerrar sesión
 function cerrarSesion() {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_data');
-    window.location.href = '/simpro-lite/web/modulos/auth/login.php';
+    window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login';
 }
+
+// Verificar autenticación al cargar el script (comentado para hacer pruebas iniciales)
+// verificarAutenticacion();
 
 // Exportar funciones para uso en otros scripts
 window.Auth = {
@@ -162,6 +133,3 @@ window.Auth = {
         return userData ? JSON.parse(userData) : null;
     }
 };
-
-// Verificar autenticación al cargar el script (opcional)
-// verificarAutenticacion();

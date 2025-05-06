@@ -1,39 +1,66 @@
-<!-- File: web/includes/header.php -->
-<?php defined('SIMPRO') or die('Acceso directo no permitido'); ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIMPRO Lite | <?= $titulo ?? 'Inicio' ?></title>
+    <title>SimPro Lite - Sistema de Monitoreo</title>
+    
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <link href="/assets/css/estilos.css" rel="stylesheet">
-    <?php if (isset($css_extra)): ?>
-        <link href="<?= $css_extra ?>" rel="stylesheet">
-    <?php endif; ?>
+    
+    <!-- Font Awesome para iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Estilos propios -->
+    <link rel="stylesheet" href="/simpro-lite/web/assets/css/estilos.css">
+    <link rel="stylesheet" href="/simpro-lite/web/assets/css/tablas.css">
+    <link rel="stylesheet" href="/simpro-lite/web/assets/css/dashboard.css">
+    
+    <!-- Scripts comunes -->
+    <script src="/simpro-lite/web/assets/js/auth.js"></script>
+    
+    <!-- Script para verificar autenticación -->
+    <script>
+        // Verificar si el usuario está autenticado
+        if (!localStorage.getItem('auth_token')) {
+            window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login';
+        }
+    </script>
 </head>
 <body>
-    <header class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-        <div class="container">
-            <a class="navbar-brand" href="/dashboard">
-                <i class="bi bi-graph-up"></i> SIMPRO Lite
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarMain">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar / Navegación -->
+            <div class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
                 <?php include 'nav.php'; ?>
-                <div class="ms-auto d-flex">
-                    <span class="navbar-text me-3">
-                        <i class="bi bi-person-circle"></i> <?= $_SESSION['usuario_nombre'] ?? 'Invitado' ?>
-                    </span>
-                    <a href="/logout" class="btn btn-outline-light btn-sm">
-                        <i class="bi bi-box-arrow-right"></i> Salir
-                    </a>
-                </div>
             </div>
-        </div>
-    </header>
-    <main class="container py-4">
-        <?php include 'alerts.php'; ?>
+            
+            <!-- Contenido principal -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <!-- Header superior -->
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">
+                        <?php 
+                        // Título dinámico según la página
+                        $modulo = isset($_GET['modulo']) ? ucfirst($_GET['modulo']) : 'Dashboard';
+                        echo $modulo;
+                        ?>
+                    </h1>
+                    
+                    <!-- Info de usuario y botón logout -->
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <div class="dropdown me-2">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user-circle me-1"></i>
+                                <span id="nombreUsuario">Usuario</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="/simpro-lite/web/index.php?modulo=admin&vista=config">Configuración</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#" onclick="Auth.cerrarSesion()">Cerrar sesión</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Aquí se incluirá el contenido de cada vista -->

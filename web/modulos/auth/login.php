@@ -53,10 +53,6 @@
                 <!-- Contenedor para mensajes -->
                 <div id="mensaje" class="alert" style="display: none;"></div>
                 
-                <!-- Información de ayuda -->
-                <div class="mt-3 text-center">
-                    <small class="text-muted">Usuario de prueba: admin / Contraseña: admin123</small>
-                </div>
             </div>
         </div>
     </div>

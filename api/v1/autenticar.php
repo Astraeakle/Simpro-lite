@@ -48,24 +48,66 @@ if (!isset($data['usuario']) || !isset($data['password'])) {
     exit;
 }
 
-// Verificar credenciales (en un caso real, consultar la base de datos)
-if ($data['usuario'] === 'admin' && $data['password'] === 'admin123') {
-    // Autenticación exitosa
-    $token = bin2hex(random_bytes(16)); // Token simplificado
+// Incluir el archivo de configuración de la base de datos
+require_once __DIR__ . '/../../web/config/config.php';
+
+try {
+    // Crear conexión PDO usando las constantes definidas en config.php
+    $pdo = new PDO(
+        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        DB_USER,
+        DB_PASSWORD, 
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    );
     
-    $response = [
-        'success' => true,
-        'token' => $token,
-        'expira' => time() + 86400, // 24 horas
-        'usuario' => [
-            'id' => 1,
-            'nombre' => 'Administrador',
-            'rol' => 'admin'
-        ]
-    ];
+    // Consulta preparada para evitar inyección SQL
+    $stmt = $pdo->prepare("SELECT id_usuario, nombre_usuario, nombre_completo, contraseña_hash, rol, estado FROM usuarios WHERE nombre_usuario = :usuario LIMIT 1");
+    $stmt->execute(['usuario' => $data['usuario']]);
+    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    echo json_encode($response);
-} else {
-    // Credenciales inválidas
-    echo json_encode(['success' => false, 'error' => 'Credenciales inválidas']);
+    // Verificar si existe el usuario
+    if (!$usuario) {
+        echo json_encode(['success' => false, 'error' => 'Usuario no encontrado']);
+        exit;
+    }
+    
+    // Verificar si el usuario está activo
+    if ($usuario['estado'] !== 'activo') {
+        echo json_encode(['success' => false, 'error' => 'Cuenta de usuario inactiva']);
+        exit;
+    }
+    
+    // Verificar contraseña con password_verify (para contraseñas hasheadas)
+    if (password_verify($data['password'], $usuario['contraseña_hash'])) {
+        // Generar token
+        $token = bin2hex(random_bytes(16));
+        $expira = time() + 86400; // 24 horas
+        
+        // Actualizar último acceso
+        $stmt = $pdo->prepare("UPDATE usuarios SET ultimo_acceso = NOW() WHERE id_usuario = :id");
+        $stmt->execute(['id' => $usuario['id_usuario']]);
+        
+        // Respuesta exitosa
+        $response = [
+            'success' => true,
+            'token' => $token,
+            'expira' => $expira,
+            'usuario' => [
+                'id' => $usuario['id_usuario'],
+                'nombre' => $usuario['nombre_usuario'],
+                'nombre_completo' => $usuario['nombre_completo'],
+                'rol' => $usuario['rol']
+            ]
+        ];
+        echo json_encode($response);
+    } else {
+        // Contraseña incorrecta
+        echo json_encode(['success' => false, 'error' => 'Credenciales inválidas']);
+    }
+
+} catch (PDOException $e) {
+    // Error en la base de datos
+    error_log("Error de BD: " . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Error de servidor: ' . $e->getMessage()]);
 }
+?>

@@ -1,59 +1,36 @@
 // File: web/assets/js/dashboard.js
-/**
- * Funciones para el dashboard principal
- */
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Actualizar widgets cada 30 segundos
-    setInterval(actualizarWidgets, 30000);
-    
-    // Manejar registro de asistencia
-    const btnRegistro = document.getElementById('btnRegistro');
-    if (btnRegistro) {
-        btnRegistro.addEventListener('click', registrarAsistencia);
-    }
-});
-
-function actualizarWidgets() {
-    // Implementar actualización de widgets via AJAX
-    console.log('Actualizando widgets...');
-}
-
-function registrarAsistencia() {
-    if (!navigator.geolocation) {
-        alert('Geolocalización no soportada en tu navegador');
+    // Verificar autenticación
+    if (!Auth.getToken()) {
+        window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login';
         return;
     }
     
-    const tipo = confirm('¿Estás registrando tu ENTRADA? (Aceptar = Sí, Cancelar = Salida)') ? 
-        'entrada' : 'salida';
+    // Cargar datos del usuario
+    const userData = Auth.getUserData();
+    console.log('Usuario autenticado:', userData);
     
-    navigator.geolocation.getCurrentPosition(
-        position => {
-            const datos = {
-                tipo: tipo,
-                latitud: position.coords.latitude,
-                longitud: position.coords.longitude,
-                dispositivo: navigator.userAgent
-            };
-            
-            fetch('/api/v1/asistencia', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + localStorage.getItem('auth_token')
-                },
-                body: JSON.stringify(datos)
-            })
-            .then(response => {
-                if (response.ok) {
-                    location.reload();
-                }
-            });
-        },
-        error => {
-            alert('Error al obtener ubicación: ' + error.message);
-        },
-        { enableHighAccuracy: true }
-    );
+    // Funciones de inicialización del dashboard
+    initDashboard();
+});
+
+// Función para inicializar el dashboard
+function initDashboard() {
+    // Aquí irían las llamadas a la API para cargar datos
+    console.log('Iniciando dashboard...');
+    
+    // Por ejemplo, podríamos cargar estadísticas o datos de los widgets
+    cargarEstadisticas();
+}
+
+// Función para cargar estadísticas
+function cargarEstadisticas() {
+    // En una implementación real, esto haría una llamada a la API
+    console.log('Cargando estadísticas...');
+    
+    // Ejemplo simulado
+    setTimeout(() => {
+        console.log('Estadísticas cargadas');
+    }, 1000);
 }
