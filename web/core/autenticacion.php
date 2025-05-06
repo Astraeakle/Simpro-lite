@@ -16,39 +16,37 @@ class Autenticacion {
     public static function login($usuario, $password) {
         $usuario = limpiarEntrada($usuario);
         
-        // Obtener usuario por usuario
-        $db = DB::conectar();
-        $sql = "SELECT id_usuario, nombre_completo, contraseña_hash, rol
-                FROM usuarios
-                WHERE nombre_usuario = ?";
-        
-        $stmt = DB::query($sql, [$usuario], "s");
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows === 1) {
-            $usuario = $result->fetch_assoc();
+        try {
+            $db = DB::conectar();
+            $sql = "SELECT id_usuario, nombre_usuario, nombre_completo, contraseña_hash, rol 
+                    FROM usuarios 
+                    WHERE nombre_usuario = ? AND estado = 'activo'";
             
-            // Verificar contraseña
-            if (password_verify($password, $usuario['contraseña_hash'])) {
-                // Iniciar sesión
-                session_start();
-                $_SESSION['usuario_id'] = $usuario['id_usuario'];
-                $_SESSION['usuario_nombre'] = $usuario['nombre_completo'];
-                $_SESSION['usuario'] = $usuario['nombre_usuario']; 
-                $_SESSION['usuario_rol'] = $usuario['rol'];
-                $_SESSION['ultimo_acceso'] = time();
+            $stmt = DB::query($sql, [$usuario], "s");
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 1) {
+                $usuarioData = $result->fetch_assoc();
                 
-                // Registrar el inicio de sesión
-                registrarLog("Inicio de sesión: {$usuario['usuario']}", 'auth');
-                
-                return $usuario;
+                if (password_verify($password, $usuarioData['contraseña_hash'])) {
+                    session_start();
+                    $_SESSION['usuario_id'] = $usuarioData['id_usuario'];
+                    $_SESSION['usuario_nombre'] = $usuarioData['nombre_completo'];
+                    $_SESSION['usuario_rol'] = $usuarioData['rol'];
+                    
+                    return true;
+                }
             }
+            
+            registrarLog("Intento fallido de login para: $usuario", 'auth');
+            return false;
+            
+        } catch (Exception $e) {
+            registrarLog("Error en login: " . $e->getMessage(), 'error');
+            return false;
         }
-        
-        registrarLog("Intento fallido de inicio de sesión: $usuario", 'error');
-        return false;
     }
-    
+        
     /**
      * Cerrar sesión de usuario
      */

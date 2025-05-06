@@ -1,36 +1,37 @@
 # File: api/.htaccess
 
-# ACTIVAR REWRITE ENGINE (debe estar primero)
+# Activar el motor de reescritura
 RewriteEngine On
 RewriteBase /simpro-lite/api/
 
-# REGLAS CORS (deben estar fuera de IfModule para garantizar funcionamiento)
-Header always set Access-Control-Allow-Origin "*"
-Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+# Configuración CORS
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+    
+    # Manejar solicitudes preflight OPTIONS
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=200,L]
+</IfModule>
 
-# REGLAS DE REWRITE (solo si el módulo está disponible)
+# Reglas de reescritura
 <IfModule mod_rewrite.c>
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^v1/(.*)$ v1/router.php?endpoint=$1 [QSA,L]
+    RewriteRule ^(.*)$ index.php [QSA,L]
 </IfModule>
 
-# SEGURIDAD BÁSICA
+# Seguridad básica
 Options -Indexes -MultiViews
 
-# PROTECCIÓN DE ARCHIVOS
+# Protección de archivos
 <FilesMatch "\.(env|config|sql|htaccess)$">
     Require all denied
 </FilesMatch>
 
-# COMPATIBILIDAD CON PHP
-<IfModule php_module>
+# Configuración PHP
+<IfModule mod_php.c>
     php_value upload_max_filesize 20M
     php_value post_max_size 20M
 </IfModule>
-
-# Configuración CORS
-Header always set Access-Control-Allow-Origin "*"
-Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-Header always set Access-Control-Allow-Headers "Content-Type, Authorization"

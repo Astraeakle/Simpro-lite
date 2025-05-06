@@ -1,51 +1,66 @@
 <!-- File: web/modulos/auth/login.php -->
-<div class="login-container">
-    <div class="card shadow-lg">
-        <div class="card-body p-5">
-            <img src="/simpro-lite/assets/img/logo.png" class="logo mb-4">
-            <form id="loginForm" method="post" action="/simpro-lite/api/v1/autenticar">
-                <div class="mb-3">
-                    <input type="text" class="form-control" name="usuario" placeholder="Usuario" required>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - SimPro Lite</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+        }
+        .card {
+            border-radius: 10px;
+            border: none;
+        }
+        .logo {
+            max-height: 80px;
+            display: block;
+            margin: 0 auto 20px;
+        }
+        #mensaje {
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="card shadow-lg">
+            <div class="card-body p-5">
+                <h3 class="text-center mb-4">SimPro Lite</h3>
+                
+                <form id="loginForm">
+                    <div class="mb-3">
+                        <label for="usuario" class="form-label">Usuario</label>
+                        <input type="text" class="form-control" id="usuario" name="usuario" placeholder="Ingrese su usuario" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Contraseña</label>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Ingrese su contraseña" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Ingresar</button>
+                </form>
+                
+                <!-- Contenedor para mensajes -->
+                <div id="mensaje" class="alert" style="display: none;"></div>
+                
+                <!-- Información de ayuda -->
+                <div class="mt-3 text-center">
+                    <small class="text-muted">Usuario de prueba: admin / Contraseña: admin123</small>
                 </div>
-                <div class="mb-3">
-                    <input type="password" class="form-control" name="password" placeholder="Contraseña" required>
-                </div>
-                <button type="submit" class="btn btn-primary w-100">Ingresar</button>
-            </form>
+            </div>
         </div>
     </div>
-</div>
 
-<script>
-document.getElementById('loginForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const formData = {
-        usuario: this.usuario.value,
-        password: this.password.value
-    };
-
-    try {
-        const response = await fetch(this.action, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        });
-
-        const data = await response.json();
-        
-        if (response.ok) {
-            // Guardar el token y redirigir
-            localStorage.setItem('auth_token', data.token);
-            window.location.href = '/simpro-lite/web/dashboard';
-        } else {
-            alert(data.error || 'Error en la autenticación');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error al conectar con el servidor');
-    }
-});
-</script>
+    <script src="/simpro-lite/web/assets/js/auth.js"></script>
+</body>
+</html>
