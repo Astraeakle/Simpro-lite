@@ -15,18 +15,17 @@ $vista = isset($_GET['vista']) ? $_GET['vista'] : 'login';
 // Lista de módulos que no requieren autenticación
 $modulosPublicos = ['auth'];
 
-// Verificar autenticación para módulos protegidos
+// Verificar autenticación para módulos protegidos (PHP side check)
+// Nota: La verificación principal se hace con JavaScript en el cliente
 if (!in_array($modulo, $modulosPublicos)) {
-    // Verificar si existe el token en la sesión (para futuras implementaciones de sesión en servidor)
+    // Este es solo un respaldo por si JavaScript está deshabilitado
+    // La verificación real se hace en auth.js
+    
+    // Si se implementa verificación de token en el servidor, se haría aquí
+    // Por ahora solo verificamos si existe la cookie de sesión como respaldo
     $autenticado = isset($_SESSION['auth_token']) && !empty($_SESSION['auth_token']);
     
-    // Si no está autenticado, redirigir al login
-    if (!$autenticado) {
-        // La verificación real se hace con JavaScript en el cliente
-        // Este es solo un respaldo por si el JS está deshabilitado
-        header('Location: index.php?modulo=auth&vista=login');
-        exit;
-    }
+    // No redirigimos aquí, dejamos que el JavaScript se encargue
 }
 
 // Construir la ruta del archivo

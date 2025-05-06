@@ -3,64 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SimPro Lite - Sistema de Monitoreo</title>
-    
+    <title>SimPro Lite - Sistema de Monitoreo de Productividad</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Font Awesome para iconos -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
-    <!-- Estilos propios -->
-    <link rel="stylesheet" href="/simpro-lite/web/assets/css/estilos.css">
-    <link rel="stylesheet" href="/simpro-lite/web/assets/css/tablas.css">
-    <link rel="stylesheet" href="/simpro-lite/web/assets/css/dashboard.css">
-    
-    <!-- Scripts comunes -->
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="/simpro-lite/web/assets/css/styles.css" rel="stylesheet">
+    <!-- Auth.js - Cargado antes para verificar autenticación inmediatamente -->
     <script src="/simpro-lite/web/assets/js/auth.js"></script>
-    
-    <!-- Script para verificar autenticación -->
-    <script>
-        // Verificar si el usuario está autenticado
-        if (!localStorage.getItem('auth_token')) {
-            window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login';
-        }
-    </script>
 </head>
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar / Navegación -->
-            <div class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
-                <?php include 'nav.php'; ?>
-            </div>
+    <!-- Verificación de autenticación -->
+    <script>
+        // Verificar autenticación al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            // Verificar si el usuario está autenticado
+            if (typeof Auth !== 'undefined') {
+                Auth.verificarAutenticacion();
+            } else {
+                console.error('Módulo Auth no disponible');
+            }
+        });
+    </script>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/simpro-lite/web/index.php?modulo=dashboard">
+                <i class="fas fa-chart-line me-2"></i>SimPro Lite
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+                <span class="navbar-toggler-icon"></span>
+            </button>
             
-            <!-- Contenido principal -->
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-                <!-- Header superior -->
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">
-                        <?php 
-                        // Título dinámico según la página
-                        $modulo = isset($_GET['modulo']) ? ucfirst($_GET['modulo']) : 'Dashboard';
-                        echo $modulo;
-                        ?>
-                    </h1>
-                    
-                    <!-- Info de usuario y botón logout -->
-                    <div class="btn-toolbar mb-2 mb-md-0">
-                        <div class="dropdown me-2">
-                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user-circle me-1"></i>
-                                <span id="nombreUsuario">Usuario</span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                                <li><a class="dropdown-item" href="/simpro-lite/web/index.php?modulo=admin&vista=config">Configuración</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="#" onclick="Auth.cerrarSesion()">Cerrar sesión</a></li>
-                            </ul>
-                        </div>
+            <div class="collapse navbar-collapse" id="navbarMain">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/simpro-lite/web/index.php?modulo=dashboard">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/simpro-lite/web/index.php?modulo=reportes&vista=listado">
+                            <i class="fas fa-file-alt me-1"></i>Reportes
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog me-1"></i>Configuración
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/simpro-lite/web/index.php?modulo=configuracion&vista=usuarios">Usuarios</a></li>
+                            <li><a class="dropdown-item" href="/simpro-lite/web/index.php?modulo=configuracion&vista=aplicaciones">Aplicaciones</a></li>
+                            <li><a class="dropdown-item" href="/simpro-lite/web/index.php?modulo=configuracion&vista=sistema">Sistema</a></li>
+                        </ul>
+                    </li>
+                </ul>
+                
+                <!-- Usuario y botón de cierre de sesión -->
+                <div class="d-flex align-items-center">
+                    <div class="dropdown">
+                        <a class="nav-link dropdown-toggle text-white" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle me-1"></i><span id="nombreUsuario">Usuario</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/simpro-lite/web/index.php?modulo=perfil&vista=editar">Mi Perfil</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="Auth.cerrarSesion()">Cerrar Sesión</a></li>
+                        </ul>
                     </div>
                 </div>
-                
-                <!-- Aquí se incluirá el contenido de cada vista -->
+            </div>
+        </div>
+    </nav>
+
+    <!-- Script para mostrar el nombre del usuario -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Mostrar nombre de usuario en la barra de navegación
+            const userData = localStorage.getItem('user_data');
+            if (userData) {
+                const user = JSON.parse(userData);
+                const nombreElement = document.getElementById('nombreUsuario');
+                if (nombreElement) {
+                    nombreElement.textContent = user.nombre_completo || user.nombre;
+                }
+            }
+        });
+    </script>
+    
+    <!-- Contenido principal -->
+    <main class="container-fluid py-4">
+        <!-- Aquí se insertará el contenido específico de cada página -->

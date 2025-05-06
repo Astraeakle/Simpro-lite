@@ -79,6 +79,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Ejecutar verificación de autenticación al cargar la página
+    verificarAutenticacion();
 });
 
 // Función para mostrar mensajes
@@ -95,19 +98,36 @@ function mostrarMensaje(mensaje, tipo) {
 function verificarAutenticacion() {
     const token = localStorage.getItem('auth_token');
     
+    // Obtener la ruta actual
+    const currentPath = window.location.pathname;
+    const currentParams = new URLSearchParams(window.location.search);
+    const currentModulo = currentParams.get('modulo');
+    const currentVista = currentParams.get('vista');
+    
     // Verificar si estamos en la página de login
-    const esLoginPage = window.location.pathname.includes('/auth/login') || 
-                        window.location.pathname.endsWith('/simpro-lite/web/') ||
-                        window.location.pathname.endsWith('/simpro-lite/web/index.php');
+    const esLoginPage = (currentPath.includes('/auth/login') || 
+                        currentModulo === 'auth' && currentVista === 'login' ||
+                        currentPath.endsWith('/simpro-lite/web/') ||
+                        currentPath.endsWith('/simpro-lite/web/index.php') && !currentModulo);
+    
+    console.log('Estado de autenticación:', { 
+        token: !!token, 
+        esLoginPage, 
+        path: currentPath, 
+        modulo: currentModulo, 
+        vista: currentVista 
+    });
     
     if (token) {
         // Si estamos en la página de login pero ya hay un token, redirigir al dashboard
         if (esLoginPage) {
+            console.log('Usuario autenticado redirigiendo al dashboard');
             window.location.href = '/simpro-lite/web/index.php?modulo=dashboard';
         }
     } else {
         // Si no hay token y no estamos en login, redirigir a login
         if (!esLoginPage) {
+            console.log('Usuario no autenticado redirigiendo a login');
             window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login';
         }
     }
@@ -119,9 +139,6 @@ function cerrarSesion() {
     localStorage.removeItem('user_data');
     window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login';
 }
-
-// Verificar autenticación al cargar el script (comentado para hacer pruebas iniciales)
-// verificarAutenticacion();
 
 // Exportar funciones para uso en otros scripts
 window.Auth = {
