@@ -13,6 +13,7 @@ merged_code.txt
 /web/config/config.php
 /monitor/config/config.json
 .env
+/venv/
 *.env.local
 
 # Base de datos y backups
