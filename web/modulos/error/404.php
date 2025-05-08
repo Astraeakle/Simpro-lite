@@ -20,7 +20,7 @@ $isLoggedIn = !empty($userData);
                 <a href="/simpro-lite/web/index.php?modulo=dashboard" class="btn btn-primary me-2">
                     <i class="fas fa-home"></i> Ir al Dashboard
                 </a>
-                <a href="javascript:void(0)" class="btn btn-outline-danger" id="btnLogout">
+                <a href="javascript:void(0)" class="btn btn-outline-danger btn-logout">
                     <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
                 </a>
             </div>
@@ -32,6 +32,29 @@ $isLoggedIn = !empty($userData);
         </div>
     </div>
 </div>
+
+<script>
+// Script específico para asegurar que el botón de cerrar sesión funcione en la página 404
+document.addEventListener('DOMContentLoaded', function() {
+    const logoutButtons = document.querySelectorAll('.btn-logout');
+    logoutButtons.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Eliminar datos del localStorage
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            
+            // Eliminar cookies
+            document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            document.cookie = "user_data=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            
+            // Redirigir a la página de logout
+            window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=logout';
+        });
+    });
+});
+</script>
 
 <?php
 // NOTA: No incluimos el footer porque ya lo incluye el index.php principal

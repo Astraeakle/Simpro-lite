@@ -29,7 +29,7 @@ if (!in_array($modulo, $modulosPublicos) && empty($userData)) {
 $incluirHeaderFooter = true;
 
 // Algunos módulos pueden manejar su propio header/footer
-if ($modulo == 'auth' && $vista == 'logout') {
+if ($modulo == 'auth' && ($vista == 'logout' || $vista == 'login')) {
     $incluirHeaderFooter = false;
 }
 
