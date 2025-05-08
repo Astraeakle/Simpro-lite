@@ -1,4 +1,5 @@
 <?php
+// File: web/modulos/dashboard/index.php
 // Verificar que este archivo se está ejecutando correctamente
 ?>
 <div class="container-fluid">
