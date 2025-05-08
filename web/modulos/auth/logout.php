@@ -1,5 +1,6 @@
 <?php
 // File: web/modulos/auth/logout.php
+
 // Destruir la sesión PHP
 session_start();
 session_destroy();
@@ -21,6 +22,7 @@ if (isset($_COOKIE['user_data'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cerrando sesión - SimPro Lite</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container mt-5 text-center">

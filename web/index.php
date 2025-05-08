@@ -1,51 +1,49 @@
 <?php
-// File: web/index.php
-
-// Iniciar sesión para manejo de variables de sesión
+// Archivo: web/index.php
 session_start();
-
-// Incluir archivos de configuración
-require_once 'config/config.php';
-require_once 'config/database.php';
-
-// Definir módulo y vista por defecto
+// Incluir configuración y funciones principales
+require_once __DIR__ . '/config/config.php';
+// Determinar qué módulo y vista cargar
 $modulo = isset($_GET['modulo']) ? $_GET['modulo'] : 'auth';
 $vista = isset($_GET['vista']) ? $_GET['vista'] : 'login';
+// Verificar si el módulo y vista existen
+$archivoModulo = __DIR__ . "/modulos/{$modulo}/{$vista}.php";
+// Si el archivo no existe, cargar página 404
+if (!file_exists($archivoModulo)) {
+    $modulo = 'error';
+    $vista = '404';
+    $archivoModulo = __DIR__ . "/modulos/{$modulo}/{$vista}.php";
+}
+// Verificar si el usuario está autenticado para módulos protegidos
+$modulosPublicos = ['auth', 'error'];
+$userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
 
-// Lista de módulos que no requieren autenticación
-$modulosPublicos = ['auth'];
-
-// Verificar autenticación para módulos protegidos (PHP side check)
-// Nota: La verificación principal se hace con JavaScript en el cliente
-if (!in_array($modulo, $modulosPublicos)) {
-    // Este es solo un respaldo por si JavaScript está deshabilitado
-    // La verificación real se hace en auth.js
-    
-    // Si se implementa verificación de token en el servidor, se haría aquí
-    // Por ahora solo verificamos si existe la cookie de sesión como respaldo
-    $autenticado = isset($_SESSION['auth_token']) && !empty($_SESSION['auth_token']);
-    
-    // No redirigimos aquí, dejamos que el JavaScript se encargue
+if (!in_array($modulo, $modulosPublicos) && empty($userData)) {
+    // Redirigir a login si no está autenticado
+    header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
+    exit;
 }
 
-// Construir la ruta del archivo
-$rutaArchivo = "modulos/{$modulo}/{$vista}.php";
+// Incluir encabezado y navegación solo para módulos que no son de autenticación o son de error 404
+// Y no incluirlos si ya han sido incluidos por el módulo específico
+$incluirHeaderFooter = true;
 
-// Incluir el header para todas las páginas excepto login
-if ($modulo !== 'auth' || $vista !== 'login') {
-    include 'includes/header.php';
+// Algunos módulos pueden manejar su propio header/footer
+if ($modulo == 'auth' && $vista == 'logout') {
+    $incluirHeaderFooter = false;
 }
 
-// Verificar si el archivo existe
-if (file_exists($rutaArchivo)) {
-    include $rutaArchivo;
-} else {
-    // Si no existe el archivo, mostrar página de error
-    include 'modulos/error/404.php';
+// Incluir header si corresponde
+if ($incluirHeaderFooter) {
+    include_once __DIR__ . '/includes/header.php';
+    include_once __DIR__ . '/includes/nav.php';
 }
 
-// Incluir el footer para todas las páginas excepto login
-if ($modulo !== 'auth' || $vista !== 'login') {
-    include 'includes/footer.php';
+// Cargar el archivo del módulo
+include_once $archivoModulo;
+
+// Incluir footer si corresponde
+if ($incluirHeaderFooter) {
+    include_once __DIR__ . '/includes/footer.php';
 }
 ?>

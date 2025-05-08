@@ -5,11 +5,14 @@
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
 $nombreUsuario = isset($userData['nombre_completo']) ? $userData['nombre_completo'] : 'Usuario';
 $rolUsuario = isset($userData['rol']) ? $userData['rol'] : '';
+
+// Determinar si el usuario está autenticado
+$isAuthenticated = !empty($userData);
 ?>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="/simpro-lite/web/index.php?modulo=dashboard">
+        <a class="navbar-brand" href="/simpro-lite/web/index.php<?php echo $isAuthenticated ? '?modulo=dashboard' : ''; ?>">
             <i class="fas fa-chart-line mr-2"></i> SimPro Lite
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" 
@@ -17,6 +20,7 @@ $rolUsuario = isset($userData['rol']) ? $userData['rol'] : '';
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarMain">
+            <?php if ($isAuthenticated): ?>
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
                     <a class="nav-link" href="/simpro-lite/web/index.php?modulo=dashboard">
@@ -56,13 +60,22 @@ $rolUsuario = isset($userData['rol']) ? $userData['rol'] : '';
                         <li><a class="dropdown-item" href="/simpro-lite/web/index.php?modulo=perfil&vista=index">Mi Perfil</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
-                            <a class="dropdown-item" href="#" onclick="Auth.cerrarSesion(); return false;">
+                            <a class="dropdown-item" href="#" id="btnLogout">
                                 <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
                             </a>
                         </li>
                     </ul>
                 </li>
             </ul>
+            <?php else: ?>
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/simpro-lite/web/index.php?modulo=auth&vista=login">
+                        <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+                    </a>
+                </li>
+            </ul>
+            <?php endif; ?>
         </div>
     </div>
 </nav>

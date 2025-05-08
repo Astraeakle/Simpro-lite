@@ -5,9 +5,7 @@
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
 $isLoggedIn = !empty($userData);
 
-// Incluir el header y la navegación
-include_once __DIR__ . '/../../includes/header.php';
-include_once __DIR__ . '/../../includes/nav.php';
+// NOTA: No incluimos el header y nav porque ya los incluye el index.php principal
 ?>
 
 <div class="container py-5">
@@ -22,7 +20,7 @@ include_once __DIR__ . '/../../includes/nav.php';
                 <a href="/simpro-lite/web/index.php?modulo=dashboard" class="btn btn-primary me-2">
                     <i class="fas fa-home"></i> Ir al Dashboard
                 </a>
-                <a href="/simpro-lite/web/index.php?modulo=auth&vista=logout" class="btn btn-outline-danger">
+                <a href="javascript:void(0)" class="btn btn-outline-danger" id="btnLogout">
                     <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
                 </a>
             </div>
@@ -36,6 +34,5 @@ include_once __DIR__ . '/../../includes/nav.php';
 </div>
 
 <?php
-// Incluir el footer
-include_once __DIR__ . '/../../includes/footer.php';
+// NOTA: No incluimos el footer porque ya lo incluye el index.php principal
 ?>
