@@ -65,6 +65,12 @@ function registrarLog($mensaje, $tipo = 'info', $id_usuario = null) {
     }
 }
 
+// Validar tipo de registro
+function validarTipoRegistro($tipo) {
+    $tiposValidos = ['entrada', 'salida', 'break', 'fin_break'];
+    return in_array($tipo, $tiposValidos);
+}
+
 try {
     // Incluir middleware de seguridad
     require_once __DIR__ . '/middleware.php';
@@ -109,6 +115,11 @@ try {
             manejarError('Campos requeridos faltantes: ' . implode(', ', $camposFaltantes), 400);
         }
         
+        // Validar tipo de registro
+        if (!validarTipoRegistro($datos['tipo'])) {
+            manejarError('Tipo de registro no válido. Tipos permitidos: entrada, salida, break, fin_break', 400);
+        }
+        
         try {
             // Obtener la configuración de la base de datos
             $config = DatabaseConfig::getConfig();
@@ -144,10 +155,29 @@ try {
                 // Registrar log de éxito
                 registrarLog("Registro de asistencia: {$datos['tipo']}", 'asistencia', $user['id_usuario']);
                 
+                // Obtener el tipo de registro en texto amigable
+                $tipoTexto = '';
+                switch ($datos['tipo']) {
+                    case 'entrada': 
+                        $tipoTexto = 'Entrada';
+                        break;
+                    case 'salida': 
+                        $tipoTexto = 'Salida';
+                        break;
+                    case 'break': 
+                        $tipoTexto = 'Inicio de break';
+                        break;
+                    case 'fin_break': 
+                        $tipoTexto = 'Fin de break';
+                        break;
+                    default: 
+                        $tipoTexto = 'Asistencia';
+                }
+                
                 // Responder con éxito
                 responderJSON([
                     'success' => true,
-                    'mensaje' => 'Asistencia registrada correctamente',
+                    'mensaje' => $tipoTexto . ' registrado correctamente',
                     'tipo' => $datos['tipo'],
                     'fecha_hora' => date('Y-m-d H:i:s')
                 ]);
@@ -160,6 +190,51 @@ try {
         } catch (PDOException $e) {
             // Error de base de datos
             registrarLog("Error PDO: " . $e->getMessage(), 'error', $user['id_usuario'] ?? null);
+            manejarError('Error en la base de datos: ' . $e->getMessage(), 500);
+        }
+    } 
+    // Para solicitudes GET (obtener último estado de asistencia)
+    else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        try {
+            // Obtener la configuración de la base de datos
+            $config = DatabaseConfig::getConfig();
+            
+            // Conectar a la base de datos
+            $pdo = new PDO(
+                "mysql:host={$config['host']};dbname={$config['database']};charset={$config['charset']}",
+                $config['username'],
+                $config['password'],
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+            
+            // Consultar el último registro de asistencia del usuario
+            $sql = "SELECT tipo, fecha_hora 
+                    FROM registros_asistencia 
+                    WHERE id_usuario = ? 
+                    AND DATE(fecha_hora) = CURDATE() 
+                    ORDER BY fecha_hora DESC 
+                    LIMIT 1";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$user['id_usuario']]);
+            $ultimoRegistro = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($ultimoRegistro) {
+                responderJSON([
+                    'success' => true,
+                    'estado' => $ultimoRegistro['tipo'],
+                    'fecha_hora' => $ultimoRegistro['fecha_hora']
+                ]);
+            } else {
+                responderJSON([
+                    'success' => true,
+                    'estado' => 'pendiente',
+                    'fecha_hora' => null
+                ]);
+            }
+            
+        } catch (PDOException $e) {
+            registrarLog("Error PDO en consulta de estado: " . $e->getMessage(), 'error', $user['id_usuario'] ?? null);
             manejarError('Error en la base de datos: ' . $e->getMessage(), 500);
         }
     } else {

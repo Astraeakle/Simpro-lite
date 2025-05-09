@@ -3,54 +3,64 @@
 
 require_once __DIR__ . '/../../web/config/config.php';
 require_once __DIR__ . '/../../web/config/database.php';
+require_once __DIR__ . '/jwt_helper.php';
 
-/**
- * Clase SecurityMiddleware para manejar la autenticación y seguridad
- */
 class SecurityMiddleware {
-    /**
-     * Aplica todas las medidas de seguridad y verifica la autenticación
-     * 
-     * @return array|null Datos del usuario autenticado o null si no está autenticado
-     */
     public function applyFullSecurity() {
         return $this->verificarToken();
     }
     
-    /**
-     * Verifica el token JWT en el encabezado Authorization
-     * 
-     * @return array|null Datos del usuario autenticado o null si no está autenticado
-     */
     private function verificarToken() {
         // Obtener todos los encabezados
         $headers = getallheaders();
         $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : '';
         
         // Verificar si existe el encabezado Authorization
-        if (empty($authHeader) || !preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
-            return null;
+        if (!empty($authHeader) && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+            $token = $matches[1];
+            // Verificar el token JWT
+            $payload = JWT::verificar($token);
+            if ($payload) {
+                return [
+                    'id_usuario' => $payload['id_usuario'],
+                    'nombre' => $payload['nombre'],
+                    'rol' => $payload['rol']
+                ];
+            }
         }
         
-        $token = $matches[1];
-        
-        // En un sistema real, aquí verificarías el token JWT
-        // Por ahora, para fines de demostración, validamos que el token no esté vacío
-        if (empty($token)) {
-            return null;
+        // Si no hay token válido, intentar obtener de la cookie de sesión
+        if (isset($_COOKIE['user_data'])) {
+            $userData = json_decode($_COOKIE['user_data'], true);
+            if (isset($userData['id']) && !empty($userData['id'])) {
+                // Verificar que el usuario exista en la base de datos
+                try {
+                    $config = DatabaseConfig::getConfig();
+                    $pdo = new PDO(
+                        "mysql:host={$config['host']};dbname={$config['database']};charset={$config['charset']}",
+                        $config['username'],
+                        $config['password'],
+                        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+                    );
+                    
+                    $stmt = $pdo->prepare("SELECT id_usuario, nombre_completo, rol FROM usuarios WHERE id_usuario = ? AND estado = 'activo'");
+                    $stmt->execute([$userData['id']]);
+                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($user) {
+                        return [
+                            'id_usuario' => $user['id_usuario'],
+                            'nombre' => $user['nombre_completo'],
+                            'rol' => $user['rol']
+                        ];
+                    }
+                } catch (Exception $e) {
+                    error_log("Error verificando usuario desde cookie: " . $e->getMessage());
+                }
+            }
         }
         
-        try {
-            // Aquí deberías decodificar y validar el JWT
-            // Por simplicidad, simulamos un usuario autenticado
-            return [
-                'id_usuario' => 1,
-                'nombre' => 'Usuario',
-                'rol' => 'empleado'
-            ];
-        } catch (Exception $e) {
-            return null;
-        }
+        return null;
     }
     
     public function verificarRol($usuario, $rolesPermitidos) {
