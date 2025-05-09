@@ -9,8 +9,6 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
     header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
     exit;
 }
-
-// NOTA: Removemos la inclusión de header y nav
 ?>
 
 <div class="container-fluid py-4">
@@ -45,13 +43,29 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
 </div>
 
 <script>
-// Script para el botón de asistencia
+// Código JavaScript para manejar el registro de asistencia
 document.addEventListener('DOMContentLoaded', function() {
     const btnAsistencia = document.getElementById('btnRegistrarAsistencia');
     if (btnAsistencia) {
         btnAsistencia.addEventListener('click', function() {
             registrarAsistencia();
         });
+    }
+    
+    // Función para detectar el tipo de dispositivo
+    function detectarDispositivo() {
+        const userAgent = navigator.userAgent;
+        let dispositivo = 'Desconocido';
+        
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)) {
+            dispositivo = 'Móvil';
+        } else if (/Tablet|iPad/i.test(userAgent)) {
+            dispositivo = 'Tablet';
+        } else if (/Windows|Macintosh|Linux/i.test(userAgent)) {
+            dispositivo = 'PC/Laptop';
+        }
+        
+        return `${dispositivo} - ${userAgent.substring(0, 50)}`;
     }
     
     // Función para registrar asistencia
@@ -70,8 +84,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         lng: position.coords.longitude
                     };
                     
+                    // Detectar dispositivo
+                    const dispositivo = detectarDispositivo();
+                    
                     // Enviar la ubicación al servidor
-                    enviarRegistroAsistencia(coords);
+                    enviarRegistroAsistencia(coords, dispositivo);
                 },
                 function(error) {
                     // Error al obtener la ubicación
@@ -79,6 +96,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     alertaAsistencia('error', 'No se pudo obtener su ubicación. Por favor permita el acceso a su ubicación.');
                     btnAsistencia.innerHTML = '<i class="fas fa-clock"></i> Registrar Asistencia';
                     btnAsistencia.disabled = false;
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
                 }
             );
         } else {
@@ -87,8 +109,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Función para enviar el registro al servidor
-    function enviarRegistroAsistencia(coords) {
+    function enviarRegistroAsistencia(coords, dispositivo) {
         const token = localStorage.getItem('auth_token');
+        
+        // Determinar el tipo de marcación (entrada/salida)
+        // En un sistema real, esto podría verificar el último registro del usuario
+        const tipo = 'entrada'; // Por simplicidad usamos 'entrada' fijo
+        
+        const datos = {
+            tipo: tipo,
+            latitud: coords.lat,
+            longitud: coords.lng,
+            dispositivo: dispositivo
+        };
+        
+        console.log('Enviando datos de asistencia:', datos);
         
         fetch('/simpro-lite/api/v1/asistencia.php', {
             method: 'POST',
@@ -96,16 +131,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ' + token
             },
-            body: JSON.stringify({
-                tipo: 'entrada', // o 'salida' dependiendo de la lógica
-                latitud: coords.lat,
-                longitud: coords.lng
-            })
+            body: JSON.stringify(datos)
         })
-        .then(response => response.json())
+        .then(response => {
+            // Verificar si la respuesta es un error antes de intentar analizarla como JSON
+            if (!response.ok) {
+                // Si hay un error, convertir la respuesta a texto
+                return response.text().then(text => {
+                    throw new Error('Error en la respuesta: ' + text);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log('Respuesta del servidor:', data);
             if (data.success) {
-                alertaAsistencia('success', 'Asistencia registrada correctamente.');
+                alertaAsistencia('success', `Asistencia (${tipo}) registrada correctamente.`);
             } else {
                 alertaAsistencia('error', data.error || 'Error al registrar asistencia.');
             }
@@ -139,6 +180,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         alertEl.innerHTML = mensaje;
+        alertEl.style.display = 'block';
         
         // Auto-ocultar después de 5 segundos
         setTimeout(() => {
@@ -147,7 +189,3 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-
-<?php
-// NOTA: Removemos la inclusión del footer
-?>

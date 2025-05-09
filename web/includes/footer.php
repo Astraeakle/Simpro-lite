@@ -24,34 +24,6 @@
 <!-- Scripts propios -->
 <script src="/simpro-lite/web/assets/js/auth.js"></script>
 
-<!-- Script específico de la página si existe -->
-<?php
-$currentPage = isset($_GET['modulo']) ? $_GET['modulo'] : 'home';
-$currentView = isset($_GET['vista']) ? $_GET['vista'] : 'index';
-$scriptPath = "/simpro-lite/web/assets/js/{$currentPage}.js";
-$viewScriptPath = "/simpro-lite/web/assets/js/{$currentPage}/{$currentView}.js";
-?>
-
-<!-- Script para el módulo actual si existe -->
-<script>
-// Verificar si el archivo existe antes de incluirlo (simplificado)
-document.addEventListener('DOMContentLoaded', function() {
-    // Cargar script específico del módulo si existe
-    loadScript('<?php echo $scriptPath; ?>');
-    
-    // Cargar script específico de la vista si existe
-    loadScript('<?php echo $viewScriptPath; ?>');
-    
-    function loadScript(src) {
-        const script = document.createElement('script');
-        script.src = src;
-        script.onerror = function() {
-            // Silenciosamente fallar si el script no existe
-            this.remove();
-        };
-        document.body.appendChild(script);
-    }
-});
 </script>
 </body>
 </html>

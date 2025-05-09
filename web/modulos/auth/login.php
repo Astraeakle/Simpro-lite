@@ -1,4 +1,6 @@
-<!-- File: web/modulos/auth/login.php -->
+<?php
+// File: web/modulos/auth/login.php 
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
