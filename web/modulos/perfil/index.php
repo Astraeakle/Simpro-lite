@@ -41,11 +41,6 @@ $rol = isset($userData['rol']) ? $userData['rol'] : '';
                                         value="<?php echo htmlspecialchars($nombre); ?>" readonly>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="email" class="form-label">Correo electrónico</label>
-                                    <input type="email" class="form-control" id="email" name="email" 
-                                        value="<?php echo htmlspecialchars($userData['email'] ?? 'usuario@ejemplo.com'); ?>" readonly>
-                                </div>
-                                <div class="mb-3">
                                     <label for="tema" class="form-label">Tema de interfaz</label>
                                     <select class="form-select" id="tema" name="tema">
                                         <option value="light" <?php echo (isset($userData['preferencias']['tema']) && $userData['preferencias']['tema'] == 'light') ? 'selected' : ''; ?>>Claro</option>
