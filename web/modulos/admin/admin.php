@@ -4,78 +4,56 @@
  * File: web/modulos/admin/admin.php
  */
 
-require_once __DIR__ . '/../web/core/autenticacion.php';
-if (!estaAutenticado() || !tienePermiso('admin')) {
-    header('Location: /login.php');
+// Verificar permisos de administrador
+$userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
+$rol = isset($userData['rol']) ? $userData['rol'] : '';
+if ($rol !== 'admin') {
+    header('Location: /simpro-lite/web/index.php?modulo=dashboard');
     exit;
 }
 
-// Lógica para manejar acciones de admin
-$accion = $_GET['accion'] ?? 'dashboard';
-
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Administración - SIMPRO Lite</title>
-    <link rel="stylesheet" href="/assets/css/main.css">
-</head>
-<body>
-    <?php include '../includes/header.php'; ?>
+<div class="container-fluid py-4">
+    <div class="alert alert-success" role="alert">
+        <h4 class="alert-heading">¡Bienvenido al Panel de Administración!</h4>
+        <p>Has ingresado correctamente como <strong>administrador</strong>.</p>
+        <hr>
+        <p class="mb-0">Desde aquí podrás administrar usuarios, configurar el sistema y ver reportes generales.</p>
+    </div>
     
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <nav id="sidebar" class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
-                <div class="position-sticky pt-3">
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link <?= $accion == 'dashboard' ? 'active' : '' ?>" 
-                               href="?accion=dashboard">
-                                Dashboard
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= $accion == 'usuarios' ? 'active' : '' ?>" 
-                               href="?accion=usuarios">
-                                Gestión de Usuarios
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= $accion == 'config' ? 'active' : '' ?>" 
-                               href="?accion=config">
-                                Configuración
-                            </a>
-                        </li>
-                    </ul>
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Panel de Administración</h6>
                 </div>
-            </nav>
-            
-            <!-- Contenido principal -->
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap 
-                     align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">Panel de Administración</h1>
+                <div class="card-body">
+                    <p>Este es el dashboard de administrador. Aquí se mostrarán las estadísticas, reportes y opciones de administración.</p>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                        <a href="/simpro-lite/web/index.php?modulo=admin&vista=usuarios" class="btn btn-primary me-md-2">
+                            <i class="fas fa-users"></i> Administrar Usuarios
+                        </a>
+                        <a href="/simpro-lite/web/index.php?modulo=admin&vista=config" class="btn btn-secondary">
+                            <i class="fas fa-cog"></i> Configuración del Sistema
+                        </a>
+                    </div>
                 </div>
-                
-                <?php 
-                // Cargar contenido según acción
-                switch ($accion) {
-                    case 'usuarios':
-                        include 'admin/usuarios.php';
-                        break;
-                    case 'config':
-                        include 'admin/config.php';
-                        break;
-                    default:
-                        include 'admin/dashboard.php';
-                }
-                ?>
-            </main>
+            </div>
         </div>
     </div>
     
-    <?php include '../includes/footer.php'; ?>
-</body>
-</html>
+    <!-- Widget de Usuarios Recientes -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Usuarios Recientes</h6>
+                </div>
+                <div class="card-body">
+                    <?php include_once __DIR__ . '/../dashboard/widgets/usuarios.php'; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

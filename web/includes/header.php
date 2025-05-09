@@ -1,7 +1,6 @@
 <?php
 // File: web/includes/header.php
 
-// Obtener la información del usuario si está disponible
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
 $tema = isset($userData['preferencias']['tema']) ? $userData['preferencias']['tema'] : 'light';
 ?>
