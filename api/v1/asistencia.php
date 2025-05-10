@@ -8,6 +8,8 @@ error_reporting(E_ALL);
 // Incluir configuración de base de datos
 require_once __DIR__ . '/../../web/config/config.php';
 require_once __DIR__ . '/../../web/config/database.php';
+require_once __DIR__ . '/middleware.php';
+require_once __DIR__ . '/../../web/core/queries.php';
 
 // Siempre establecer el tipo de contenido como JSON antes de cualquier salida
 header("Content-Type: application/json; charset=UTF-8");
@@ -49,9 +51,7 @@ function registrarLog($mensaje, $tipo = 'info', $id_usuario = null) {
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
         
-        $sql = "INSERT INTO logs_sistema (tipo, modulo, mensaje, id_usuario, ip_address) 
-                VALUES (?, ?, ?, ?, ?)";
-        $stmt = $pdo->prepare($sql);
+        $stmt = $pdo->prepare(Queries::$INSERT_LOG);
         $stmt->execute([
             $tipo, 
             'asistencia', 
@@ -60,7 +60,6 @@ function registrarLog($mensaje, $tipo = 'info', $id_usuario = null) {
             $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'
         ]);
     } catch (Exception $e) {
-        // Si falla el registro en BD, al menos tenemos el error_log
         error_log("Error al registrar log en BD: " . $e->getMessage());
     }
 }
@@ -72,8 +71,7 @@ function validarTipoRegistro($tipo) {
 }
 
 try {
-    // Incluir middleware de seguridad
-    require_once __DIR__ . '/middleware.php';
+    
 
     // Inicializar middleware de seguridad
     $middleware = new SecurityMiddleware();
@@ -131,17 +129,11 @@ try {
                 $config['password'],
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
             );
-            
-            // Preparar la consulta SQL
-            $sql = "INSERT INTO registros_asistencia 
-                    (id_usuario, tipo, fecha_hora, latitud, longitud, dispositivo, ip_address, metodo) 
-                    VALUES (?, ?, NOW(), ?, ?, ?, ?, 'web')";
-            
             // Obtener IP del cliente
             $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
             
             // Ejecutar la consulta
-            $stmt = $pdo->prepare($sql);
+            $stmt = $pdo->prepare(Queries::$INSERT_REGISTRO_ASISTENCIA);
             $resultado = $stmt->execute([
                 $user['id_usuario'],
                 $datos['tipo'],
@@ -207,15 +199,7 @@ try {
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
             );
             
-            // Consultar el último registro de asistencia del usuario
-            $sql = "SELECT tipo, fecha_hora 
-                    FROM registros_asistencia 
-                    WHERE id_usuario = ? 
-                    AND DATE(fecha_hora) = CURDATE() 
-                    ORDER BY fecha_hora DESC 
-                    LIMIT 1";
-            
-            $stmt = $pdo->prepare($sql);
+            $stmt = $pdo->prepare(Queries::$GET_ULTIMO_REGISTRO_ASISTENCIA);
             $stmt->execute([$user['id_usuario']]);
             $ultimoRegistro = $stmt->fetch(PDO::FETCH_ASSOC);
             
