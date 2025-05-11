@@ -1,7 +1,6 @@
 <?php
 // File: web/core/autenticacion.phprequire_once 'basedatos.php';
 require_once 'utilidades.php';
-
 class Autenticacion {
     public static function login($usuario, $password) {
         $usuario = limpiarEntrada($usuario);
@@ -32,21 +31,13 @@ class Autenticacion {
             return false;
         }
     }
-        
-    /**
-     * Cerrar sesión de usuario
-     */
     public static function logout() {
         session_start();
         
         if (isset($_SESSION['usuario'])) {
             registrarLog("Cierre de sesión: {$_SESSION['usuario']}", 'auth');
         }
-        
-        // Destruir todas las variables de sesión
         $_SESSION = array();
-        
-        // Destruir la cookie de sesión si existe
         if (ini_get("session.use_cookies")) {
             $params = session_get_cookie_params();
             setcookie(session_name(), '', time() - 42000,
@@ -54,23 +45,13 @@ class Autenticacion {
                 $params["secure"], $params["httponly"]
             );
         }
-        
-        // Destruir la sesión
         session_destroy();
     }
-    
-    /**
-     * Registrar un nuevo usuario
-     * @param array $datos Datos del usuario
-     * @return int|bool ID del usuario creado o false si falla
-     */
+
     public static function registrarUsuario($datos) {
-        // Validar datos
         if (!validarusuario($datos['usuario'])) {
             return false;
         }
-        
-        // Encriptar contraseña
         $password_hash = password_hash($datos['password'], PASSWORD_DEFAULT);
         $params = [
             $datos['nombre_completo'],
