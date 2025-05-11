@@ -8,11 +8,7 @@ class Autenticacion {
         
         try {
             $db = DB::conectar();
-            $sql = "SELECT id_usuario, nombre_usuario, nombre_completo, contraseña_hash, rol 
-                    FROM usuarios 
-                    WHERE nombre_usuario = ? AND estado = 'activo'";
-            
-            $stmt = DB::query($sql, [$usuario], "s");
+            $stmt = DB::query(Queries::$GET_USUARIO_ACTIVO_POR_NOMBRE, [$usuario], "s");
             $result = $stmt->get_result();
             
             if ($result->num_rows === 1) {
@@ -76,11 +72,6 @@ class Autenticacion {
         
         // Encriptar contraseña
         $password_hash = password_hash($datos['password'], PASSWORD_DEFAULT);
-        
-        // Insertar usuario en la base de datos
-        $sql = "INSERT INTO usuarios (nombre_completo, usuario, contraseña_hash, rol)
-                VALUES (?, ?, ?, ?)";
-        
         $params = [
             $datos['nombre_completo'],
             $datos['usuario'],
@@ -88,7 +79,7 @@ class Autenticacion {
             $datos['rol'] ?? 'empleado'
         ];
         
-        $stmt = DB::query($sql, $params, "ssss");
+        $stmt = DB::query(Queries::$INSERT_USUARIO, $params, "ssss");
         
         if ($stmt->affected_rows === 1) {
             $id_usuario = $stmt->insert_id;
@@ -101,10 +92,7 @@ class Autenticacion {
     
     public static function cambiarPassword($id_usuario, $nueva_password) {
         $password_hash = password_hash($nueva_password, PASSWORD_DEFAULT);
-        
-        $sql = "UPDATE usuarios SET contraseña_hash = ? WHERE id_usuario = ?";
-        $stmt = DB::query($sql, [$password_hash, $id_usuario], "si");
-        
+        $stmt = DB::query(Queries::$CAMBIAR_PASSWORD, [$password_hash, $id_usuario], "si");
         return $stmt->affected_rows === 1;
     }
     

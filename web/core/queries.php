@@ -5,6 +5,9 @@ class Queries {
     public static $GET_USUARIOS = "SELECT id_usuario, nombre_usuario, contraseña_hash FROM usuarios";
     public static $GET_USUARIO_POR_NOMBRE = "SELECT id_usuario, nombre_usuario, nombre_completo, contraseña_hash, rol, estado FROM usuarios WHERE nombre_usuario = :usuario LIMIT 1";
     public static $INSERT_USUARIO = "INSERT INTO usuarios (nombre_usuario, nombre_completo, contraseña_hash, rol) VALUES (?, ?, ?, ?)";
+    public static $GET_USUARIO_ACTIVO_POR_NOMBRE = "SELECT id_usuario, nombre_usuario, nombre_completo, contraseña_hash, rol FROM usuarios WHERE nombre_usuario = ? AND estado = 'activo'";
+    public static $CAMBIAR_PASSWORD = "UPDATE usuarios SET contraseña_hash = ? WHERE id_usuario = ?";
+
     // Asistencia
     public static $GET_ULTIMO_REGISTRO_ASISTENCIA = "SELECT tipo, fecha_hora FROM registros_asistencia WHERE id_usuario = ? AND DATE(fecha_hora) = CURDATE() ORDER BY fecha_hora DESC LIMIT 1 ";
     public static $INSERT_REGISTRO_ASISTENCIA = "INSERT INTO registros_asistencia (id_usuario, tipo, fecha_hora, latitud, longitud, dispositivo, ip_address, metodo) VALUES (?, ?, NOW(), ?, ?, ?, ?, 'web')";
