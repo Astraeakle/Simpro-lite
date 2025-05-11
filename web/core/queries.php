@@ -1,5 +1,5 @@
 <?php
-
+// File: web/core/queries.php
 class Queries {
     // Usuarios
     public static $GET_USUARIOS = "SELECT id_usuario, nombre_usuario, contraseña_hash FROM usuarios";
