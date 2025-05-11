@@ -5,9 +5,9 @@
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-// Incluir configuración de base de datos
+// Incluir solo la configuración de base de datos
 require_once __DIR__ . '/../../web/config/config.php';
-require_once __DIR__ . '/../../web/config/database.php';
+require_once __DIR__ . '/../../web/config/database.php';  // Solo incluir si realmente necesitas la conexión aquí
 require_once __DIR__ . '/middleware.php';
 require_once __DIR__ . '/../../web/core/queries.php';
 
@@ -44,13 +44,7 @@ function registrarLog($mensaje, $tipo = 'info', $id_usuario = null) {
     // En un sistema de producción, también guardaríamos en la tabla logs_sistema
     try {
         $config = DatabaseConfig::getConfig();
-        $pdo = new PDO(
-            "mysql:host={$config['host']};dbname={$config['database']};charset={$config['charset']}",
-            $config['username'],
-            $config['password'],
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
-        
+        $pdo = Database::getConnection();        
         $stmt = $pdo->prepare(Queries::$INSERT_LOG);
         $stmt->execute([
             $tipo, 
@@ -71,8 +65,6 @@ function validarTipoRegistro($tipo) {
 }
 
 try {
-    
-
     // Inicializar middleware de seguridad
     $middleware = new SecurityMiddleware();
     $user = $middleware->applyFullSecurity();
@@ -202,6 +194,7 @@ try {
             $stmt = $pdo->prepare(Queries::$GET_ULTIMO_REGISTRO_ASISTENCIA);
             $stmt->execute([$user['id_usuario']]);
             $ultimoRegistro = $stmt->fetch(PDO::FETCH_ASSOC);
+
             
             if ($ultimoRegistro) {
                 responderJSON([

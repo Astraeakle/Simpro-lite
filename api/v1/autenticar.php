@@ -1,6 +1,10 @@
 <?php
 // File: api/v1/autenticar.php
 
+// Incluir los archivos de configuración y clases necesarias
+require_once __DIR__ . '/../../web/config/database.php';
+require_once __DIR__ . '/../../web/core/queries.php';
+
 // Activar reporte de errores para depuración
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
@@ -35,7 +39,7 @@ $data = json_decode($input, true);
 // Verificar si hubo un error al decodificar JSON
 if (json_last_error() !== JSON_ERROR_NONE) {
     error_log("Error JSON: " . json_last_error_msg());
-    echo json_encode([
+    echo json_encode([ 
         'success' => false, 
         'error' => 'Formato JSON inválido: ' . json_last_error_msg()
     ]);
@@ -48,20 +52,12 @@ if (!isset($data['usuario']) || !isset($data['password'])) {
     exit;
 }
 
-// Incluir el archivo de configuración de la base de datos
-require_once __DIR__ . '/../../web/config/config.php';
-
 try {
-    // Crear conexión PDO usando las constantes definidas en config.php
-    $pdo = new PDO(
-        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
-        DB_USER,
-        DB_PASSWORD, 
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    // Obtener la conexión PDO desde la clase Database
+    $pdo = Database::getConnection();
     
     // Consulta preparada para evitar inyección SQL
-    $stmt = $pdo->prepare("SELECT id_usuario, nombre_usuario, nombre_completo, contraseña_hash, rol, estado FROM usuarios WHERE nombre_usuario = :usuario LIMIT 1");
+    $stmt = $pdo->prepare(Queries::$GET_USUARIO_POR_NOMBRE);
     $stmt->execute(['usuario' => $data['usuario']]);
     $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
     

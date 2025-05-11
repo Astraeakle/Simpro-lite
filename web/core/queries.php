@@ -3,7 +3,7 @@
 class Queries {
     // Usuarios
     public static $GET_USUARIOS = "SELECT id_usuario, nombre_usuario, contraseña_hash FROM usuarios";
-    public static $GET_USUARIO_POR_NOMBRE = "SELECT id_usuario, nombre_usuario, nombre_completo, contraseña_hash, rol, estado FROM usuarios WHERE nombre_usuario = ? LIMIT 1";
+    public static $GET_USUARIO_POR_NOMBRE = "SELECT id_usuario, nombre_usuario, nombre_completo, contraseña_hash, rol, estado FROM usuarios WHERE nombre_usuario = :usuario LIMIT 1";
     public static $INSERT_USUARIO = "INSERT INTO usuarios (nombre_usuario, nombre_completo, contraseña_hash, rol) VALUES (?, ?, ?, ?)";
     // Asistencia
     public static $GET_ULTIMO_REGISTRO_ASISTENCIA = "SELECT tipo, fecha_hora FROM registros_asistencia WHERE id_usuario = ? AND DATE(fecha_hora) = CURDATE() ORDER BY fecha_hora DESC LIMIT 1 ";

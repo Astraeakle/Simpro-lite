@@ -1,18 +1,8 @@
 <?php
-/**
- * Sistema de autenticación para SIMPRO Lite
- * File: web/core/autenticacion.php
- */
-require_once 'basedatos.php';
+// File: web/core/autenticacion.phprequire_once 'basedatos.php';
 require_once 'utilidades.php';
 
 class Autenticacion {
-    /**
-     * Iniciar sesión con usuario y contraseña
-     * @param string $usuario
-     * @param string $password
-     * @return array|bool Array con datos de usuario o false si falla
-     */
     public static function login($usuario, $password) {
         $usuario = limpiarEntrada($usuario);
         
@@ -109,12 +99,6 @@ class Autenticacion {
         return false;
     }
     
-    /**
-     * Cambiar contraseña de usuario
-     * @param int $id_usuario
-     * @param string $nueva_password
-     * @return bool
-     */
     public static function cambiarPassword($id_usuario, $nueva_password) {
         $password_hash = password_hash($nueva_password, PASSWORD_DEFAULT);
         
@@ -124,21 +108,11 @@ class Autenticacion {
         return $stmt->affected_rows === 1;
     }
     
-    /**
-     * Verificar token de reseteo de contraseña
-     * @param string $token
-     * @return int|bool ID de usuario o false
-     */
     public static function verificarTokenReset($token) {
         // Implementar si se necesita recuperación de contraseña
         return false;
     }
     
-    /**
-     * Generar token de reseteo de contraseña
-     * @param string $usuario
-     * @return string|bool Token o false
-     */
     public static function generarTokenReset($usuario) {
         // Implementar si se necesita recuperación de contraseña
         return false;
