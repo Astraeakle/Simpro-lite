@@ -2,62 +2,128 @@
 // File: api/v1/jwt_helper.php
 
 class JWT {
-    private static $secretKey = 'Neuvis2023'; // Cambia esto por una clave secreta más segura y compleja
+    // Obtiene la clave secreta desde una variable de entorno o usa una por defecto (solo para desarrollo)
+    private static function getSecretKey() {
+        $envSecret = getenv('JWT_SECRET_KEY');
+        if ($envSecret) {
+            return $envSecret;
+        }
+        
+        // IMPORTANTE: En producción, esta clave debe configurarse como variable de entorno
+        return 'B7#Cq4@XsW!6tP9$mZ2*nR5&vL8%yE3'; // Clave de ejemplo - NO USAR EN PRODUCCIÓN
+    }
     
     /**
      * Genera un token JWT
-     * @param array $usuario Datos del usuario
-     * @return string Token JWT
      */
-    public static function generar($usuario) {
-        $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
-        $payload = json_encode([
-            'id_usuario' => $usuario['id_usuario'],
-            'nombre' => $usuario['nombre_completo'],
-            'rol' => $usuario['rol'],
-            'iat' => time(),
-            'exp' => time() + (60 * 60 * 24) // 1 día
-        ]);
+    public static function generar($usuario, $expiraEn = 86400) {
+        // Datos básicos del header
+        $header = [
+            'typ' => 'JWT',
+            'alg' => 'HS256'
+        ];
         
-        $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
-        $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($payload));
+        // Datos del payload con claims estándar
+        $ahora = time();
+        $payload = [
+            'sub' => $usuario['id_usuario'],          // subject (ID del usuario)
+            'name' => $usuario['nombre_completo'],    // nombre completo
+            'rol' => $usuario['rol'],                 // rol/permiso
+            'iat' => $ahora,                          // issued at (emitido en)
+            'exp' => $ahora + $expiraEn,              // expiration time
+            'jti' => bin2hex(random_bytes(8))         // JWT ID (único)
+        ];
         
-        $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, self::$secretKey, true);
-        $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+        // Codificar header y payload en Base64Url
+        $base64UrlHeader = self::base64UrlEncode(json_encode($header));
+        $base64UrlPayload = self::base64UrlEncode(json_encode($payload));
         
+        // Crear firma
+        $signature = hash_hmac(
+            'sha256', 
+            $base64UrlHeader . "." . $base64UrlPayload, 
+            self::getSecretKey(), 
+            true
+        );
+        
+        $base64UrlSignature = self::base64UrlEncode($signature);
+        
+        // Formar el token completo
         return $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
     }
     
     /**
      * Verifica un token JWT
-     * @param string $token Token JWT
-     * @return array|null Datos del usuario o null si es inválido
      */
     public static function verificar($token) {
+        // Dividir el token en sus partes
         $tokenParts = explode('.', $token);
         if (count($tokenParts) != 3) {
-            return null;
+            return false;
         }
         
         list($base64UrlHeader, $base64UrlPayload, $base64UrlSignature) = $tokenParts;
         
+        // Decodificar header y payload
+        $header = json_decode(self::base64UrlDecode($base64UrlHeader), true);
+        $payload = json_decode(self::base64UrlDecode($base64UrlPayload), true);
+        
+        // Verificar algoritmo en el header
+        if (!isset($header['alg']) || $header['alg'] !== 'HS256') {
+            return false;
+        }
+        
         // Verificar firma
-        $signature = base64_decode(str_replace(['-', '_'], ['+', '/'], $base64UrlSignature));
-        $expectedSignature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, self::$secretKey, true);
+        $signature = self::base64UrlDecode($base64UrlSignature);
+        $expectedSignature = hash_hmac(
+            'sha256', 
+            $base64UrlHeader . "." . $base64UrlPayload, 
+            self::getSecretKey(), 
+            true
+        );
         
         if (!hash_equals($signature, $expectedSignature)) {
-            return null;
+            return false;
         }
-        
-        // Decodificar payload
-        $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $base64UrlPayload)), true);
         
         // Verificar expiración
-        if (isset($payload['exp']) && $payload['exp'] < time()) {
-            return null;
+        if (!isset($payload['exp']) || $payload['exp'] < time()) {
+            return false;
         }
         
+        // Devolver los datos del payload
         return $payload;
     }
+    public static function extraerTokenDeHeader($authHeader = null) {
+        if ($authHeader === null) {
+            // Si no se proporciona, intentar obtenerlo de los headers
+            $authHeader = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : '';
+        }
+        
+        // Verificar si el header comienza con "Bearer "
+        if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+            return $matches[1];
+        }
+        
+        return null;
+    }
+    public static function verificarDesdeHeader() {
+        $token = self::extraerTokenDeHeader();
+        
+        if (!$token) {
+            return false;
+        }
+        
+        return self::verificar($token);
+    }
+    private static function base64UrlEncode($data) {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+    private static function base64UrlDecode($data) {
+        $padLength = 4 - strlen($data) % 4;
+        if ($padLength < 4) {
+            $data .= str_repeat('=', $padLength);
+        }
+        return base64_decode(strtr($data, '-_', '+/'));
+    }
 }
-?>

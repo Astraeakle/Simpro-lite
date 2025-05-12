@@ -1,7 +1,9 @@
-// File: web/assets/js/auth.js
+// File: web/assets/jsauth.js
 const Auth = {
+    // Inicializa el módulo
     init: function() {
         console.log('Iniciando módulo de autenticación');
+        
         // Verificar si estamos en la página de login
         const loginForm = document.getElementById('loginForm');
         if (loginForm) {
@@ -14,7 +16,7 @@ const Auth = {
             this.redirectToLogin();
         }
 
-        // Agregar listener para el botón de cerrar sesión en cualquier parte de la app
+        // Agregar listener para el botón de cerrar sesión
         document.addEventListener('click', function(e) {
             if (e.target && e.target.id === 'btnLogout') {
                 e.preventDefault();
@@ -25,7 +27,6 @@ const Auth = {
     
     /**
      * Maneja el envío del formulario de login
-     * @param {Event} e - Evento de formulario
      */
     handleLogin: function(e) {
         e.preventDefault();
@@ -95,7 +96,6 @@ const Auth = {
     
     /**
      * Verifica si el usuario está autenticado
-     * @return {Boolean} Verdadero si está autenticado
      */
     isAuthenticated: function() {
         return !!localStorage.getItem('auth_token');
@@ -103,7 +103,6 @@ const Auth = {
     
     /**
      * Verifica si estamos en la página de login
-     * @return {Boolean} Verdadero si es la página de login
      */
     isLoginPage: function() {
         return window.location.href.includes('?modulo=auth&vista=login') || 
@@ -144,7 +143,6 @@ const Auth = {
     
     /**
      * Obtiene los datos del usuario actual
-     * @return {Object|null} Datos del usuario o null si no está autenticado
      */
     getUserData: function() {
         const userData = localStorage.getItem('user_data');
@@ -153,7 +151,6 @@ const Auth = {
     
     /**
      * Obtiene el token de autenticación
-     * @return {String|null} Token de autenticación o null si no existe
      */
     getToken: function() {
         return localStorage.getItem('auth_token');
