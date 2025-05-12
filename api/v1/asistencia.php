@@ -1,49 +1,37 @@
 <?php
 // File: api/v1/asistencia.php
-
-// Deshabilitar la visualización de errores en producción
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-// Incluir solo la configuración de base de datos
 require_once __DIR__ . '/../../web/config/config.php';
-require_once __DIR__ . '/../../web/config/database.php';  // Solo incluir si realmente necesitas la conexión aquí
+require_once __DIR__ . '/../../web/config/database.php';
 require_once __DIR__ . '/middleware.php';
 require_once __DIR__ . '/../../web/core/queries.php';
 
-// Siempre establecer el tipo de contenido como JSON antes de cualquier salida
 header("Content-Type: application/json; charset=UTF-8");
-
-// Permitir solicitudes CORS
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
-// Manejar solicitudes de preflight OPTIONS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit(0);
 }
 
-// Función para responder con JSON
 function responderJSON($data) {
     echo json_encode($data);
     exit;
 }
 
-// Función para manejar errores
 function manejarError($mensaje, $codigo = 500) {
     http_response_code($codigo);
     responderJSON(['success' => false, 'error' => $mensaje]);
 }
 
-// Función para registrar logs
 function registrarLog($mensaje, $tipo = 'info', $id_usuario = null) {
     error_log("[$tipo] $mensaje - Usuario: $id_usuario");
     
-    // En un sistema de producción, también guardaríamos en la tabla logs_sistema
     try {
-        $config = DatabaseConfig::getConfig();
         $pdo = Database::getConnection();        
         $stmt = $pdo->prepare(Queries::$INSERT_LOG);
         $stmt->execute([
@@ -58,14 +46,41 @@ function registrarLog($mensaje, $tipo = 'info', $id_usuario = null) {
     }
 }
 
-// Validar tipo de registro
 function validarTipoRegistro($tipo) {
     $tiposValidos = ['entrada', 'salida', 'break', 'fin_break'];
     return in_array($tipo, $tiposValidos);
 }
 
+function verificarAutorizacionHorasExtras($id_usuario) {
+    try {
+        $pdo = Database::getConnection();
+        $fecha_actual = date('Y-m-d');
+        
+        $sql = "SELECT COUNT(*) FROM autorizaciones_extras 
+                WHERE id_usuario = ? 
+                AND fecha = ? 
+                AND estado = 'aprobado' 
+                AND TIME(NOW()) BETWEEN hora_inicio AND hora_fin";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$id_usuario, $fecha_actual]);
+        
+        return $stmt->fetchColumn() > 0;
+    } catch (Exception $e) {
+        error_log("Error verificando autorización horas extras: " . $e->getMessage());
+        return false;
+    }
+}
+
+function estaEnHorarioLaboral() {
+    $horaActual = (int)date('H');
+    $horaInicio = 8;
+    $horaFin = 18;
+    
+    return ($horaActual >= $horaInicio && $horaActual < $horaFin);
+}
+
 try {
-    // Inicializar middleware de seguridad
     $middleware = new SecurityMiddleware();
     $user = $middleware->applyFullSecurity();
 
@@ -73,25 +88,19 @@ try {
         manejarError('No autorizado', 401);
     }
 
-    // Para solicitudes POST (registro de asistencia)
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Obtener el cuerpo de la solicitud
         $requestBody = file_get_contents('php://input');
         
-        // Verificar que el cuerpo de la solicitud no esté vacío
         if (empty($requestBody)) {
             manejarError('No se recibieron datos', 400);
         }
         
-        // Decodificar JSON
         $datos = json_decode($requestBody, true);
         
-        // Verificar si hubo error en la decodificación JSON
         if (json_last_error() !== JSON_ERROR_NONE) {
             manejarError('Error en formato JSON: ' . json_last_error_msg(), 400);
         }
         
-        // Validar campos requeridos
         $camposRequeridos = ['tipo', 'latitud', 'longitud', 'dispositivo'];
         $camposFaltantes = [];
         
@@ -105,60 +114,42 @@ try {
             manejarError('Campos requeridos faltantes: ' . implode(', ', $camposFaltantes), 400);
         }
         
-        // Validar tipo de registro
         if (!validarTipoRegistro($datos['tipo'])) {
             manejarError('Tipo de registro no válido. Tipos permitidos: entrada, salida, break, fin_break', 400);
         }
         
+        if (!estaEnHorarioLaboral() && $datos['tipo'] === 'entrada') {
+            if (!verificarAutorizacionHorasExtras($user['id_usuario'])) {
+                manejarError('No tiene autorización para registrar asistencia fuera del horario laboral', 403);
+            }
+        }
+        
         try {
-            // Obtener la configuración de la base de datos
-            $config = DatabaseConfig::getConfig();
-            
-            // Conectar a la base de datos
-            $pdo = new PDO(
-                "mysql:host={$config['host']};dbname={$config['database']};charset={$config['charset']}",
-                $config['username'],
-                $config['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-            );
-            // Obtener IP del cliente
+            $pdo = Database::getConnection();
             $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
             
-            // Ejecutar la consulta
             $stmt = $pdo->prepare(Queries::$INSERT_REGISTRO_ASISTENCIA);
             $resultado = $stmt->execute([
                 $user['id_usuario'],
                 $datos['tipo'],
                 $datos['latitud'],
                 $datos['longitud'],
-                substr($datos['dispositivo'], 0, 100), // Limitar a 100 caracteres
+                substr($datos['dispositivo'], 0, 100),
                 $ip
             ]);
             
             if ($resultado) {
-                // Registrar log de éxito
                 registrarLog("Registro de asistencia: {$datos['tipo']}", 'asistencia', $user['id_usuario']);
                 
-                // Obtener el tipo de registro en texto amigable
                 $tipoTexto = '';
                 switch ($datos['tipo']) {
-                    case 'entrada': 
-                        $tipoTexto = 'Entrada';
-                        break;
-                    case 'salida': 
-                        $tipoTexto = 'Salida';
-                        break;
-                    case 'break': 
-                        $tipoTexto = 'Inicio de break';
-                        break;
-                    case 'fin_break': 
-                        $tipoTexto = 'Fin de break';
-                        break;
-                    default: 
-                        $tipoTexto = 'Asistencia';
+                    case 'entrada': $tipoTexto = 'Entrada'; break;
+                    case 'salida': $tipoTexto = 'Salida'; break;
+                    case 'break': $tipoTexto = 'Inicio de break'; break;
+                    case 'fin_break': $tipoTexto = 'Fin de break'; break;
+                    default: $tipoTexto = 'Asistencia';
                 }
                 
-                // Responder con éxito
                 responderJSON([
                     'success' => true,
                     'mensaje' => $tipoTexto . ' registrado correctamente',
@@ -166,60 +157,73 @@ try {
                     'fecha_hora' => date('Y-m-d H:i:s')
                 ]);
             } else {
-                // Error en la inserción
                 registrarLog("Error al insertar registro de asistencia", 'error', $user['id_usuario']);
                 manejarError('Error al registrar en la base de datos', 500);
             }
             
         } catch (PDOException $e) {
-            // Error de base de datos
             registrarLog("Error PDO: " . $e->getMessage(), 'error', $user['id_usuario'] ?? null);
             manejarError('Error en la base de datos: ' . $e->getMessage(), 500);
         }
     } 
-    // Para solicitudes GET (obtener último estado de asistencia)
     else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         try {
-            // Obtener la configuración de la base de datos
-            $config = DatabaseConfig::getConfig();
+            $pdo = Database::getConnection();
+            $fechaActual = date('Y-m-d');
             
-            // Conectar a la base de datos
-            $pdo = new PDO(
-                "mysql:host={$config['host']};dbname={$config['database']};charset={$config['charset']}",
-                $config['username'],
-                $config['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-            );
+            $stmtHoy = $pdo->prepare("
+                SELECT tipo, fecha_hora 
+                FROM registros_asistencia 
+                WHERE id_usuario = ? 
+                AND DATE(fecha_hora) = ? 
+                ORDER BY fecha_hora DESC 
+                LIMIT 1
+            ");
+            $stmtHoy->execute([$user['id_usuario'], $fechaActual]);
+            $registroHoy = $stmtHoy->fetch(PDO::FETCH_ASSOC);
             
-            $stmt = $pdo->prepare(Queries::$GET_ULTIMO_REGISTRO_ASISTENCIA);
-            $stmt->execute([$user['id_usuario']]);
-            $ultimoRegistro = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            
-            if ($ultimoRegistro) {
+            if ($registroHoy) {
                 responderJSON([
                     'success' => true,
-                    'estado' => $ultimoRegistro['tipo'],
-                    'fecha_hora' => $ultimoRegistro['fecha_hora']
+                    'estado' => $registroHoy['tipo'],
+                    'fecha_hora' => $registroHoy['fecha_hora'],
+                    'es_hoy' => true
                 ]);
             } else {
-                responderJSON([
-                    'success' => true,
-                    'estado' => 'pendiente',
-                    'fecha_hora' => null
-                ]);
+                $stmtUltimo = $pdo->prepare("
+                    SELECT tipo, fecha_hora 
+                    FROM registros_asistencia 
+                    WHERE id_usuario = ? 
+                    ORDER BY fecha_hora DESC 
+                    LIMIT 1
+                ");
+                $stmtUltimo->execute([$user['id_usuario']]);
+                $ultimoRegistro = $stmtUltimo->fetch(PDO::FETCH_ASSOC);
+                
+                if ($ultimoRegistro) {
+                    responderJSON([
+                        'success' => true,
+                        'estado' => 'pendiente',
+                        'fecha_hora' => $ultimoRegistro['fecha_hora'],
+                        'es_hoy' => false
+                    ]);
+                } else {
+                    responderJSON([
+                        'success' => true,
+                        'estado' => 'pendiente',
+                        'fecha_hora' => null,
+                        'es_hoy' => false
+                    ]);
+                }
             }
-            
         } catch (PDOException $e) {
             registrarLog("Error PDO en consulta de estado: " . $e->getMessage(), 'error', $user['id_usuario'] ?? null);
             manejarError('Error en la base de datos: ' . $e->getMessage(), 500);
         }
     } else {
-        // Método no permitido
         manejarError('Método no permitido', 405);
     }
 } catch (Exception $e) {
-    // Capturar cualquier excepción no manejada
     registrarLog("Error general: " . $e->getMessage(), 'error');
     manejarError('Error inesperado en el servidor', 500);
 }

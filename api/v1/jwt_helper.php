@@ -2,7 +2,7 @@
 // File: api/v1/jwt_helper.php
 
 class JWT {
-    private static $secretKey = 'tu_clave_secreta'; // En producción, usa una clave más segura
+    private static $secretKey = 'Neuvis2023'; // Cambia esto por una clave secreta más segura y compleja
     
     /**
      * Genera un token JWT
