@@ -1,306 +1,306 @@
-#!/usr/bin/env python3
 # File: monitor/app/main.py
-"""
-SIMPRO Lite - Advanced Productivity Monitor
-
-Monitoreo detallado de aplicaciones en primer plano con registro y depuración visual
-"""
-
 import os
 import sys
 import json
 import time
 import psutil
-import logging
 import threading
 import tkinter as tk
 from datetime import datetime
-from logging.handlers import RotatingFileHandler
-import win32gui
-import win32process
+import uuid
+import sqlite3
+from tkinter import ttk, messagebox
+
+try:
+    import win32gui
+    import win32process
+except ImportError:
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pywin32"])
+    import win32gui
+    import win32process
 
 
 class ProductivityMonitor:
-    def __init__(self, config_path='../config/config.json'):
-        """
-        Inicializar el monitor con configuración y logging
-        """
-        # Configurar logging
-        self.setup_logging()
-
-        # Cargar configuración
-        self.config_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), config_path))
+    def __init__(self):
         self.config = self.load_config()
-
-        # Estado del monitor
         self.running = False
-        self.current_session = {
-            'start_time': None,
-            'current_app': None,
-            'last_app': None
-        }
+        self.activities = []
+        self.last_activity = None
+        self.session_id = str(uuid.uuid4())
+        self.setup_db()
+        self.create_ui()
 
-        # Cola de errores
-        self.error_queue = []
+    def load_config(self):
+        config_path = os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), "config", "config.json")
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            return config
+        except (FileNotFoundError, json.JSONDecodeError):
+            # Config por defecto si hay error
+            return {"intervalo": 5, "max_reintentos": 3}
 
-        # Crear ventana de errores y depuración
-        self.create_debug_window()
+    def setup_db(self):
+        db_dir = os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), "data")
+        os.makedirs(db_dir, exist_ok=True)
+        self.db_path = os.path.join(db_dir, "activity.db")
 
-    def setup_logging(self):
-        """Configurar logging detallado"""
-        log_dir = os.path.abspath(os.path.join(
-            os.path.dirname(__file__), '..', 'logs'))
-        os.makedirs(log_dir, exist_ok=True)
-        log_path = os.path.join(log_dir, 'monitor_debug.log')
-
-        # Configurar logger
-        self.logger = logging.getLogger('ProductivityMonitor')
-        self.logger.setLevel(logging.DEBUG)
-
-        # Manejador de archivo rotativo
-        file_handler = RotatingFileHandler(
-            log_path,
-            maxBytes=10*1024*1024,  # 10 MB
-            backupCount=5
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS activities (
+            id INTEGER PRIMARY KEY,
+            activity_id TEXT,
+            timestamp TEXT,
+            duration INTEGER,
+            app TEXT,
+            title TEXT,
+            session_id TEXT
         )
-        file_handler.setLevel(logging.DEBUG)
+        ''')
+        conn.commit()
+        conn.close()
 
-        # Manejador de consola
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.DEBUG)
-
-        # Formato
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        file_handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
-
-        # Añadir manejadores
-        self.logger.addHandler(file_handler)
-        self.logger.addHandler(console_handler)
-
-    def create_debug_window(self):
-        """
-        Crear ventana de Tkinter para depuración y seguimiento
-        """
+    def create_ui(self):
         self.root = tk.Tk()
-        self.root.title("SIMPRO Monitor - Seguimiento de Aplicaciones")
-        self.root.geometry("800x600")
+        self.root.title("Monitor de Productividad")
+        self.root.geometry("700x500")
+        self.root.resizable(True, True)
 
-        # Marco principal
-        main_frame = tk.Frame(self.root)
-        main_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        # Frame principal
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Títulos
-        tk.Label(main_frame, text="Aplicación Actual",
-                 font=('Arial', 12, 'bold')).pack()
-        self.current_app_label = tk.Label(
-            main_frame, text="N/A", font=('Arial', 10))
-        self.current_app_label.pack()
+        # Status frame
+        status_frame = ttk.LabelFrame(
+            main_frame, text="Estado Actual", padding="5")
+        status_frame.pack(fill=tk.X, pady=5)
 
-        # Lista de aplicaciones detectadas
-        tk.Label(main_frame, text="Historial de Aplicaciones",
-                 font=('Arial', 12, 'bold')).pack()
-        self.apps_listbox = tk.Listbox(
-            main_frame,
-            width=100,
-            height=20,
-            bg='white',
-            fg='black'
-        )
-        self.apps_listbox.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        self.current_app_label = ttk.Label(status_frame, text="App: N/A")
+        self.current_app_label.pack(side=tk.LEFT, padx=5)
 
-        # Botones
-        button_frame = tk.Frame(main_frame)
-        button_frame.pack(pady=5)
+        self.current_title_label = ttk.Label(status_frame, text="Título: N/A")
+        self.current_title_label.pack(side=tk.LEFT, padx=5)
 
-        clear_btn = tk.Button(
-            button_frame,
-            text="Limpiar Historial",
-            command=self.clear_app_history
-        )
-        clear_btn.pack(side=tk.LEFT, padx=5)
+        # Control frame
+        control_frame = ttk.Frame(main_frame)
+        control_frame.pack(fill=tk.X, pady=5)
 
-        restart_btn = tk.Button(
-            button_frame,
-            text="Reiniciar Monitoreo",
-            command=self.restart_monitoring
-        )
-        restart_btn.pack(side=tk.LEFT, padx=5)
+        self.start_button = ttk.Button(
+            control_frame, text="Iniciar", command=self.start_monitoring)
+        self.start_button.pack(side=tk.LEFT, padx=5)
+
+        self.stop_button = ttk.Button(
+            control_frame, text="Detener", command=self.stop_monitoring, state=tk.DISABLED)
+        self.stop_button.pack(side=tk.LEFT, padx=5)
+
+        self.save_button = ttk.Button(
+            control_frame, text="Guardar Datos", command=self.save_data)
+        self.save_button.pack(side=tk.LEFT, padx=5)
+
+        # Tabla de actividades
+        table_frame = ttk.LabelFrame(
+            main_frame, text="Actividades Recientes", padding="5")
+        table_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+
+        columns = ('id', 'app', 'title', 'duration')
+        self.tree = ttk.Treeview(table_frame, columns=columns, show='headings')
+
+        self.tree.heading('id', text='ID')
+        self.tree.heading('app', text='Aplicación')
+        self.tree.heading('title', text='Título')
+        self.tree.heading('duration', text='Duración (s)')
+
+        self.tree.column('id', width=50)
+        self.tree.column('app', width=150)
+        self.tree.column('title', width=350)
+        self.tree.column('duration', width=100)
+
+        scrollbar = ttk.Scrollbar(
+            table_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Status bar
+        self.status_var = tk.StringVar(value="Listo")
+        status_bar = ttk.Label(
+            self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # Configurar cierre
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def get_active_window_info(self):
-        """
-        Obtener información detallada de la ventana activa
-        """
         try:
-            # Obtener el handle de la ventana en primer plano
             hwnd = win32gui.GetForegroundWindow()
-
-            # Obtener el título de la ventana
             window_title = win32gui.GetWindowText(hwnd)
-
-            # Obtener el PID del proceso
             _, pid = win32process.GetWindowThreadProcessId(hwnd)
 
-            # Obtener información del proceso
             try:
                 process = psutil.Process(pid)
                 app_name = process.name()
-                exe_path = process.exe()
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                app_name = "Desconocido"
-                exe_path = "N/A"
+            except:
+                app_name = "unknown.exe"
 
-            # Información detallada
-            app_info = {
-                'nombre': app_name,
-                'titulo_ventana': window_title,
-                'pid': pid,
-                'ruta_ejecutable': exe_path,
-                'timestamp': datetime.now().isoformat()
-            }
-
-            return app_info
-
-        except Exception as e:
-            self.log_error(f"Error al obtener información de ventana: {e}")
-            return None
-
-    def log_error(self, error_message, critical=False):
-        """
-        Registrar errores y mostrarlos en la ventana de depuración
-        """
-        if critical:
-            self.logger.critical(error_message)
-        else:
-            self.logger.error(error_message)
-
-        # Añadir a la cola de errores
-        self.error_queue.append(f"{datetime.now()}: {error_message}")
+            return {"app": app_name, "title": window_title}
+        except:
+            return {"app": "error.exe", "title": ""}
 
     def update_ui(self, app_info):
-        """
-        Actualizar la interfaz de usuario con información de la aplicación
-        """
         if app_info:
-            # Actualizar etiqueta de aplicación actual
-            current_app_text = f"{app_info['nombre']} - {app_info['titulo_ventana']}"
-            self.current_app_label.config(text=current_app_text)
+            self.current_app_label.config(text=f"App: {app_info['app']}")
+            truncated_title = app_info['title'][:50] + \
+                ('...' if len(app_info['title']) > 50 else '')
+            self.current_title_label.config(text=f"Título: {truncated_title}")
 
-            # Añadir a la lista de aplicaciones
-            app_entry = f"{app_info['timestamp']} | {current_app_text}"
-            self.apps_listbox.insert(tk.END, app_entry)
+    def record_activity(self, app_info):
+        now = datetime.now()
+        activity_id = len(self.activities) + 1
+        timestamp = now.isoformat()
 
-            # Mantener solo las últimas 100 entradas
-            if self.apps_listbox.size() > 100:
-                self.apps_listbox.delete(0)
+        # Calcular duración si hay actividad previa
+        duration = 0
+        if self.last_activity:
+            last_time = datetime.fromisoformat(self.last_activity["timestamp"])
+            duration = int((now - last_time).total_seconds())
+            self.last_activity["duration"] = duration
 
-    def clear_app_history(self):
-        """
-        Limpiar el historial de aplicaciones
-        """
-        self.apps_listbox.delete(0, tk.END)
-        self.current_app_label.config(text="N/A")
+        # Crear nueva actividad
+        activity = {
+            "id": activity_id,
+            "timestamp": timestamp,
+            "duration": 0,
+            "data": app_info
+        }
+
+        # Guardar actividad actual como última
+        self.last_activity = activity
+        self.activities.append(activity)
+
+        # Añadir a la vista si la duración es > 0
+        if duration > 0:
+            prev_activity = self.activities[-2] if len(
+                self.activities) > 1 else None
+            if prev_activity:
+                self.tree.insert('', 0, values=(
+                    prev_activity["id"],
+                    prev_activity["data"]["app"],
+                    prev_activity["data"]["title"],
+                    prev_activity["duration"]
+                ))
+
+                # Mantener solo las últimas 100 entradas
+                if len(self.tree.get_children()) > 100:
+                    last_item = self.tree.get_children()[-1]
+                    self.tree.delete(last_item)
+
+    def _monitor_loop(self):
+        while self.running:
+            try:
+                app_info = self.get_active_window_info()
+                if app_info:
+                    self.root.after(0, self.update_ui, app_info)
+                    self.root.after(0, self.record_activity, app_info)
+                time.sleep(self.config.get("intervalo", 5))
+            except Exception as e:
+                self.status_var.set(f"Error: {str(e)}")
+                time.sleep(self.config.get("intervalo", 5))
 
     def start_monitoring(self):
-        """
-        Iniciar el proceso de monitoreo
-        """
         self.running = True
         self.monitor_thread = threading.Thread(target=self._monitor_loop)
         self.monitor_thread.daemon = True
         self.monitor_thread.start()
 
-        # Iniciar bucle de eventos de Tkinter
-        self.root.protocol("WM_DELETE_WINDOW", self.stop_monitoring)
-        self.root.mainloop()
-
-    def _monitor_loop(self):
-        """
-        Bucle principal de monitoreo
-        """
-        while self.running:
-            try:
-                # Obtener información de la ventana actual
-                current_app = self.get_active_window_info()
-
-                if current_app:
-                    # Registrar información
-                    self.logger.debug(f"Aplicación detectada: {current_app}")
-
-                    # Actualizar UI
-                    self.root.after(0, self.update_ui, current_app)
-
-                # Dormir por el intervalo configurado
-                time.sleep(self.config.get('intervalo', 5))
-
-            except Exception as e:
-                self.log_error(f"Error en el bucle de monitoreo: {e}")
-                time.sleep(self.config.get('intervalo', 5))
+        self.start_button.config(state=tk.DISABLED)
+        self.stop_button.config(state=tk.NORMAL)
+        self.status_var.set("Monitoreando...")
 
     def stop_monitoring(self):
-        """
-        Detener el monitoreo y cerrar la aplicación
-        """
         self.running = False
-        if hasattr(self, 'monitor_thread'):
-            self.monitor_thread.join()
-        self.root.quit()
+        if hasattr(self, 'monitor_thread') and self.monitor_thread.is_alive():
+            self.monitor_thread.join(timeout=1.0)
 
-    def restart_monitoring(self):
-        """
-        Reiniciar el proceso de monitoreo
-        """
-        self.stop_monitoring()
-        self.start_monitoring()
+        self.start_button.config(state=tk.NORMAL)
+        self.stop_button.config(state=tk.DISABLED)
+        self.status_var.set("Detenido")
 
-    def load_config(self):
-        """
-        Cargar configuración con manejo de errores
-        """
+        # Calcular duración final para última actividad
+        if self.last_activity:
+            now = datetime.now()
+            last_time = datetime.fromisoformat(self.last_activity["timestamp"])
+            self.last_activity["duration"] = int(
+                (now - last_time).total_seconds())
+
+            # Actualizar UI con última actividad
+            self.tree.insert('', 0, values=(
+                self.last_activity["id"],
+                self.last_activity["data"]["app"],
+                self.last_activity["data"]["title"],
+                self.last_activity["duration"]
+            ))
+
+    def save_data(self):
         try:
-            with open(self.config_path, 'r') as f:
-                config = json.load(f)
+            # Guardar en la base de datos
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
 
-            # Configuraciones predeterminadas
-            # Intervalo más corto para mejor seguimiento
-            config.setdefault('intervalo', 5)
-            config.setdefault('max_reintentos', 3)
-            config.setdefault('log_level', 'DEBUG')
+            for activity in self.activities:
+                cursor.execute('''
+                INSERT INTO activities (activity_id, timestamp, duration, app, title, session_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    str(activity["id"]),
+                    activity["timestamp"],
+                    activity["duration"],
+                    activity["data"]["app"],
+                    activity["data"]["title"],
+                    self.session_id
+                ))
 
-            return config
-        except FileNotFoundError:
-            self.log_error(
-                "Archivo de configuración no encontrado", critical=True)
-            return {
-                'intervalo': 5,
-                'max_reintentos': 3,
-                'log_level': 'DEBUG'
-            }
-        except json.JSONDecodeError:
-            self.log_error("JSON inválido en la configuración", critical=True)
-            return {
-                'intervalo': 5,
-                'max_reintentos': 3,
-                'log_level': 'DEBUG'
-            }
+            conn.commit()
+            conn.close()
+
+            # También guardar como JSON
+            save_dir = os.path.join(os.path.dirname(
+                os.path.abspath(__file__)), "data")
+            os.makedirs(save_dir, exist_ok=True)
+
+            json_path = os.path.join(
+                save_dir, f"activity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+            with open(json_path, 'w') as f:
+                json.dump(self.activities, f, indent=2)
+
+            self.status_var.set(f"Datos guardados en: {json_path}")
+            messagebox.showinfo(
+                "Datos Guardados", f"Se han guardado {len(self.activities)} registros de actividad.")
+
+            # Reiniciar actividades después de guardar
+            self.activities = []
+            self.last_activity = None
+
+        except Exception as e:
+            self.status_var.set(f"Error al guardar datos: {str(e)}")
+            messagebox.showerror(
+                "Error", f"No se pudieron guardar los datos: {str(e)}")
+
+    def on_closing(self):
+        if messagebox.askokcancel("Salir", "¿Desea guardar los datos antes de salir?"):
+            self.save_data()
+        self.stop_monitoring()
+        self.root.destroy()
+        sys.exit(0)
 
 
 def main():
-    # Verificar dependencias
-    try:
-        import win32gui
-        import win32process
-    except ImportError:
-        print("Instalando dependencias necesarias...")
-        import subprocess
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "pywin32"])
-
     monitor = ProductivityMonitor()
-    monitor.start_monitoring()
+    monitor.root.mainloop()
 
 
 if __name__ == "__main__":

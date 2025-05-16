@@ -1,23 +1,17 @@
 <?php
 // File: api/v1/jwt_helper.php
-
 class JWT {
-    // Obtiene la clave secreta desde una variable de entorno o usa una por defecto (solo para desarrollo)
     private static function getSecretKey() {
         $envSecret = getenv('JWT_SECRET_KEY');
         if ($envSecret) {
             return $envSecret;
         }
         
-        // IMPORTANTE: En producción, esta clave debe configurarse como variable de entorno
-        return 'B7#Cq4@XsW!6tP9$mZ2*nR5&vL8%yE3'; // Clave de ejemplo - NO USAR EN PRODUCCIÓN
+        return 'B7#Cq4@XsW!6tP9$mZ2*nR5&vL8%yE3';
     }
     
-    /**
-     * Genera un token JWT
-     */
+    // Genera un token JWT
     public static function generar($usuario, $expiraEn = 86400) {
-        // Datos básicos del header
         $header = [
             'typ' => 'JWT',
             'alg' => 'HS256'

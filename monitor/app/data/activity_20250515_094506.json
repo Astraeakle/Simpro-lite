@@ -1,0 +1,254 @@
+[
+  {
+    "id": 1,
+    "timestamp": "2025-05-15T09:42:43.504782",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 2,
+    "timestamp": "2025-05-15T09:42:48.505794",
+    "duration": 5,
+    "data": {
+      "app": "Code.exe",
+      "title": "main.py - Simpro-lite - Visual Studio Code"
+    }
+  },
+  {
+    "id": 3,
+    "timestamp": "2025-05-15T09:42:53.507014",
+    "duration": 12,
+    "data": {
+      "app": "explorer.exe",
+      "title": ""
+    }
+  },
+  {
+    "id": 4,
+    "timestamp": "2025-05-15T09:43:05.583359",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 5,
+    "timestamp": "2025-05-15T09:43:10.584242",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 6,
+    "timestamp": "2025-05-15T09:43:15.584896",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 7,
+    "timestamp": "2025-05-15T09:43:20.586735",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 8,
+    "timestamp": "2025-05-15T09:43:25.588192",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 9,
+    "timestamp": "2025-05-15T09:43:30.590262",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 10,
+    "timestamp": "2025-05-15T09:43:35.591107",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 11,
+    "timestamp": "2025-05-15T09:43:40.592008",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 12,
+    "timestamp": "2025-05-15T09:43:45.593311",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 13,
+    "timestamp": "2025-05-15T09:43:50.594688",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 14,
+    "timestamp": "2025-05-15T09:43:55.595464",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 15,
+    "timestamp": "2025-05-15T09:44:00.596062",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 16,
+    "timestamp": "2025-05-15T09:44:05.597428",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 17,
+    "timestamp": "2025-05-15T09:44:10.598088",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 18,
+    "timestamp": "2025-05-15T09:44:15.598914",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 19,
+    "timestamp": "2025-05-15T09:44:20.599821",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 20,
+    "timestamp": "2025-05-15T09:44:25.600368",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 21,
+    "timestamp": "2025-05-15T09:44:30.600795",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 22,
+    "timestamp": "2025-05-15T09:44:35.601429",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 23,
+    "timestamp": "2025-05-15T09:44:40.602139",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 24,
+    "timestamp": "2025-05-15T09:44:45.603645",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 25,
+    "timestamp": "2025-05-15T09:44:50.604264",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 26,
+    "timestamp": "2025-05-15T09:44:55.605078",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 27,
+    "timestamp": "2025-05-15T09:45:00.606014",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 28,
+    "timestamp": "2025-05-15T09:45:05.606970",
+    "duration": 0,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  }
+]

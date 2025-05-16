@@ -1,0 +1,83 @@
+[
+  {
+    "id": 1,
+    "timestamp": "2025-05-15T09:41:58.495394",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 2,
+    "timestamp": "2025-05-15T09:42:03.496644",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 3,
+    "timestamp": "2025-05-15T09:42:08.497473",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 4,
+    "timestamp": "2025-05-15T09:42:13.498473",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 5,
+    "timestamp": "2025-05-15T09:42:18.499418",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "JSON Data Format for Application Monitoring - Claude - Brave"
+    }
+  },
+  {
+    "id": 6,
+    "timestamp": "2025-05-15T09:42:23.500508",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "YouTube - Brave"
+    }
+  },
+  {
+    "id": 7,
+    "timestamp": "2025-05-15T09:42:28.500996",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 8,
+    "timestamp": "2025-05-15T09:42:33.502043",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 9,
+    "timestamp": "2025-05-15T09:42:38.502714",
+    "duration": 0,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  }
+]
