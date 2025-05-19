@@ -40,7 +40,7 @@ class ProductivityMonitor:
             return config
         except (FileNotFoundError, json.JSONDecodeError):
             # Config por defecto si hay error
-            return {"intervalo": 5, "max_reintentos": 3}
+            return {"intervalo": 1, "max_reintentos": 3}
 
     def setup_db(self):
         db_dir = os.path.join(os.path.dirname(
@@ -112,7 +112,7 @@ class ProductivityMonitor:
         self.tree.heading('id', text='ID')
         self.tree.heading('app', text='Aplicación')
         self.tree.heading('title', text='Título')
-        self.tree.heading('duration', text='Duración (s)')
+        self.tree.heading('duration', text='Duración')
 
         self.tree.column('id', width=50)
         self.tree.column('app', width=150)
@@ -158,46 +158,80 @@ class ProductivityMonitor:
                 ('...' if len(app_info['title']) > 50 else '')
             self.current_title_label.config(text=f"Título: {truncated_title}")
 
+    def format_duration(self, seconds):
+        """Convierte segundos en un formato legible (horas, minutos, segundos)"""
+        if seconds < 60:
+            return f"{seconds}s"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            secs = seconds % 60
+            return f"{minutes}m {secs}s"
+        else:
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            secs = seconds % 60
+            return f"{hours}h {minutes}m {secs}s"
+
     def record_activity(self, app_info):
         now = datetime.now()
-        activity_id = len(self.activities) + 1
-        timestamp = now.isoformat()
 
-        # Calcular duración si hay actividad previa
+        # Si hay una actividad previa, calcular duración
         duration = 0
         if self.last_activity:
             last_time = datetime.fromisoformat(self.last_activity["timestamp"])
             duration = int((now - last_time).total_seconds())
-            self.last_activity["duration"] = duration
+
+            # Verificar si la aplicación actual es la misma que la última
+            if self.last_activity["data"]["app"] == app_info["app"]:
+                # Acumular la duración y actualizar la marca de tiempo
+                self.last_activity["duration"] += duration
+                self.last_activity["timestamp"] = now.isoformat()
+
+                # Actualizar la entrada en el TreeView
+                if len(self.activities) > 0:
+                    # Encontrar el ID del item en el TreeView (será el primero si está actualizado)
+                    for item_id in self.tree.get_children():
+                        values = self.tree.item(item_id, 'values')
+                        if values and int(values[0]) == self.last_activity["id"]:
+                            self.tree.item(item_id, values=(
+                                self.last_activity["id"],
+                                self.last_activity["data"]["app"],
+                                self.last_activity["data"]["title"],
+                                self.format_duration(
+                                    self.last_activity["duration"])
+                            ))
+                            break
+                return
+
+        # Si es una aplicación diferente o la primera actividad, crear nuevo registro
+        activity_id = len(self.activities) + 1
+        timestamp = now.isoformat()
 
         # Crear nueva actividad
         activity = {
             "id": activity_id,
             "timestamp": timestamp,
-            "duration": 0,
+            "duration": duration,
             "data": app_info
         }
+
+        # Añadir la actividad anterior a la vista si existe
+        if self.last_activity and duration > 0:
+            self.tree.insert('', 0, values=(
+                self.last_activity["id"],
+                self.last_activity["data"]["app"],
+                self.last_activity["data"]["title"],
+                self.format_duration(self.last_activity["duration"])
+            ))
+
+            # Mantener solo las últimas 100 entradas
+            if len(self.tree.get_children()) > 100:
+                last_item = self.tree.get_children()[-1]
+                self.tree.delete(last_item)
 
         # Guardar actividad actual como última
         self.last_activity = activity
         self.activities.append(activity)
-
-        # Añadir a la vista si la duración es > 0
-        if duration > 0:
-            prev_activity = self.activities[-2] if len(
-                self.activities) > 1 else None
-            if prev_activity:
-                self.tree.insert('', 0, values=(
-                    prev_activity["id"],
-                    prev_activity["data"]["app"],
-                    prev_activity["data"]["title"],
-                    prev_activity["duration"]
-                ))
-
-                # Mantener solo las últimas 100 entradas
-                if len(self.tree.get_children()) > 100:
-                    last_item = self.tree.get_children()[-1]
-                    self.tree.delete(last_item)
 
     def _monitor_loop(self):
         while self.running:
@@ -234,16 +268,31 @@ class ProductivityMonitor:
         if self.last_activity:
             now = datetime.now()
             last_time = datetime.fromisoformat(self.last_activity["timestamp"])
-            self.last_activity["duration"] = int(
-                (now - last_time).total_seconds())
+            duration = int((now - last_time).total_seconds())
+            self.last_activity["duration"] += duration
 
-            # Actualizar UI con última actividad
-            self.tree.insert('', 0, values=(
-                self.last_activity["id"],
-                self.last_activity["data"]["app"],
-                self.last_activity["data"]["title"],
-                self.last_activity["duration"]
-            ))
+            # Verificar si ya existe en la vista
+            found = False
+            for item_id in self.tree.get_children():
+                values = self.tree.item(item_id, 'values')
+                if values and int(values[0]) == self.last_activity["id"]:
+                    self.tree.item(item_id, values=(
+                        self.last_activity["id"],
+                        self.last_activity["data"]["app"],
+                        self.last_activity["data"]["title"],
+                        self.format_duration(self.last_activity["duration"])
+                    ))
+                    found = True
+                    break
+
+            # Si no está, añadirlo
+            if not found:
+                self.tree.insert('', 0, values=(
+                    self.last_activity["id"],
+                    self.last_activity["data"]["app"],
+                    self.last_activity["data"]["title"],
+                    self.format_duration(self.last_activity["duration"])
+                ))
 
     def save_data(self):
         try:
@@ -284,6 +333,10 @@ class ProductivityMonitor:
             # Reiniciar actividades después de guardar
             self.activities = []
             self.last_activity = None
+
+            # Limpiar la vista de árbol
+            for item in self.tree.get_children():
+                self.tree.delete(item)
 
         except Exception as e:
             self.status_var.set(f"Error al guardar datos: {str(e)}")

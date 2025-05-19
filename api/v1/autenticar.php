@@ -1,7 +1,5 @@
 <?php
 // File: api/v1/autenticar.php
-
-// Incluir los archivos de configuración y clases necesarias
 require_once __DIR__ . '/../../web/config/database.php';
 require_once __DIR__ . '/../../web/core/queries.php';
 

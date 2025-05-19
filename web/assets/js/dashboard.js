@@ -1,3 +1,4 @@
+// File: web/assets/js/dashboard.js
 document.addEventListener('DOMContentLoaded', function() {
     if (!Auth.getToken()) {
         window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login';
@@ -7,40 +8,57 @@ document.addEventListener('DOMContentLoaded', function() {
     const userData = Auth.getUserData();
     console.log('Usuario autenticado:', userData);
     
-    function formatearFechaHora(fechaHora) {
-        if (!fechaHora) return 'No disponible';
+    function formatearFechaHora(fechaStr) {
+        if (!fechaStr) return 'N/A';
         
-        const fecha = new Date(fechaHora);
-        if (isNaN(fecha.getTime())) return 'Fecha inválida';
-        
-        const opciones = { 
-            year: 'numeric', month: 'long', day: 'numeric',
-            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-        };
-        
-        return fecha.toLocaleDateString('es-ES', opciones);
+        try {
+            const fecha = new Date(fechaStr);
+            
+            return fecha.toLocaleString('es-ES', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        } catch (e) {
+            console.error('Error al formatear fecha:', e);
+            return fechaStr; 
+        }
     }
+    let timeoutId;
 
     function alertaAsistencia(tipo, mensaje) {
         const alertaContainer = document.getElementById('alertaContainer');
         if (!alertaContainer) return;
         
-        alertaContainer.innerHTML = '';
-        
+        // Crear elemento de alerta
         const alerta = document.createElement('div');
-        alerta.className = `alert alert-${tipo === 'error' ? 'danger' : tipo} alert-dismissible fade show`;
+        alerta.className = `alert alert-${tipo} alert-dismissible fade show`;
         alerta.role = 'alert';
         
+        const iconos = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-exclamation-triangle',
+            warning: 'fas fa-exclamation-circle',
+            info: 'fas fa-info-circle'
+        };
+        
+        const icono = iconos[tipo] || iconos.info;
+        
         alerta.innerHTML = `
-            ${mensaje}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+            <i class="${icono} me-2"></i> ${mensaje}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
         
+        // Agregar alerta al contenedor
         alertaContainer.appendChild(alerta);
         
+        // Auto-cerrar después de 5 segundos
         setTimeout(() => {
-            const closeButton = alerta.querySelector('.btn-close');
-            if (closeButton) closeButton.click();
+            alerta.classList.remove('show');
+            setTimeout(() => alerta.remove(), 300);
         }, 5000);
     }
 
@@ -94,25 +112,60 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function detectarDispositivo() {
+        const ua = navigator.userAgent;
+        if (/Android/i.test(ua)) return 'Android';
+        if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS';
+        if (/Windows Phone/i.test(ua)) return 'Windows Phone';
+        if (/Windows/i.test(ua)) return 'Windows';
+        if (/Macintosh/i.test(ua)) return 'Mac';
+        if (/Linux/i.test(ua)) return 'Linux';
+        return 'Desconocido';
+    }
+
     function registrarAsistencia(tipo) {
-        const dispositivo = `${navigator.platform} - ${navigator.userAgent}`;
+        // Obtener token de autenticación
         const token = localStorage.getItem('auth_token') || 'token_demo';
         
-        alertaAsistencia('info', 'Obteniendo tu ubicación...');
+        // Mostrar cargando en el botón correspondiente
+        let btnActual;
+        switch (tipo) {
+            case 'entrada': btnActual = document.getElementById('btnRegistrarEntrada'); break;
+            case 'salida': btnActual = document.getElementById('btnRegistrarSalida'); break;
+            case 'break': btnActual = document.getElementById('btnRegistrarBreak'); break;
+            case 'fin_break': btnActual = document.getElementById('btnFinalizarBreak'); break;
+        }
         
-        const geo = new Geolocalizador();
+        if (btnActual) {
+            const textoOriginal = btnActual.innerHTML;
+            btnActual.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+            btnActual.disabled = true;
+            
+            // Restaurar el botón después de 15 segundos si no se completa la solicitud
+            const timeoutId = setTimeout(() => {
+                btnActual.innerHTML = textoOriginal;
+                btnActual.disabled = false;
+            }, 15000);
+        }
         
-        geo.obtenerUbicacion()
+        // Obtener geolocalización
+        const geolocalizador = new Geolocalizador();
+        
+        geolocalizador.obtenerUbicacion()
             .then(ubicacion => {
-                alertaAsistencia('info', 'Registrando asistencia...');
+                // Detectar información del dispositivo
+                const navegador = navigator.userAgent;
+                const dispositivo = detectarDispositivo();
                 
+                // Preparar datos para enviar
                 const datos = {
                     tipo: tipo,
                     latitud: ubicacion.latitud,
                     longitud: ubicacion.longitud,
-                    dispositivo: dispositivo
+                    dispositivo: `${dispositivo} - ${navegador.substring(0, 50)}`
                 };
                 
+                // Enviar datos al servidor
                 return fetch('/simpro-lite/api/v1/asistencia.php', {
                     method: 'POST',
                     headers: {
@@ -125,23 +178,44 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => {
                 if (!response.ok) {
                     return response.text().then(text => {
-                        throw new Error('Error en la respuesta: ' + text);
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            throw new Error('Error en la respuesta: ' + text);
+                        }
+                    }).then(errorData => {
+                        throw new Error('Error: ' + (errorData.error || response.statusText));
                     });
                 }
                 return response.json();
             })
             .then(data => {
-                console.log('Respuesta registro:', data);
+                console.log('Respuesta:', data);
+                
+                if (btnActual) {
+                    clearTimeout(timeoutId);
+                    btnActual.innerHTML = btnActual.getAttribute('data-original-text') || btnActual.getAttribute('data-default-text') || btnActual.textContent;
+                    btnActual.disabled = false;
+                }
+                
                 if (data.success) {
-                    alertaAsistencia('success', data.mensaje);
-                    actualizarInterfazSegunEstado(data.tipo, data.fecha_hora);
+                    alertaAsistencia('success', data.mensaje || 'Registro exitoso');
+                    // Actualizar interfaz después de 1 segundo
+                    setTimeout(() => verificarEstadoActual(), 1000);
                 } else {
-                    alertaAsistencia('error', data.error || 'Error al registrar asistencia');
+                    alertaAsistencia('error', data.error || 'Error al procesar el registro');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alertaAsistencia('error', 'Error: ' + error.message);
+                
+                if (btnActual) {
+                    clearTimeout(timeoutId);
+                    btnActual.innerHTML = btnActual.getAttribute('data-original-text') || btnActual.getAttribute('data-default-text') || btnActual.textContent;
+                    btnActual.disabled = false;
+                }
+                
+                alertaAsistencia('error', error.message || 'Error de conexión');
             });
     }
 

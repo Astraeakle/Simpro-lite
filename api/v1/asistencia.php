@@ -74,9 +74,8 @@ function verificarAutorizacionHorasExtras($id_usuario) {
 
 function estaEnHorarioLaboral() {
     $horaActual = (int)date('H');
-    $horaInicio = 8;
-    $horaFin = 18;
-    
+    $horaInicio = 6;  
+    $horaFin = 23;
     return ($horaActual >= $horaInicio && $horaActual < $horaFin);
 }
 

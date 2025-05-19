@@ -1,0 +1,164 @@
+[
+  {
+    "id": 1,
+    "timestamp": "2025-05-17T16:46:39.630234",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 2,
+    "timestamp": "2025-05-17T16:46:44.631128",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "Restaurar commit git - Brave"
+    }
+  },
+  {
+    "id": 3,
+    "timestamp": "2025-05-17T16:46:49.631793",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "WhatsApp - Brave"
+    }
+  },
+  {
+    "id": 4,
+    "timestamp": "2025-05-17T16:46:54.632740",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "sistema web control de asistencia y monitoreo de... - Google Acad\u00e9mico - Brave"
+    }
+  },
+  {
+    "id": 5,
+    "timestamp": "2025-05-17T16:46:59.633922",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "KAREN BEATRIZ SANCHEZ ESTUPI\u00d1AN.pdf - Brave"
+    }
+  },
+  {
+    "id": 6,
+    "timestamp": "2025-05-17T16:47:04.635153",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "KAREN BEATRIZ SANCHEZ ESTUPI\u00d1AN.pdf - Brave"
+    }
+  },
+  {
+    "id": 7,
+    "timestamp": "2025-05-17T16:47:09.635582",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "sistema web control de asistencia y monitoreo de... - Google Acad\u00e9mico - Brave"
+    }
+  },
+  {
+    "id": 8,
+    "timestamp": "2025-05-17T16:47:14.636188",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "Desarrollo de un sistema web y el control de asistencia del personal de la instituci\u00f3n educativa privada Triolet \u2013 Huaura, 2019 - Brave"
+    }
+  },
+  {
+    "id": 9,
+    "timestamp": "2025-05-17T16:47:19.637034",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "sistema web control de asistencia y monitoreo de... - Google Acad\u00e9mico - Brave"
+    }
+  },
+  {
+    "id": 10,
+    "timestamp": "2025-05-17T16:47:24.637964",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "An\u00e1lisis y dise\u00f1o de un sistema web para el proceso de control de asistencia de la empresa Labset Protect World SAC - Brave"
+    }
+  },
+  {
+    "id": 11,
+    "timestamp": "2025-05-17T16:47:29.638582",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 12,
+    "timestamp": "2025-05-17T16:47:34.639809",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "Desarrollo del Sistema - Documentos de Google - Brave"
+    }
+  },
+  {
+    "id": 13,
+    "timestamp": "2025-05-17T16:47:39.640396",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "Desarrollo del Sistema - Documentos de Google - Brave"
+    }
+  },
+  {
+    "id": 14,
+    "timestamp": "2025-05-17T16:47:44.641754",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "Desarrollo del Sistema - Documentos de Google - Brave"
+    }
+  },
+  {
+    "id": 15,
+    "timestamp": "2025-05-17T16:47:49.642455",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "Desarrollo del Sistema - Documentos de Google - Brave"
+    }
+  },
+  {
+    "id": 16,
+    "timestamp": "2025-05-17T16:47:54.643390",
+    "duration": 5,
+    "data": {
+      "app": "brave.exe",
+      "title": "DESARROLLO PRODUCTO - Google Drive - Brave"
+    }
+  },
+  {
+    "id": 17,
+    "timestamp": "2025-05-17T16:47:59.643872",
+    "duration": 5,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  },
+  {
+    "id": 18,
+    "timestamp": "2025-05-17T16:48:04.644575",
+    "duration": 0,
+    "data": {
+      "app": "python.exe",
+      "title": "Monitor de Productividad"
+    }
+  }
+]
