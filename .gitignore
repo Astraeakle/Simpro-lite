@@ -17,11 +17,7 @@ merged_code.txt
 *.env.local
 
 # Base de datos y backups
-*.sql
-*.myd
-*.myi
-*.ibd
-/db/backups/
+/monitor/app/data/*
 
 # Logs del sistema
 /logs/*
