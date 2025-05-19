@@ -8,32 +8,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const userData = Auth.getUserData();
     console.log('Usuario autenticado:', userData);
     
+    // Funciones auxiliares
     function formatearFechaHora(fechaStr) {
         if (!fechaStr) return 'N/A';
-        
         try {
             const fecha = new Date(fechaStr);
-            
             return fecha.toLocaleString('es-ES', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
         } catch (e) {
             console.error('Error al formatear fecha:', e);
             return fechaStr; 
         }
     }
-    let timeoutId;
 
     function alertaAsistencia(tipo, mensaje) {
         const alertaContainer = document.getElementById('alertaContainer');
         if (!alertaContainer) return;
         
-        // Crear elemento de alerta
         const alerta = document.createElement('div');
         alerta.className = `alert alert-${tipo} alert-dismissible fade show`;
         alerta.role = 'alert';
@@ -52,10 +45,8 @@ document.addEventListener('DOMContentLoaded', function() {
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
         
-        // Agregar alerta al contenedor
         alertaContainer.appendChild(alerta);
         
-        // Auto-cerrar después de 5 segundos
         setTimeout(() => {
             alerta.classList.remove('show');
             setTimeout(() => alerta.remove(), 300);
@@ -124,10 +115,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function registrarAsistencia(tipo) {
-        // Obtener token de autenticación
-        const token = localStorage.getItem('auth_token') || 'token_demo';
+        // Validar tipo (solo valores permitidos)
+        const tiposValidos = ['entrada', 'salida', 'break', 'fin_break'];
+        if (!tiposValidos.includes(tipo)) {
+            alertaAsistencia('error', 'Tipo de registro inválido');
+            return;
+        }
         
-        // Mostrar cargando en el botón correspondiente
+        // Obtener token
+        const token = Auth.getToken();
+        
+        // Manejar cambios en botón
         let btnActual;
         switch (tipo) {
             case 'entrada': btnActual = document.getElementById('btnRegistrarEntrada'); break;
@@ -136,17 +134,22 @@ document.addEventListener('DOMContentLoaded', function() {
             case 'fin_break': btnActual = document.getElementById('btnFinalizarBreak'); break;
         }
         
+        // Guardar texto original y mostrar animación de carga
+        let textoOriginal = '';
         if (btnActual) {
-            const textoOriginal = btnActual.innerHTML;
+            textoOriginal = btnActual.innerHTML;
             btnActual.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
             btnActual.disabled = true;
-            
-            // Restaurar el botón después de 15 segundos si no se completa la solicitud
-            const timeoutId = setTimeout(() => {
+        }
+        
+        // Controlar timeout para restaurar botón
+        let timeoutId = setTimeout(() => {
+            if (btnActual) {
                 btnActual.innerHTML = textoOriginal;
                 btnActual.disabled = false;
-            }, 15000);
-        }
+            }
+            alertaAsistencia('error', 'La solicitud ha tardado demasiado. Intente nuevamente.');
+        }, 15000);
         
         // Obtener geolocalización
         const geolocalizador = new Geolocalizador();
@@ -154,16 +157,18 @@ document.addEventListener('DOMContentLoaded', function() {
         geolocalizador.obtenerUbicacion()
             .then(ubicacion => {
                 // Detectar información del dispositivo
-                const navegador = navigator.userAgent;
                 const dispositivo = detectarDispositivo();
+                const navegador = navigator.userAgent;
                 
                 // Preparar datos para enviar
                 const datos = {
-                    tipo: tipo,
-                    latitud: ubicacion.latitud,
-                    longitud: ubicacion.longitud,
+                    tipo: tipo, // Asegurar que sea exactamente uno de los valores permitidos
+                    latitud: parseFloat(ubicacion.latitud.toFixed(6)),
+                    longitud: parseFloat(ubicacion.longitud.toFixed(6)),
                     dispositivo: `${dispositivo} - ${navegador.substring(0, 50)}`
                 };
+                
+                console.log('Enviando datos de asistencia:', datos);
                 
                 // Enviar datos al servidor
                 return fetch('/simpro-lite/api/v1/asistencia.php', {
@@ -192,9 +197,10 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 console.log('Respuesta:', data);
                 
+                // Limpiar timeout y restaurar botón
+                clearTimeout(timeoutId);
                 if (btnActual) {
-                    clearTimeout(timeoutId);
-                    btnActual.innerHTML = btnActual.getAttribute('data-original-text') || btnActual.getAttribute('data-default-text') || btnActual.textContent;
+                    btnActual.innerHTML = textoOriginal;
                     btnActual.disabled = false;
                 }
                 
@@ -209,9 +215,10 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => {
                 console.error('Error:', error);
                 
+                // Limpiar timeout y restaurar botón
+                clearTimeout(timeoutId);
                 if (btnActual) {
-                    clearTimeout(timeoutId);
-                    btnActual.innerHTML = btnActual.getAttribute('data-original-text') || btnActual.getAttribute('data-default-text') || btnActual.textContent;
+                    btnActual.innerHTML = textoOriginal;
                     btnActual.disabled = false;
                 }
                 
@@ -220,14 +227,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function verificarEstadoActual() {
-        const token = localStorage.getItem('auth_token') || 'token_demo';
+        const token = Auth.getToken();
         const estadoLabel = document.getElementById('estadoLabel');
         const ultimoRegistro = document.getElementById('ultimoRegistro');
 
         if (estadoLabel) estadoLabel.textContent = 'Cargando...';
         if (ultimoRegistro) ultimoRegistro.textContent = 'Cargando...';
 
-        fetch(`/simpro-lite/api/v1/asistencia.php`, {
+        fetch('/simpro-lite/api/v1/asistencia.php', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -271,10 +278,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnFinalizarBreak = document.getElementById('btnFinalizarBreak');
         const btnSalida = document.getElementById('btnRegistrarSalida');
 
-        if (btnEntrada) btnEntrada.addEventListener('click', () => registrarAsistencia('entrada'));
-        if (btnBreak) btnBreak.addEventListener('click', () => registrarAsistencia('break'));
-        if (btnFinalizarBreak) btnFinalizarBreak.addEventListener('click', () => registrarAsistencia('fin_break'));
-        if (btnSalida) btnSalida.addEventListener('click', () => registrarAsistencia('salida'));
+        // Guardar texto original de cada botón
+        if (btnEntrada) {
+            btnEntrada.setAttribute('data-default-text', btnEntrada.innerHTML);
+            btnEntrada.addEventListener('click', () => registrarAsistencia('entrada'));
+        }
+        if (btnBreak) {
+            btnBreak.setAttribute('data-default-text', btnBreak.innerHTML);
+            btnBreak.addEventListener('click', () => registrarAsistencia('break'));
+        }
+        if (btnFinalizarBreak) {
+            btnFinalizarBreak.setAttribute('data-default-text', btnFinalizarBreak.innerHTML);
+            btnFinalizarBreak.addEventListener('click', () => registrarAsistencia('fin_break'));
+        }
+        if (btnSalida) {
+            btnSalida.setAttribute('data-default-text', btnSalida.innerHTML);
+            btnSalida.addEventListener('click', () => registrarAsistencia('salida'));
+        }
 
         verificarEstadoActual();
     }

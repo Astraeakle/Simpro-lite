@@ -36,16 +36,20 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
                     </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-start" id="botonesAsistencia">
-                        <button id="btnRegistrarEntrada" class="btn btn-success me-md-2" style="display:none;">
+                        <button id="btnRegistrarEntrada" class="btn btn-success me-md-2" style="display:none;"
+                            data-default-text="<i class='fas fa-clock'></i> Registrar Entrada">
                             <i class="fas fa-clock"></i> Registrar Entrada
                         </button>
-                        <button id="btnRegistrarBreak" class="btn btn-warning me-md-2" style="display:none;">
+                        <button id="btnRegistrarBreak" class="btn btn-warning me-md-2" style="display:none;"
+                            data-default-text="<i class='fas fa-coffee'></i> Iniciar Break">
                             <i class="fas fa-coffee"></i> Iniciar Break
                         </button>
-                        <button id="btnFinalizarBreak" class="btn btn-info me-md-2" style="display:none;">
+                        <button id="btnFinalizarBreak" class="btn btn-info me-md-2" style="display:none;"
+                            data-default-text="<i class='fas fa-check'></i> Finalizar Break">
                             <i class="fas fa-check"></i> Finalizar Break
                         </button>
-                        <button id="btnRegistrarSalida" class="btn btn-danger me-md-2" style="display:none;">
+                        <button id="btnRegistrarSalida" class="btn btn-danger me-md-2" style="display:none;"
+                            data-default-text="<i class='fas fa-sign-out-alt'></i> Registrar Salida">
                             <i class="fas fa-sign-out-alt"></i> Registrar Salida
                         </button>
                         <a href="/simpro-lite/web/index.php?modulo=reportes&vista=personal" class="btn btn-primary">
@@ -70,7 +74,6 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
                                                 <label for="supervisorSelect">Supervisor:</label>
                                                 <select class="form-control" id="supervisorSelect" required>
                                                     <option value="">Seleccione un supervisor</option>
-                                                    <!-- Se llenarán dinámicamente -->
                                                 </select>
                                             </div>
                                             <div class="form-group mb-3">
@@ -120,61 +123,18 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
 <script src="/simpro-lite/web/assets/js/dashboard.js"></script>
 
 <script>
-// Este código debería reemplazar la sección JavaScript en empleado_dashboard.php
-
 document.addEventListener('DOMContentLoaded', function() {
+    // Variables
+    let timeoutId = null;
+
     // Botones de asistencia
-    const btnEntrada = document.getElementById('btnRegistrarEntrada');
-    const btnBreak = document.getElementById('btnRegistrarBreak');
-    const btnFinalizarBreak = document.getElementById('btnFinalizarBreak');
-    const btnSalida = document.getElementById('btnRegistrarSalida');
-
-    // Elementos de estado
-    const estadoLabel = document.getElementById('estadoLabel');
-    const ultimoRegistro = document.getElementById('ultimoRegistro');
-
-    // Elementos de horas extras
     const btnMostrarSolicitudExtras = document.getElementById('btnMostrarSolicitudExtras');
     const solicitudExtrasContainer = document.getElementById('solicitudExtrasContainer');
     const btnCancelarExtras = document.getElementById('btnCancelarExtras');
     const formSolicitudExtras = document.getElementById('formSolicitudExtras');
     const supervisorSelect = document.getElementById('supervisorSelect');
 
-    // Variables para el estado actual
-    let estadoActual = 'pendiente'; // pendiente, entrada, break, salida
-
-    // Verificar el estado actual al cargar la página
-    verificarEstadoActual();
-
-    // Cargar supervisores para el formulario de horas extras
-    cargarSupervisores();
-
-    // Asignar eventos a los botones
-    if (btnEntrada) {
-        btnEntrada.addEventListener('click', function() {
-            registrarAsistencia('entrada');
-        });
-    }
-
-    if (btnBreak) {
-        btnBreak.addEventListener('click', function() {
-            registrarAsistencia('break');
-        });
-    }
-
-    if (btnFinalizarBreak) {
-        btnFinalizarBreak.addEventListener('click', function() {
-            registrarAsistencia('fin_break');
-        });
-    }
-
-    if (btnSalida) {
-        btnSalida.addEventListener('click', function() {
-            registrarAsistencia('salida');
-        });
-    }
-
-    // Eventos para el formulario de horas extras
+    // Mostrar formulario de horas extras
     if (btnMostrarSolicitudExtras) {
         btnMostrarSolicitudExtras.addEventListener('click', function() {
             solicitudExtrasContainer.style.display = 'block';
@@ -189,21 +149,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 fechaExtras.min = formatoFecha;
             }
 
-            // Si es fin de semana, mostrar mensaje informativo
+            // Mostrar mensajes informativos
             const esFinDeSemana = esHoyFinDeSemana();
             if (esFinDeSemana) {
                 mostrarAlertaInformativa(
                     'Las solicitudes para fin de semana son aprobadas automáticamente');
-            }
-
-            // Si es mismo día, también mostrar mensaje
-            if (!esFinDeSemana) {
+            } else {
                 mostrarAlertaInformativa(
                     'Las solicitudes para el mismo día son aprobadas automáticamente');
             }
         });
     }
 
+    // Ocultar formulario de horas extras
     if (btnCancelarExtras) {
         btnCancelarExtras.addEventListener('click', function() {
             solicitudExtrasContainer.style.display = 'none';
@@ -213,6 +171,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Enviar formulario de horas extras
     if (formSolicitudExtras) {
         formSolicitudExtras.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -260,112 +219,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Función mejorada para verificar el estado actual
-    function verificarEstadoActual() {
-        const token = localStorage.getItem('auth_token') || 'token_demo';
+    // Cargar supervisores para el formulario de horas extras
+    cargarSupervisores();
 
-        // Mostrar estado de carga
-        if (estadoLabel) estadoLabel.textContent = 'Cargando...';
-        if (ultimoRegistro) ultimoRegistro.textContent = 'Cargando...';
-
-        // Ocultar todos los botones mientras se carga
-        if (btnEntrada) btnEntrada.style.display = 'none';
-        if (btnBreak) btnBreak.style.display = 'none';
-        if (btnFinalizarBreak) btnFinalizarBreak.style.display = 'none';
-        if (btnSalida) btnSalida.style.display = 'none';
-
-        // Hacer solicitud GET al servidor para obtener el estado actual
-        fetch(`/simpro-lite/api/v1/asistencia.php`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        try {
-                            return JSON.parse(text);
-                        } catch (e) {
-                            throw new Error('Error en la respuesta: ' + text);
-                        }
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Estado actual:', data);
-                if (data.success) {
-                    // Actualizar la interfaz según el estado recibido
-                    actualizarInterfazSegunEstado(data.estado, data.fecha_hora);
-                } else {
-                    alertaAsistencia('error', data.error || 'Error al obtener estado');
-                    actualizarInterfazSegunEstado('pendiente', null);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alertaAsistencia('error', 'Error de conexión al obtener el estado');
-                actualizarInterfazSegunEstado('pendiente', null);
-            });
-    }
-
-    // Función para actualizar la interfaz según estado
-    function actualizarInterfazSegunEstado(estado, hora) {
-        estadoActual = estado;
-
-        // Ocultar todos los botones primero
-        if (btnEntrada) btnEntrada.style.display = 'none';
-        if (btnBreak) btnBreak.style.display = 'none';
-        if (btnFinalizarBreak) btnFinalizarBreak.style.display = 'none';
-        if (btnSalida) btnSalida.style.display = 'none';
-
-        // Mostrar los botones adecuados según el estado
-        if (estadoLabel && ultimoRegistro) {
-            switch (estado) {
-                case 'pendiente':
-                    estadoLabel.textContent = 'Sin registros hoy';
-                    ultimoRegistro.textContent = hora ? formatearFechaHora(hora) : 'N/A';
-                    if (btnEntrada) btnEntrada.style.display = 'inline-block';
-                    break;
-                case 'entrada':
-                    estadoLabel.textContent = 'Trabajando';
-                    ultimoRegistro.textContent = formatearFechaHora(hora);
-                    if (btnBreak) btnBreak.style.display = 'inline-block';
-                    if (btnSalida) btnSalida.style.display = 'inline-block';
-                    break;
-                case 'break':
-                    estadoLabel.textContent = 'En pausa';
-                    ultimoRegistro.textContent = formatearFechaHora(hora);
-                    if (btnFinalizarBreak) btnFinalizarBreak.style.display = 'inline-block';
-                    break;
-                case 'fin_break':
-                    estadoLabel.textContent = 'Trabajando (después de pausa)';
-                    ultimoRegistro.textContent = formatearFechaHora(hora);
-                    if (btnBreak) btnBreak.style.display = 'inline-block';
-                    if (btnSalida) btnSalida.style.display = 'inline-block';
-                    break;
-                case 'salida':
-                    estadoLabel.textContent = 'Jornada finalizada';
-                    ultimoRegistro.textContent = formatearFechaHora(hora);
-                    // Si es salida, permitir registrar entrada al día siguiente
-                    if (btnEntrada) btnEntrada.style.display = 'inline-block';
-                    break;
-                default:
-                    estadoLabel.textContent = 'Estado desconocido';
-                    ultimoRegistro.textContent = 'N/A';
-                    if (btnEntrada) btnEntrada.style.display = 'inline-block';
-            }
-        }
-    }
-
-    // Función mejorada para cargar supervisores
+    // Función para cargar supervisores
     function cargarSupervisores() {
-        // Obtener token de autenticación
         const token = localStorage.getItem('auth_token') || 'token_demo';
 
-        // Hacer solicitud GET al servidor
         fetch('/simpro-lite/api/v1/usuarios.php?rol=supervisor', {
                 method: 'GET',
                 headers: {
@@ -388,7 +248,6 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 console.log('Supervisores:', data);
                 if (data.success && Array.isArray(data.supervisores) && data.supervisores.length > 0) {
-                    // Llenar el select de supervisores
                     if (supervisorSelect) {
                         supervisorSelect.innerHTML = '<option value="">Seleccione un supervisor</option>';
 
@@ -400,69 +259,60 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                     }
                 } else {
-                    // Si no hay supervisores o hay un error
                     console.error('Error al cargar supervisores:', data.error ||
                         'No se encontraron supervisores');
-                    supervisorSelect.innerHTML = '<option value="">Seleccione un supervisor</option>';
-                    const option = document.createElement('option');
-                    option.value = "1"; // Asumiendo que el ID 1 es admin
-                    option.textContent = "Administrador del Sistema";
-                    supervisorSelect.appendChild(option);
+                    if (supervisorSelect) {
+                        supervisorSelect.innerHTML = '<option value="">Seleccione un supervisor</option>';
+                        const option = document.createElement('option');
+                        option.value = "1"; // Asumiendo que el ID 1 es admin
+                        option.textContent = "Administrador del Sistema";
+                        supervisorSelect.appendChild(option);
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                // En caso de error, agregar un supervisor por defecto
-                supervisorSelect.innerHTML = '<option value="">Seleccione un supervisor</option>';
-                const option = document.createElement('option');
-                option.value = "1"; // ID por defecto para el administrador
-                option.textContent = "Administrador del Sistema";
-                supervisorSelect.appendChild(option);
+                if (supervisorSelect) {
+                    supervisorSelect.innerHTML = '<option value="">Seleccione un supervisor</option>';
+                    const option = document.createElement('option');
+                    option.value = "1";
+                    option.textContent = "Administrador del Sistema";
+                    supervisorSelect.appendChild(option);
+                }
             });
     }
 
     // Función para enviar solicitud de horas extras
     function enviarSolicitudHorasExtras() {
-        // Obtener valores del formulario
         const supervisorId = document.getElementById('supervisorSelect').value;
         const fecha = document.getElementById('fechaExtras').value;
         const horaInicio = document.getElementById('horaInicio').value;
         const horaFin = document.getElementById('horaFin').value;
         const motivo = document.getElementById('motivoExtras').value;
 
-        // Validar que todos los campos estén completos
         if (!supervisorId || !fecha || !horaInicio || !horaFin || !motivo) {
             alertaAsistencia('error', 'Todos los campos son obligatorios');
             return;
         }
 
-        // Validar que hora fin sea posterior a hora inicio
         if (horaFin <= horaInicio) {
             alertaAsistencia('error', 'La hora de finalización debe ser posterior a la hora de inicio');
             return;
         }
 
-        // Obtener hora actual
         const horaActual = new Date().toLocaleTimeString('en-US', {
             hour12: false
         });
-
-        // Validar fecha actual vs fecha seleccionada
         const fechaActual = new Date().toISOString().split('T')[0];
 
-        if (fecha === fechaActual) {
-            // Si es el mismo día, verificar hora de inicio
-            if (horaInicio <= horaActual) {
-                alertaAsistencia('error',
-                    'Para solicitudes del mismo día, la hora de inicio debe ser posterior a la hora actual');
-                return;
-            }
+        if (fecha === fechaActual && horaInicio <= horaActual) {
+            alertaAsistencia('error',
+                'Para solicitudes del mismo día, la hora de inicio debe ser posterior a la hora actual');
+            return;
         }
 
-        // Obtener token de autenticación
         const token = localStorage.getItem('auth_token') || 'token_demo';
 
-        // Datos para enviar
         const datosExtras = {
             id_supervisor: supervisorId,
             fecha: fecha,
@@ -471,7 +321,6 @@ document.addEventListener('DOMContentLoaded', function() {
             motivo: motivo
         };
 
-        // Hacer solicitud POST al servidor
         fetch('/simpro-lite/api/v1/horas_extras.php', {
                 method: 'POST',
                 headers: {
@@ -491,10 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 console.log('Respuesta solicitud extras:', data);
                 if (data.success) {
-                    // Mostrar alerta de éxito
                     alertaAsistencia('success', 'Solicitud de horas extras enviada correctamente');
-
-                    // Cerrar el formulario y reiniciarlo
                     document.getElementById('solicitudExtrasContainer').style.display = 'none';
                     document.getElementById('btnMostrarSolicitudExtras').style.display = 'block';
                     document.getElementById('formSolicitudExtras').reset();
@@ -506,6 +352,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 alertaAsistencia('error', 'Error de conexión al enviar la solicitud');
             });
+    }
+
+    // Función para mostrar alertas (reutilizada de dashboard.js)
+    function alertaAsistencia(tipo, mensaje) {
+        const alertaContainer = document.getElementById('alertaContainer');
+        if (!alertaContainer) return;
+
+        const alerta = document.createElement('div');
+        alerta.className = `alert alert-${tipo} alert-dismissible fade show`;
+        alerta.role = 'alert';
+
+        const iconos = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-exclamation-triangle',
+            warning: 'fas fa-exclamation-circle',
+            info: 'fas fa-info-circle'
+        };
+
+        const icono = iconos[tipo] || iconos.info;
+
+        alerta.innerHTML = `
+            <i class="${icono} me-2"></i> ${mensaje}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+
+        alertaContainer.appendChild(alerta);
+
+        setTimeout(() => {
+            alerta.classList.remove('show');
+            setTimeout(() => alerta.remove(), 300);
+        }, 5000);
     }
 });
 </script>

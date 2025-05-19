@@ -47,8 +47,9 @@ function registrarLog($mensaje, $tipo = 'info', $id_usuario = null) {
 }
 
 function validarTipoRegistro($tipo) {
+    // Lista estricta de tipos válidos
     $tiposValidos = ['entrada', 'salida', 'break', 'fin_break'];
-    return in_array($tipo, $tiposValidos);
+    return in_array($tipo, $tiposValidos, true);
 }
 
 function verificarAutorizacionHorasExtras($id_usuario) {
@@ -113,9 +114,18 @@ try {
             manejarError('Campos requeridos faltantes: ' . implode(', ', $camposFaltantes), 400);
         }
         
-        if (!validarTipoRegistro($datos['tipo'])) {
+        // Validación estricta del tipo de registro
+        if (!isset($datos['tipo']) || !is_string($datos['tipo'])) {
+            manejarError('Tipo de registro no válido', 400);
+        }
+        
+        $tipo = trim(strtolower($datos['tipo']));
+        if (!validarTipoRegistro($tipo)) {
             manejarError('Tipo de registro no válido. Tipos permitidos: entrada, salida, break, fin_break', 400);
         }
+        
+        // Reemplazar el valor original con el valor limpio y validado
+        $datos['tipo'] = $tipo;
         
         if (!estaEnHorarioLaboral() && $datos['tipo'] === 'entrada') {
             if (!verificarAutorizacionHorasExtras($user['id_usuario'])) {
@@ -127,15 +137,91 @@ try {
             $pdo = Database::getConnection();
             $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
             
-            $stmt = $pdo->prepare(Queries::$INSERT_REGISTRO_ASISTENCIA);
-            $resultado = $stmt->execute([
+            // Verificar que el tipo de registro sea coherente con el último registro
+            $stmtUltimo = $pdo->prepare("
+                SELECT tipo FROM registros_asistencia 
+                WHERE id_usuario = ? AND DATE(fecha_hora) = CURRENT_DATE()
+                ORDER BY fecha_hora DESC LIMIT 1
+            ");
+            $stmtUltimo->execute([$user['id_usuario']]);
+            $ultimoRegistro = $stmtUltimo->fetch(PDO::FETCH_ASSOC);
+            
+            // Lógica para verificar coherencia de registros
+            if ($ultimoRegistro) {
+                $ultimoTipo = $ultimoRegistro['tipo'];
+                $tipoActual = $datos['tipo'];
+                
+                $secuenciaInvalida = false;
+                
+                // Verificar secuencias inválidas
+                if (($tipoActual === 'entrada' && ($ultimoTipo === 'entrada' || $ultimoTipo === 'fin_break')) ||
+                    ($tipoActual === 'salida' && ($ultimoTipo === 'salida' || $ultimoTipo === 'break')) ||
+                    ($tipoActual === 'break' && ($ultimoTipo === 'break' || $ultimoTipo === 'salida')) ||
+                    ($tipoActual === 'fin_break' && ($ultimoTipo === 'fin_break' || $ultimoTipo === 'entrada' || $ultimoTipo === 'salida'))) {
+                    $secuenciaInvalida = true;
+                }
+                
+                if ($secuenciaInvalida) {
+                    manejarError('Secuencia de registro inválida. No puede registrar ' . $tipoActual . ' después de ' . $ultimoTipo, 400);
+                }
+            } else if ($datos['tipo'] !== 'entrada' && date('Y-m-d') === date('Y-m-d')) {
+                // Si no hay registros hoy y no es entrada
+                manejarError('Debe registrar entrada primero', 400);
+            }
+            
+            // Verificar la estructura de la tabla antes de insertar
+            $checkTableStmt = $pdo->prepare("DESCRIBE registros_asistencia");
+            $checkTableStmt->execute();
+            $tableColumns = $checkTableStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Buscar la definición de la columna 'tipo'
+            $tipoColumn = null;
+            foreach ($tableColumns as $column) {
+                if ($column['Field'] === 'tipo') {
+                    $tipoColumn = $column;
+                    break;
+                }
+            }
+            
+            // Si existe una columna dispositivo, usarla en la consulta
+            $hasDispositivo = false;
+            $hasIpAddress = false;
+            foreach ($tableColumns as $column) {
+                if ($column['Field'] === 'dispositivo') {
+                    $hasDispositivo = true;
+                }
+                if ($column['Field'] === 'ip_address') {
+                    $hasIpAddress = true;
+                }
+            }
+            
+            // Construir la consulta SQL según las columnas disponibles
+            $sql = "INSERT INTO registros_asistencia (id_usuario, tipo, fecha_hora, latitud, longitud";
+            $values = "VALUES (?, ?, NOW(), ?, ?";
+            $params = [
                 $user['id_usuario'],
                 $datos['tipo'],
-                $datos['latitud'],
-                $datos['longitud'],
-                substr($datos['dispositivo'], 0, 100),
-                $ip
-            ]);
+                floatval($datos['latitud']),
+                floatval($datos['longitud'])
+            ];
+            
+            if ($hasDispositivo) {
+                $sql .= ", dispositivo";
+                $values .= ", ?";
+                $params[] = substr($datos['dispositivo'], 0, 100);  // Limitar a 100 caracteres
+            }
+            
+            if ($hasIpAddress) {
+                $sql .= ", ip_address";
+                $values .= ", ?";
+                $params[] = $ip;
+            }
+            
+            $sql .= ") " . $values . ")";
+            
+            // Preparar y ejecutar la consulta
+            $stmt = $pdo->prepare($sql);
+            $resultado = $stmt->execute($params);
             
             if ($resultado) {
                 registrarLog("Registro de asistencia: {$datos['tipo']}", 'asistencia', $user['id_usuario']);
