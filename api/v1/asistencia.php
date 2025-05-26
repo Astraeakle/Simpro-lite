@@ -47,37 +47,26 @@ function registrarLog($mensaje, $tipo = 'info', $id_usuario = null) {
 }
 
 function validarTipoRegistro($tipo) {
-    // Lista estricta de tipos válidos
     $tiposValidos = ['entrada', 'salida', 'break', 'fin_break'];
     return in_array($tipo, $tiposValidos, true);
 }
 
-function verificarAutorizacionHorasExtras($id_usuario) {
-    try {
-        $pdo = Database::getConnection();
-        $fecha_actual = date('Y-m-d');
-        
-        $sql = "SELECT COUNT(*) FROM autorizaciones_extras 
-                WHERE id_usuario = ? 
-                AND fecha = ? 
-                AND estado = 'aprobado' 
-                AND TIME(NOW()) BETWEEN hora_inicio AND hora_fin";
-        
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$id_usuario, $fecha_actual]);
-        
-        return $stmt->fetchColumn() > 0;
-    } catch (Exception $e) {
-        error_log("Error verificando autorización horas extras: " . $e->getMessage());
-        return false;
+function validarSecuenciaRegistro($tipoActual, $ultimoTipo, $esHoy = false) {
+    // Si no hay registros HOY, solo se permite entrada
+    if (!$esHoy || $ultimoTipo === null) {
+        return $tipoActual === 'entrada';
     }
-}
-
-function estaEnHorarioLaboral() {
-    $horaActual = (int)date('H');
-    $horaInicio = 6;  
-    $horaFin = 23;
-    return ($horaActual >= $horaInicio && $horaActual < $horaFin);
+    
+    // Definir transiciones válidas para registros del mismo día
+    $transicionesValidas = [
+        'entrada' => ['break', 'salida'],
+        'break' => ['fin_break'],
+        'fin_break' => ['break', 'salida'],
+        'salida' => [] // Después de salida no se puede registrar más en el mismo día
+    ];
+    
+    return isset($transicionesValidas[$ultimoTipo]) && 
+           in_array($tipoActual, $transicionesValidas[$ultimoTipo]);
 }
 
 try {
@@ -114,76 +103,59 @@ try {
             manejarError('Campos requeridos faltantes: ' . implode(', ', $camposFaltantes), 400);
         }
         
-        // Validación estricta del tipo de registro
-        if (!isset($datos['tipo']) || !is_string($datos['tipo'])) {
-            manejarError('Tipo de registro no válido', 400);
-        }
-        
         $tipo = trim(strtolower($datos['tipo']));
         if (!validarTipoRegistro($tipo)) {
             manejarError('Tipo de registro no válido. Tipos permitidos: entrada, salida, break, fin_break', 400);
         }
         
-        // Reemplazar el valor original con el valor limpio y validado
         $datos['tipo'] = $tipo;
-        
-        if (!estaEnHorarioLaboral() && $datos['tipo'] === 'entrada') {
-            if (!verificarAutorizacionHorasExtras($user['id_usuario'])) {
-                manejarError('No tiene autorización para registrar asistencia fuera del horario laboral', 403);
-            }
-        }
-        
+                
         try {
             $pdo = Database::getConnection();
             $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+            $fechaActual = date('Y-m-d');
             
-            // Verificar que el tipo de registro sea coherente con el último registro
-            $stmtUltimo = $pdo->prepare("
-                SELECT tipo FROM registros_asistencia 
-                WHERE id_usuario = ? AND DATE(fecha_hora) = CURRENT_DATE()
+            // Obtener el último registro del día actual
+            $stmtHoy = $pdo->prepare("
+                SELECT tipo, fecha_hora FROM registros_asistencia 
+                WHERE id_usuario = ? AND DATE(fecha_hora) = ?
                 ORDER BY fecha_hora DESC LIMIT 1
             ");
-            $stmtUltimo->execute([$user['id_usuario']]);
-            $ultimoRegistro = $stmtUltimo->fetch(PDO::FETCH_ASSOC);
+            $stmtHoy->execute([$user['id_usuario'], $fechaActual]);
+            $registroHoy = $stmtHoy->fetch(PDO::FETCH_ASSOC);
             
-            // Lógica para verificar coherencia de registros
-            if ($ultimoRegistro) {
-                $ultimoTipo = $ultimoRegistro['tipo'];
-                $tipoActual = $datos['tipo'];
+            $ultimoTipoHoy = $registroHoy ? $registroHoy['tipo'] : null;
+            $hayRegistroHoy = (bool)$registroHoy;
+            
+            // Debug log
+            error_log("Usuario {$user['id_usuario']}: Tipo actual: {$datos['tipo']}, Último hoy: " . ($ultimoTipoHoy ?? 'null') . ", Hay registro hoy: " . ($hayRegistroHoy ? 'sí' : 'no'));
+            
+            // Validar secuencia
+            if (!validarSecuenciaRegistro($datos['tipo'], $ultimoTipoHoy, $hayRegistroHoy)) {
+                $mensaje = 'Secuencia de registro inválida';
                 
-                $secuenciaInvalida = false;
-                
-                // Verificar secuencias inválidas
-                if (($tipoActual === 'entrada' && ($ultimoTipo === 'entrada' || $ultimoTipo === 'fin_break')) ||
-                    ($tipoActual === 'salida' && ($ultimoTipo === 'salida' || $ultimoTipo === 'break')) ||
-                    ($tipoActual === 'break' && ($ultimoTipo === 'break' || $ultimoTipo === 'salida')) ||
-                    ($tipoActual === 'fin_break' && ($ultimoTipo === 'fin_break' || $ultimoTipo === 'entrada' || $ultimoTipo === 'salida'))) {
-                    $secuenciaInvalida = true;
+                if (!$hayRegistroHoy) {
+                    $mensaje = 'Debe registrar entrada primero para comenzar el día laboral';
+                } else {
+                    $siguientesPosibles = [
+                        'entrada' => 'break o salida',
+                        'break' => 'fin_break',
+                        'fin_break' => 'break o salida',
+                        'salida' => 'nada más (día laboral terminado)'
+                    ];
+                    
+                    $siguiente = $siguientesPosibles[$ultimoTipoHoy] ?? 'entrada';
+                    $mensaje = "Después de registrar '$ultimoTipoHoy', puede registrar: $siguiente";
                 }
                 
-                if ($secuenciaInvalida) {
-                    manejarError('Secuencia de registro inválida. No puede registrar ' . $tipoActual . ' después de ' . $ultimoTipo, 400);
-                }
-            } else if ($datos['tipo'] !== 'entrada' && date('Y-m-d') === date('Y-m-d')) {
-                // Si no hay registros hoy y no es entrada
-                manejarError('Debe registrar entrada primero', 400);
+                manejarError($mensaje, 400);
             }
             
-            // Verificar la estructura de la tabla antes de insertar
+            // Verificar estructura de tabla
             $checkTableStmt = $pdo->prepare("DESCRIBE registros_asistencia");
             $checkTableStmt->execute();
             $tableColumns = $checkTableStmt->fetchAll(PDO::FETCH_ASSOC);
             
-            // Buscar la definición de la columna 'tipo'
-            $tipoColumn = null;
-            foreach ($tableColumns as $column) {
-                if ($column['Field'] === 'tipo') {
-                    $tipoColumn = $column;
-                    break;
-                }
-            }
-            
-            // Si existe una columna dispositivo, usarla en la consulta
             $hasDispositivo = false;
             $hasIpAddress = false;
             foreach ($tableColumns as $column) {
@@ -195,7 +167,7 @@ try {
                 }
             }
             
-            // Construir la consulta SQL según las columnas disponibles
+            // Construir consulta SQL
             $sql = "INSERT INTO registros_asistencia (id_usuario, tipo, fecha_hora, latitud, longitud";
             $values = "VALUES (?, ?, NOW(), ?, ?";
             $params = [
@@ -208,7 +180,7 @@ try {
             if ($hasDispositivo) {
                 $sql .= ", dispositivo";
                 $values .= ", ?";
-                $params[] = substr($datos['dispositivo'], 0, 100);  // Limitar a 100 caracteres
+                $params[] = substr($datos['dispositivo'], 0, 100);
             }
             
             if ($hasIpAddress) {
@@ -219,21 +191,18 @@ try {
             
             $sql .= ") " . $values . ")";
             
-            // Preparar y ejecutar la consulta
             $stmt = $pdo->prepare($sql);
             $resultado = $stmt->execute($params);
             
             if ($resultado) {
                 registrarLog("Registro de asistencia: {$datos['tipo']}", 'asistencia', $user['id_usuario']);
                 
-                $tipoTexto = '';
-                switch ($datos['tipo']) {
-                    case 'entrada': $tipoTexto = 'Entrada'; break;
-                    case 'salida': $tipoTexto = 'Salida'; break;
-                    case 'break': $tipoTexto = 'Inicio de break'; break;
-                    case 'fin_break': $tipoTexto = 'Fin de break'; break;
-                    default: $tipoTexto = 'Asistencia';
-                }
+                $tipoTexto = [
+                    'entrada' => 'Entrada',
+                    'salida' => 'Salida', 
+                    'break' => 'Inicio de break',
+                    'fin_break' => 'Fin de break'
+                ][$datos['tipo']] ?? 'Asistencia';
                 
                 responderJSON([
                     'success' => true,
@@ -256,18 +225,18 @@ try {
             $pdo = Database::getConnection();
             $fechaActual = date('Y-m-d');
             
+            // Buscar registro del día actual
             $stmtHoy = $pdo->prepare("
                 SELECT tipo, fecha_hora 
                 FROM registros_asistencia 
-                WHERE id_usuario = ? 
-                AND DATE(fecha_hora) = ? 
-                ORDER BY fecha_hora DESC 
-                LIMIT 1
+                WHERE id_usuario = ? AND DATE(fecha_hora) = ? 
+                ORDER BY fecha_hora DESC LIMIT 1
             ");
             $stmtHoy->execute([$user['id_usuario'], $fechaActual]);
             $registroHoy = $stmtHoy->fetch(PDO::FETCH_ASSOC);
             
             if ($registroHoy) {
+                // Hay registro hoy
                 responderJSON([
                     'success' => true,
                     'estado' => $registroHoy['tipo'],
@@ -275,31 +244,23 @@ try {
                     'es_hoy' => true
                 ]);
             } else {
+                // No hay registro hoy, buscar el último registro histórico
                 $stmtUltimo = $pdo->prepare("
                     SELECT tipo, fecha_hora 
                     FROM registros_asistencia 
                     WHERE id_usuario = ? 
-                    ORDER BY fecha_hora DESC 
-                    LIMIT 1
+                    ORDER BY fecha_hora DESC LIMIT 1
                 ");
                 $stmtUltimo->execute([$user['id_usuario']]);
                 $ultimoRegistro = $stmtUltimo->fetch(PDO::FETCH_ASSOC);
                 
-                if ($ultimoRegistro) {
-                    responderJSON([
-                        'success' => true,
-                        'estado' => 'pendiente',
-                        'fecha_hora' => $ultimoRegistro['fecha_hora'],
-                        'es_hoy' => false
-                    ]);
-                } else {
-                    responderJSON([
-                        'success' => true,
-                        'estado' => 'pendiente',
-                        'fecha_hora' => null,
-                        'es_hoy' => false
-                    ]);
-                }
+                responderJSON([
+                    'success' => true,
+                    'estado' => 'sin_registros_hoy', // Estado específico para este caso
+                    'fecha_hora' => $ultimoRegistro ? $ultimoRegistro['fecha_hora'] : null,
+                    'es_hoy' => false,
+                    'ultimo_tipo' => $ultimoRegistro ? $ultimoRegistro['tipo'] : null
+                ]);
             }
         } catch (PDOException $e) {
             registrarLog("Error PDO en consulta de estado: " . $e->getMessage(), 'error', $user['id_usuario'] ?? null);

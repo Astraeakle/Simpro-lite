@@ -1,69 +1,105 @@
 <?php
 // File: api/v1/actividad.php
-require_once '../../web/core/basedatos.php';
-require_once '../../web/core/utilidades.php';
+require_once __DIR__ . '/../../web/config/database.php';
 
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
-// Validar método HTTP
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    responderJSON(['error' => 'Método no permitido'], 405);
+    echo json_encode(['success' => false, 'error' => 'Método no permitido']);
+    exit;
 }
 
-// Validar token JWT
-if (!isset($_SERVER['PHP_AUTH_USER'])) {
-    header('WWW-Authenticate: Basic realm="SIMPRO"');
-    responderJSON(['error' => 'Autenticación requerida'], 401);
-}
-$usuario = $_SERVER['PHP_AUTH_USER'];
-$pass = $_SERVER['PHP_AUTH_PW'];
+$headers = getallheaders();
+$token = null;
 
-require_once '../../web/core/autenticacion.php';
-if (!Autenticacion::login($usuario, $pass)) {
-    responderJSON(['error' => 'Credenciales inválidas'], 401);
+if (isset($headers['Authorization'])) {
+    $token = str_replace('Bearer ', '', $headers['Authorization']);
 }
 
-// Procesar datos
-$datos = json_decode(file_get_contents('php://input'), true);
+if (!$token) {
+    echo json_encode(['success' => false, 'error' => 'Token requerido']);
+    exit;
+}
+
+$input = file_get_contents('php://input');
+$data = json_decode($input, true);
+
 if (json_last_error() !== JSON_ERROR_NONE) {
-    responderJSON(['error' => 'JSON inválido'], 400);
+    echo json_encode(['success' => false, 'error' => 'JSON inválido']);
+    exit;
 }
 
 // Validar campos requeridos
-$camposRequeridos = ['usuario_id', 'nombre_app', 'fecha_hora_inicio'];
-foreach ($camposRequeridos as $campo) {
-    if (empty($datos[$campo])) {
-        responderJSON(['error' => "Campo requerido: $campo"], 400);
+$required_fields = ['user_id', 'app', 'title', 'start_time', 'end_time', 'duration', 'category'];
+foreach ($required_fields as $field) {
+    if (!isset($data[$field])) {
+        echo json_encode(['success' => false, 'error' => "Campo requerido: $field"]);
+        exit;
     }
 }
 
 try {
-    DB::beginTransaction();
+    $pdo = Database::getConnection();
     
-    $sql = "INSERT INTO actividad_apps 
-            (id_usuario, nombre_app, titulo_ventana, fecha_hora_inicio, fecha_hora_fin) 
-            VALUES (?, ?, ?, ?, ?)";
+    // Verificar que el usuario existe
+    $stmt = $pdo->prepare("SELECT id_usuario FROM usuarios WHERE id_usuario = ? AND estado = 'activo'");
+    $stmt->execute([$data['user_id']]);
     
-    $params = [
-        $datos['usuario_id'],
-        $datos['nombre_app'],
-        $datos['titulo_ventana'] ?? null,
-        $datos['fecha_hora_inicio'],
-        $datos['fecha_hora_fin'] ?? null
-    ];
-    
-    $stmt = DB::query($sql, $params, "issss");
-    
-    if ($stmt->affected_rows === 1) {
-        DB::commit();
-        responderJSON(['success' => true, 'id_actividad' => $stmt->insert_id]);
-    } else {
-        DB::rollback();
-        responderJSON(['error' => 'Error al registrar actividad'], 500);
+    if (!$stmt->fetch()) {
+        echo json_encode(['success' => false, 'error' => 'Usuario no encontrado']);
+        exit;
     }
-} catch (Exception $e) {
-    DB::rollback();
-    registrarLog("Error en API actividad: " . $e->getMessage(), 'error');
-    responderJSON(['error' => 'Error del servidor'], 500);
+    
+    // Crear tabla de actividades si no existe
+    $create_table_sql = "
+        CREATE TABLE IF NOT EXISTS actividades_monitor (
+            id_actividad INT AUTO_INCREMENT PRIMARY KEY,
+            id_usuario INT NOT NULL,
+            aplicacion VARCHAR(255) NOT NULL,
+            titulo TEXT,
+            hora_inicio DATETIME NOT NULL,
+            hora_fin DATETIME NOT NULL,
+            duracion INT NOT NULL,
+            categoria ENUM('productiva', 'distractora', 'neutral') DEFAULT 'neutral',
+            fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+        )
+    ";
+    $pdo->exec($create_table_sql);
+    
+    // Insertar actividad
+    $stmt = $pdo->prepare("
+        INSERT INTO actividades_monitor (
+            id_usuario, aplicacion, titulo, hora_inicio, hora_fin, duracion, categoria
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ");
+    
+    $stmt->execute([
+        $data['user_id'],
+        $data['app'],
+        $data['title'],
+        $data['start_time'],
+        $data['end_time'],
+        $data['duration'],
+        $data['category']
+    ]);
+    
+    echo json_encode([
+        'success' => true,
+        'message' => 'Actividad guardada correctamente',
+        'id' => $pdo->lastInsertId()
+    ]);
+    
+} catch (PDOException $e) {
+    error_log("Error en actividad: " . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Error de servidor']);
 }
 ?>

@@ -59,59 +59,6 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
 
                     <!-- Div para mostrar alertas -->
                     <div id="alertaContainer" class="mt-3"></div>
-
-                    <!-- Formulario para solicitar horas extras (oculto por defecto) -->
-                    <div id="solicitudExtrasContainer" class="mt-4" style="display:none;">
-                        <div class="card border-left-warning shadow h-100 py-2">
-                            <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col mr-2">
-                                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                            Solicitar Horas Extras
-                                        </div>
-                                        <form id="formSolicitudExtras" class="mt-3">
-                                            <div class="form-group mb-3">
-                                                <label for="supervisorSelect">Supervisor:</label>
-                                                <select class="form-control" id="supervisorSelect" required>
-                                                    <option value="">Seleccione un supervisor</option>
-                                                </select>
-                                            </div>
-                                            <div class="form-group mb-3">
-                                                <label for="fechaExtras">Fecha:</label>
-                                                <input type="date" class="form-control" id="fechaExtras" required
-                                                    min="<?php echo date('Y-m-d'); ?>">
-                                            </div>
-                                            <div class="row mb-3">
-                                                <div class="col-md-6">
-                                                    <label for="horaInicio">Hora inicio:</label>
-                                                    <input type="time" class="form-control" id="horaInicio" required>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <label for="horaFin">Hora fin:</label>
-                                                    <input type="time" class="form-control" id="horaFin" required>
-                                                </div>
-                                            </div>
-                                            <div class="form-group mb-3">
-                                                <label for="motivoExtras">Motivo:</label>
-                                                <textarea class="form-control" id="motivoExtras" rows="3"
-                                                    required></textarea>
-                                            </div>
-                                            <button type="submit" class="btn btn-warning">Enviar Solicitud</button>
-                                            <button type="button" class="btn btn-secondary"
-                                                id="btnCancelarExtras">Cancelar</button>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Botón para solicitar horas extras -->
-                    <div class="mt-3">
-                        <button id="btnMostrarSolicitudExtras" class="btn btn-outline-warning">
-                            <i class="fas fa-business-time"></i> Solicitar Horas Extras
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
