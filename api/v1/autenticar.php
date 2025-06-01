@@ -2,6 +2,7 @@
 // File: api/v1/autenticar.php
 require_once __DIR__ . '/../../web/config/database.php';
 require_once __DIR__ . '/../../web/core/queries.php';
+require_once __DIR__ . '/jwt_helper.php';
 
 // Activar reporte de errores para depuración
 ini_set('display_errors', 1);
@@ -73,19 +74,50 @@ try {
     
     // Verificar contraseña con password_verify (para contraseñas hasheadas)
     if (password_verify($data['password'], $usuario['contraseña_hash'])) {
-        // Generar token
-        $token = bin2hex(random_bytes(16));
-        $expira = time() + 86400; // 24 horas
+        
+        // Generar JWT token usando tu clase JWT
+        $token = JWT::generar($usuario, 86400); // 24 horas
+        
+        // Obtener información del dispositivo e IP
+        $dispositivo = $_SERVER['HTTP_USER_AGENT'] ?? 'Desconocido';
+        $ip_address = $_SERVER['REMOTE_ADDR'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? 'Desconocida';
+        
+        // Calcular fecha de expiración
+        $fecha_expiracion = date('Y-m-d H:i:s', time() + 86400);
+        
+        // Guardar el token en la base de datos
+        $stmt_token = $pdo->prepare("
+            INSERT INTO tokens_auth (id_usuario, token, fecha_expiracion, dispositivo, ip_address) 
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        
+        $token_guardado = $stmt_token->execute([
+            $usuario['id_usuario'], 
+            $token, 
+            $fecha_expiracion, 
+            substr($dispositivo, 0, 100), // Limitar a 100 caracteres
+            $ip_address
+        ]);
+        
+        if (!$token_guardado) {
+            error_log("Error al guardar token en BD: " . implode(", ", $stmt_token->errorInfo()));
+            echo json_encode(['success' => false, 'error' => 'Error al generar sesión']);
+            exit;
+        }
         
         // Actualizar último acceso
         $stmt = $pdo->prepare("UPDATE usuarios SET ultimo_acceso = NOW() WHERE id_usuario = :id");
         $stmt->execute(['id' => $usuario['id_usuario']]);
         
+        // Limpiar tokens expirados del usuario (opcional - mantener BD limpia)
+        $stmt_cleanup = $pdo->prepare("DELETE FROM tokens_auth WHERE id_usuario = ? AND fecha_expiracion < NOW()");
+        $stmt_cleanup->execute([$usuario['id_usuario']]);
+        
         // Respuesta exitosa
         $response = [
             'success' => true,
             'token' => $token,
-            'expira' => $expira,
+            'expira' => time() + 86400,
             'usuario' => [
                 'id' => $usuario['id_usuario'],
                 'nombre' => $usuario['nombre_usuario'],
@@ -93,7 +125,9 @@ try {
                 'rol' => $usuario['rol']
             ]
         ];
+        
         echo json_encode($response);
+        
     } else {
         // Contraseña incorrecta
         echo json_encode(['success' => false, 'error' => 'Credenciales inválidas']);
@@ -103,5 +137,9 @@ try {
     // Error en la base de datos
     error_log("Error de BD: " . $e->getMessage());
     echo json_encode(['success' => false, 'error' => 'Error de servidor: ' . $e->getMessage()]);
+} catch (Exception $e) {
+    // Error general
+    error_log("Error general: " . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Error interno del servidor']);
 }
 ?>
