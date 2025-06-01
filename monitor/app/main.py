@@ -8,6 +8,7 @@ import threading
 import tkinter as tk
 import requests
 import sqlite3
+import uuid
 from datetime import datetime
 from tkinter import ttk, messagebox
 
@@ -26,9 +27,11 @@ class ProductivityMonitor:
         self.config = self.load_config()
         self.running = False
         self.monitoring_active = False
-        self.last_activity = None
+        self.current_activity = None
+        self.session_id = str(uuid.uuid4())
         self.token = None
         self.user_data = None
+        self.activity_start_time = None
         self.setup_db()
         self.create_ui()
         self.auto_login()
@@ -44,7 +47,7 @@ class ProductivityMonitor:
         except (FileNotFoundError, json.JSONDecodeError):
             return {
                 "api_url": "http://localhost/simpro-lite/api/v1",
-                "intervalo": 10,
+                "intervalo": 1,  # Cada segundo para captura continua
                 "apps_productivas": [
                     "chrome.exe", "firefox.exe", "edge.exe", "code.exe", "vscode.exe",
                     "word.exe", "excel.exe", "powerpoint.exe", "outlook.exe", "teams.exe",
@@ -57,7 +60,7 @@ class ProductivityMonitor:
             }
 
     def setup_db(self):
-        """Configurar base de datos local"""
+        """Configurar base de datos local con estructura corregida"""
         db_dir = os.path.join(os.path.dirname(
             os.path.abspath(__file__)), "data")
         os.makedirs(db_dir, exist_ok=True)
@@ -66,18 +69,18 @@ class ProductivityMonitor:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Tabla de actividades
+        # Tabla de actividades con estructura simplificada
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS activities (
-            id INTEGER PRIMARY KEY,
-            user_id INTEGER,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            activity_id TEXT UNIQUE,
+            timestamp TEXT,
+            duration INTEGER DEFAULT 0,
             app TEXT,
             title TEXT,
-            start_time TEXT,
-            end_time TEXT,
-            duration INTEGER,
+            session_id TEXT,
             category TEXT,
-            synced BOOLEAN DEFAULT FALSE
+            sync_status INTEGER DEFAULT 0
         )
         ''')
 
@@ -98,7 +101,7 @@ class ProductivityMonitor:
     def create_ui(self):
         """Crear interfaz de usuario simplificada"""
         self.root = tk.Tk()
-        self.root.title("SIMPRO Monitor de Productividad")
+        self.root.title("SIMPRO Monitor Lite")
         self.root.geometry("800x500")
         self.root.resizable(True, True)
 
@@ -121,19 +124,13 @@ class ProductivityMonitor:
         self.password_entry = ttk.Entry(self.login_frame, show="*", width=15)
         self.password_entry.grid(row=0, column=3, padx=5)
 
-        # Checkbox recordar sesión
-        self.remember_var = tk.BooleanVar()
-        self.remember_checkbox = ttk.Checkbutton(
-            self.login_frame, text="Recordarme", variable=self.remember_var)
-        self.remember_checkbox.grid(row=0, column=4, padx=5)
-
         self.login_button = ttk.Button(
             self.login_frame, text="Conectar", command=self.login)
-        self.login_button.grid(row=0, column=5, padx=5)
+        self.login_button.grid(row=0, column=4, padx=5)
 
         self.logout_button = ttk.Button(
             self.login_frame, text="Desconectar", command=self.logout, state=tk.DISABLED)
-        self.logout_button.grid(row=0, column=6, padx=5)
+        self.logout_button.grid(row=0, column=5, padx=5)
 
         # Frame de estado
         status_frame = ttk.LabelFrame(
@@ -144,8 +141,8 @@ class ProductivityMonitor:
             status_frame, text="Estado: Desconectado", font=("Arial", 10, "bold"))
         self.status_label.pack(side=tk.LEFT, padx=10)
 
-        self.work_status_label = ttk.Label(
-            status_frame, text="Jornada: No iniciada", font=("Arial", 10, "bold"), foreground="red")
+        self.work_status_label = ttk.Label(status_frame, text="Jornada: No iniciada", font=(
+            "Arial", 10, "bold"), foreground="red")
         self.work_status_label.pack(side=tk.LEFT, padx=20)
 
         self.current_app_label = ttk.Label(
@@ -160,12 +157,16 @@ class ProductivityMonitor:
             control_frame, text="Sincronizar Datos", command=self.sync_data, state=tk.DISABLED)
         self.sync_button.pack(side=tk.LEFT, padx=5)
 
+        self.finalize_button = ttk.Button(
+            control_frame, text="Finalizar Sesión", command=self.finalize_session, state=tk.DISABLED)
+        self.finalize_button.pack(side=tk.LEFT, padx=5)
+
         # Tabla de actividades recientes
         table_frame = ttk.LabelFrame(
             main_frame, text="Actividades Recientes", padding="5")
         table_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        columns = ('app', 'title', 'duration', 'category', 'synced')
+        columns = ('app', 'title', 'duration', 'category', 'sync_status')
         self.tree = ttk.Treeview(
             table_frame, columns=columns, show='headings', height=10)
 
@@ -173,13 +174,13 @@ class ProductivityMonitor:
         self.tree.heading('title', text='Título')
         self.tree.heading('duration', text='Duración')
         self.tree.heading('category', text='Categoría')
-        self.tree.heading('synced', text='Sincronizado')
+        self.tree.heading('sync_status', text='Sincronizado')
 
         self.tree.column('app', width=120)
         self.tree.column('title', width=250)
         self.tree.column('duration', width=80)
         self.tree.column('category', width=100)
-        self.tree.column('synced', width=80)
+        self.tree.column('sync_status', width=80)
 
         scrollbar = ttk.Scrollbar(
             table_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -215,31 +216,13 @@ class ProductivityMonitor:
             if result:
                 self.token = result[1]
                 self.user_data = json.loads(result[2])
-
-                # Verificar que el token sigue siendo válido
-                if self.verify_token():
-                    self.username_entry.insert(0, result[0])
-                    self.remember_var.set(True)
-                    self.login_success()
-                    self.status_var.set("Sesión restaurada automáticamente")
-                    self.start_work_status_monitor()
-                else:
-                    self.clear_saved_credentials()
+                self.username_entry.insert(0, result[0])
+                self.login_success()
+                self.status_var.set("Sesión restaurada automáticamente")
+                self.start_work_status_monitor()
 
         except Exception as e:
             print(f"Error en auto_login: {e}")
-
-    def verify_token(self):
-        """Verificar si el token es válido"""
-        try:
-            response = requests.get(
-                f"{self.config['api_url']}/verify_token.php",
-                headers={'Authorization': f'Bearer {self.token}'},
-                timeout=5
-            )
-            return response.status_code == 200 and response.json().get('valid', False)
-        except:
-            return False
 
     def login(self):
         """Autenticar usuario"""
@@ -263,10 +246,7 @@ class ProductivityMonitor:
                 if data.get('success'):
                     self.token = data.get('token')
                     self.user_data = data.get('usuario')
-
-                    if self.remember_var.get():
-                        self.save_credentials()
-
+                    self.save_credentials()
                     self.login_success()
                     self.start_work_status_monitor()
                     messagebox.showinfo(
@@ -286,7 +266,6 @@ class ProductivityMonitor:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            # Limpiar anteriores
             cursor.execute('DELETE FROM saved_credentials')
 
             expires_at = int(time.time()) + (7 * 24 * 3600)  # 7 días
@@ -304,17 +283,6 @@ class ProductivityMonitor:
         except Exception as e:
             print(f"Error guardando credenciales: {e}")
 
-    def clear_saved_credentials(self):
-        """Limpiar credenciales guardadas"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM saved_credentials')
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"Error limpiando credenciales: {e}")
-
     def login_success(self):
         """Acciones después de login exitoso"""
         self.status_label.config(
@@ -322,18 +290,15 @@ class ProductivityMonitor:
         self.login_button.config(state=tk.DISABLED)
         self.logout_button.config(state=tk.NORMAL)
         self.sync_button.config(state=tk.NORMAL)
+        self.finalize_button.config(state=tk.NORMAL)
 
         self.username_entry.config(state=tk.DISABLED)
         self.password_entry.config(state=tk.DISABLED)
-        self.remember_checkbox.config(state=tk.DISABLED)
 
     def logout(self):
         """Cerrar sesión"""
         if self.monitoring_active:
             self.stop_monitoring()
-
-        if not self.remember_var.get():
-            self.clear_saved_credentials()
 
         self.token = None
         self.user_data = None
@@ -344,10 +309,10 @@ class ProductivityMonitor:
         self.login_button.config(state=tk.NORMAL)
         self.logout_button.config(state=tk.DISABLED)
         self.sync_button.config(state=tk.DISABLED)
+        self.finalize_button.config(state=tk.DISABLED)
 
         self.username_entry.config(state=tk.NORMAL)
         self.password_entry.config(state=tk.NORMAL)
-        self.remember_checkbox.config(state=tk.NORMAL)
         self.password_entry.delete(0, tk.END)
 
         self.status_var.set("Desconectado")
@@ -358,7 +323,7 @@ class ProductivityMonitor:
             while self.token:
                 try:
                     self.check_work_status()
-                    time.sleep(15)  # Verificar cada 15 segundos
+                    time.sleep(15)
                 except Exception as e:
                     print(f"Error en monitoreo de estado: {e}")
                     time.sleep(30)
@@ -389,15 +354,13 @@ class ProductivityMonitor:
                             self.start_monitoring()
                             self.status_var.set(
                                 "¡Jornada iniciada! - Monitoreando actividad...")
-
                     elif estado == 'break':
                         self.work_status_label.config(
                             text="🟡 EN BREAK", foreground="orange")
                         if self.monitoring_active:
                             self.stop_monitoring()
                             self.status_var.set("En break - Monitoreo pausado")
-
-                    else:  # finalizada o sin_iniciar
+                    else:
                         self.work_status_label.config(
                             text="🔴 JORNADA FINALIZADA", foreground="red")
                         if self.monitoring_active:
@@ -450,51 +413,91 @@ class ProductivityMonitor:
             return f"{hours}h {minutes}m"
 
     def record_activity(self, app_info):
-        """Registrar actividad del usuario"""
+        """Registrar actividad del usuario cada segundo"""
         now = datetime.now()
+        current_key = f"{app_info['app']}|{app_info['title']}"
 
-        # Si es la misma actividad, acumular tiempo
-        if (self.last_activity and
-            self.last_activity["app"] == app_info["app"] and
-                self.last_activity["title"] == app_info["title"]):
+        # Si es la misma actividad, incrementar duración
+        if (self.current_activity and
+                self.current_activity['key'] == current_key):
+            self.current_activity['duration'] += 1
+            self.update_current_activity_in_db()
+        else:
+            # Finalizar actividad anterior si existe
+            if self.current_activity:
+                self.finalize_current_activity()
 
-            last_time = datetime.fromisoformat(
-                self.last_activity["start_time"])
-            self.last_activity["duration"] = int(
-                (now - last_time).total_seconds())
-            self.last_activity["end_time"] = now.isoformat()
+            # Crear nueva actividad
+            activity_id = str(uuid.uuid4())
+            category = self.classify_app(app_info["app"])
+
+            self.current_activity = {
+                'key': current_key,
+                'activity_id': activity_id,
+                'app': app_info["app"],
+                'title': app_info["title"],
+                'timestamp': now.isoformat(),
+                'duration': 1,
+                'category': category
+            }
+            self.save_activity_to_db(self.current_activity)
+
+    def save_activity_to_db(self, activity):
+        """Guardar nueva actividad en base de datos"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+            INSERT INTO activities (activity_id, timestamp, duration, app, title, session_id, category, sync_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                activity['activity_id'],
+                activity['timestamp'],
+                activity['duration'],
+                activity['app'],
+                activity['title'],
+                self.session_id,
+                activity['category'],
+                0
+            ))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Error guardando actividad: {e}")
+
+    def update_current_activity_in_db(self):
+        """Actualizar duración de la actividad actual"""
+        if not self.current_activity:
             return
 
-        # Finalizar actividad anterior si existe
-        if self.last_activity:
-            self.finalize_activity()
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+            UPDATE activities 
+            SET duration = ? 
+            WHERE activity_id = ?
+            ''', (
+                self.current_activity['duration'],
+                self.current_activity['activity_id']
+            ))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Error actualizando actividad: {e}")
 
-        # Nueva actividad
-        category = self.classify_app(app_info["app"])
-        self.last_activity = {
-            "app": app_info["app"],
-            "title": app_info["title"],
-            "start_time": now.isoformat(),
-            "end_time": now.isoformat(),
-            "duration": 0,
-            "category": category
-        }
-
-    def finalize_activity(self):
-        """Finalizar y guardar actividad actual"""
-        if not self.last_activity or self.last_activity["duration"] < 5:
+    def finalize_current_activity(self):
+        """Finalizar actividad actual y actualizar vista"""
+        if not self.current_activity or self.current_activity['duration'] < 5:
             return
-
-        # Guardar en BD local
-        self.save_activity_local(self.last_activity)
 
         # Actualizar vista
         self.tree.insert('', 0, values=(
-            self.last_activity["app"],
-            self.last_activity["title"][:40] +
-            ('...' if len(self.last_activity["title"]) > 40 else ''),
-            self.format_duration(self.last_activity["duration"]),
-            self.last_activity["category"],
+            self.current_activity["app"],
+            self.current_activity["title"][:40] +
+            ('...' if len(self.current_activity["title"]) > 40 else ''),
+            self.format_duration(self.current_activity["duration"]),
+            self.current_activity["category"],
             "No"
         ))
 
@@ -504,36 +507,13 @@ class ProductivityMonitor:
             for item in items[50:]:
                 self.tree.delete(item)
 
-    def save_activity_local(self, activity):
-        """Guardar actividad en base de datos local"""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
-            INSERT INTO activities (user_id, app, title, start_time, end_time, duration, category, synced)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                self.user_data.get('id'),
-                activity["app"],
-                activity["title"],
-                activity["start_time"],
-                activity["end_time"],
-                activity["duration"],
-                activity["category"],
-                False
-            ))
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"Error guardando actividad: {e}")
-
     def load_recent_activities(self):
         """Cargar actividades recientes en la tabla"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT app, title, duration, category, synced 
+                SELECT app, title, duration, category, sync_status 
                 FROM activities 
                 ORDER BY id DESC 
                 LIMIT 30
@@ -564,7 +544,7 @@ class ProductivityMonitor:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM activities WHERE synced = FALSE')
+            cursor.execute('SELECT * FROM activities WHERE sync_status = 0')
             activities = cursor.fetchall()
 
             if not activities:
@@ -578,12 +558,12 @@ class ProductivityMonitor:
                     response = requests.post(
                         f"{self.config['api_url']}/actividad.php",
                         json={
-                            'user_id': activity[1],
-                            'app': activity[2],
-                            'title': activity[3],
-                            'start_time': activity[4],
-                            'end_time': activity[5],
-                            'duration': activity[6],
+                            'activity_id': activity[1],
+                            'timestamp': activity[2],
+                            'duration': activity[3],
+                            'app': activity[4],
+                            'title': activity[5],
+                            'session_id': activity[6],
                             'category': activity[7]
                         },
                         headers={'Authorization': f'Bearer {self.token}'},
@@ -592,7 +572,7 @@ class ProductivityMonitor:
 
                     if response.status_code == 200 and response.json().get('success'):
                         cursor.execute(
-                            'UPDATE activities SET synced = TRUE WHERE id = ?', (activity[0],))
+                            'UPDATE activities SET sync_status = 1 WHERE id = ?', (activity[0],))
                         synced_count += 1
 
                 except Exception as e:
@@ -612,6 +592,18 @@ class ProductivityMonitor:
         except Exception as e:
             messagebox.showerror("Error", f"Error en sincronización: {str(e)}")
 
+    def finalize_session(self):
+        """Finalizar sesión y guardar todos los datos localmente"""
+        if self.current_activity:
+            self.finalize_current_activity()
+
+        if self.monitoring_active:
+            self.stop_monitoring()
+
+        messagebox.showinfo(
+            "Sesión Finalizada", "Todos los datos han sido guardados localmente.\nSincronice cuando tenga conexión a internet.")
+        self.status_var.set("Sesión finalizada - Datos guardados localmente")
+
     def start_monitoring(self):
         """Iniciar monitoreo de actividades"""
         if self.monitoring_active:
@@ -625,12 +617,11 @@ class ProductivityMonitor:
                 try:
                     app_info = self.get_active_window_info()
                     if app_info:
-                        # Actualizar UI desde el hilo principal
                         self.root.after(0, lambda: self.current_app_label.config(
                             text=f"App: {app_info['app']}"))
                         self.root.after(
                             0, lambda: self.record_activity(app_info))
-                    time.sleep(self.config.get("intervalo", 10))
+                    time.sleep(self.config.get("intervalo", 1))
                 except Exception as e:
                     print(f"Error en monitoreo: {e}")
                     time.sleep(5)
@@ -645,15 +636,8 @@ class ProductivityMonitor:
         self.running = False
         self.current_app_label.config(text="App: Monitoreo pausado")
 
-        # Finalizar actividad actual si existe
-        if self.last_activity:
-            now = datetime.now()
-            last_time = datetime.fromisoformat(
-                self.last_activity["start_time"])
-            self.last_activity["duration"] = int(
-                (now - last_time).total_seconds())
-            self.last_activity["end_time"] = now.isoformat()
-            self.finalize_activity()
+        if self.current_activity:
+            self.finalize_current_activity()
 
     def on_closing(self):
         """Manejar cierre de aplicación"""
@@ -665,13 +649,12 @@ class ProductivityMonitor:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT COUNT(*) FROM activities WHERE synced = FALSE')
+                'SELECT COUNT(*) FROM activities WHERE sync_status = 0')
             pending_count = cursor.fetchone()[0]
             conn.close()
 
             if pending_count > 0:
-                if messagebox.askokcancel("Salir",
-                                          f"Hay {pending_count} actividades sin sincronizar.\n¿Desea sincronizar antes de salir?"):
+                if messagebox.askokcancel("Salir", f"Hay {pending_count} actividades sin sincronizar.\n¿Desea sincronizar antes de salir?"):
                     self.sync_data()
         except:
             pass

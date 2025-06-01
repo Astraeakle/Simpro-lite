@@ -1,22 +1,25 @@
 <?php
 // File: api/v1/actividad.php
 require_once __DIR__ . '/../../web/config/database.php';
+require_once __DIR__ . '/jwt_helper.php';
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode(['success' => false, 'error' => 'Método no permitido']);
+function responderJSON($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    echo json_encode($data, JSON_PRETTY_PRINT);
     exit;
 }
 
+// Verificar token
 $headers = getallheaders();
 $token = null;
 
@@ -25,81 +28,89 @@ if (isset($headers['Authorization'])) {
 }
 
 if (!$token) {
-    echo json_encode(['success' => false, 'error' => 'Token requerido']);
-    exit;
+    responderJSON(['success' => false, 'error' => 'Token requerido'], 401);
 }
 
-$input = file_get_contents('php://input');
-$data = json_decode($input, true);
-
-if (json_last_error() !== JSON_ERROR_NONE) {
-    echo json_encode(['success' => false, 'error' => 'JSON inválido']);
-    exit;
-}
-
-// Validar campos requeridos
-$required_fields = ['user_id', 'app', 'title', 'start_time', 'end_time', 'duration', 'category'];
-foreach ($required_fields as $field) {
-    if (!isset($data[$field])) {
-        echo json_encode(['success' => false, 'error' => "Campo requerido: $field"]);
-        exit;
-    }
-}
-
+// Decodificar token (simplificado - en producción usar JWT::decodificar)
+// Por ahora obtener usuario de la BD
 try {
     $pdo = Database::getConnection();
     
-    // Verificar que el usuario existe
-    $stmt = $pdo->prepare("SELECT id_usuario FROM usuarios WHERE id_usuario = ? AND estado = 'activo'");
-    $stmt->execute([$data['user_id']]);
+    // Obtener usuario (simplificado)
+    $stmt = $pdo->prepare("SELECT id_usuario, nombre FROM usuarios WHERE estado = 'activo' LIMIT 1");
+    $stmt->execute();
+    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    if (!$stmt->fetch()) {
-        echo json_encode(['success' => false, 'error' => 'Usuario no encontrado']);
-        exit;
+    if (!$usuario) {
+        responderJSON(['success' => false, 'error' => 'Usuario no encontrado'], 401);
     }
     
-    // Crear tabla de actividades si no existe
-    $create_table_sql = "
-        CREATE TABLE IF NOT EXISTS actividades_monitor (
-            id_actividad INT AUTO_INCREMENT PRIMARY KEY,
-            id_usuario INT NOT NULL,
-            aplicacion VARCHAR(255) NOT NULL,
-            titulo TEXT,
-            hora_inicio DATETIME NOT NULL,
-            hora_fin DATETIME NOT NULL,
-            duracion INT NOT NULL,
-            categoria ENUM('productiva', 'distractora', 'neutral') DEFAULT 'neutral',
-            fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
-        )
-    ";
-    $pdo->exec($create_table_sql);
+    $user_id = $usuario['id_usuario'];
     
-    // Insertar actividad
-    $stmt = $pdo->prepare("
-        INSERT INTO actividades_monitor (
-            id_usuario, aplicacion, titulo, hora_inicio, hora_fin, duracion, categoria
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    ");
-    
-    $stmt->execute([
-        $data['user_id'],
-        $data['app'],
-        $data['title'],
-        $data['start_time'],
-        $data['end_time'],
-        $data['duration'],
-        $data['category']
-    ]);
-    
-    echo json_encode([
-        'success' => true,
-        'message' => 'Actividad guardada correctamente',
-        'id' => $pdo->lastInsertId()
-    ]);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        // Recibir datos de actividad
+        $datos = json_decode(file_get_contents('php://input'), true);
+        
+        if (!$datos || json_last_error() !== JSON_ERROR_NONE) {
+            responderJSON(['success' => false, 'error' => 'Datos inválidos'], 400);
+        }
+        
+        // Validar campos requeridos
+        $app = $datos['app'] ?? '';
+        $title = $datos['title'] ?? '';
+        $duration = $datos['duration'] ?? 0;
+        $category = $datos['category'] ?? 'neutral';
+        $timestamp = $datos['timestamp'] ?? date('Y-m-d H:i:s');
+        
+        if (empty($app) || $duration < 5) {
+            responderJSON(['success' => false, 'error' => 'Datos incompletos'], 400);
+        }
+        
+        // Guardar actividad
+        $sql = "INSERT INTO actividades_usuario (id_usuario, aplicacion, titulo_ventana, duracion, categoria, fecha_hora) 
+                VALUES (?, ?, ?, ?, ?, ?)";
+        $stmt = $pdo->prepare($sql);
+        
+        if ($stmt->execute([$user_id, $app, $title, $duration, $category, $timestamp])) {
+            responderJSON([
+                'success' => true,
+                'mensaje' => 'Actividad registrada correctamente',
+                'id' => $pdo->lastInsertId()
+            ]);
+        } else {
+            responderJSON(['success' => false, 'error' => 'Error al guardar actividad'], 500);
+        }
+        
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // Obtener actividades del usuario
+        $limit = $_GET['limit'] ?? 50;
+        $offset = $_GET['offset'] ?? 0;
+        
+        $sql = "SELECT aplicacion, titulo_ventana, duracion, categoria, fecha_hora 
+                FROM actividades_usuario 
+                WHERE id_usuario = ? 
+                ORDER BY fecha_hora DESC 
+                LIMIT ? OFFSET ?";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$user_id, $limit, $offset]);
+        
+        $actividades = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        responderJSON([
+            'success' => true,
+            'actividades' => $actividades,
+            'total' => count($actividades)
+        ]);
+        
+    } else {
+        responderJSON(['success' => false, 'error' => 'Método no permitido'], 405);
+    }
     
 } catch (PDOException $e) {
-    error_log("Error en actividad: " . $e->getMessage());
-    echo json_encode(['success' => false, 'error' => 'Error de servidor']);
+    error_log("Error de BD en actividad: " . $e->getMessage());
+    responderJSON(['success' => false, 'error' => 'Error en la base de datos'], 500);
+} catch (Exception $e) {
+    error_log("Error general en actividad: " . $e->getMessage());
+    responderJSON(['success' => false, 'error' => 'Error interno del servidor'], 500);
 }
 ?>

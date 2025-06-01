@@ -1,6 +1,5 @@
 <?php
 // File: api/v1/middleware.php
-
 require_once __DIR__ . '/../../web/config/config.php';
 require_once __DIR__ . '/../../web/config/database.php';
 require_once __DIR__ . '/jwt_helper.php';
@@ -14,7 +13,6 @@ class SecurityMiddleware {
         // Obtener todos los encabezados
         $headers = getallheaders();
         $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : '';
-        
         // Verificar si existe el encabezado Authorization
         if (!empty($authHeader) && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
             $token = $matches[1];
@@ -58,8 +56,7 @@ class SecurityMiddleware {
                     error_log("Error verificando usuario desde cookie: " . $e->getMessage());
                 }
             }
-        }
-        
+        }        
         return null;
     }
     
