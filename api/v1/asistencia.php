@@ -3,6 +3,9 @@
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
+// CORREGIDO: Establecer zona horaria de Perú
+date_default_timezone_set('America/Lima');
+
 require_once __DIR__ . '/../../web/config/config.php';
 require_once __DIR__ . '/../../web/config/database.php';
 require_once __DIR__ . '/middleware.php';
@@ -113,7 +116,7 @@ try {
         try {
             $pdo = Database::getConnection();
             $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-            $fechaActual = date('Y-m-d');
+            $fechaActual = date('Y-m-d'); // Ahora usa zona horaria de Lima
             
             // Obtener el último registro del día actual
             $stmtHoy = $pdo->prepare("
@@ -127,8 +130,8 @@ try {
             $ultimoTipoHoy = $registroHoy ? $registroHoy['tipo'] : null;
             $hayRegistroHoy = (bool)$registroHoy;
             
-            // Debug log
-            error_log("Usuario {$user['id_usuario']}: Tipo actual: {$datos['tipo']}, Último hoy: " . ($ultimoTipoHoy ?? 'null') . ", Hay registro hoy: " . ($hayRegistroHoy ? 'sí' : 'no'));
+            // Debug log con zona horaria
+            error_log("Usuario {$user['id_usuario']}: Fecha actual: $fechaActual, Tipo actual: {$datos['tipo']}, Último hoy: " . ($ultimoTipoHoy ?? 'null') . ", Hay registro hoy: " . ($hayRegistroHoy ? 'sí' : 'no'));
             
             // Validar secuencia
             if (!validarSecuenciaRegistro($datos['tipo'], $ultimoTipoHoy, $hayRegistroHoy)) {
@@ -223,7 +226,10 @@ try {
     else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         try {
             $pdo = Database::getConnection();
-            $fechaActual = date('Y-m-d');
+            $fechaActual = date('Y-m-d'); // Ahora usa zona horaria de Lima
+            
+            // Debug: Mostrar fecha actual del servidor
+            error_log("Consultando registros para fecha: $fechaActual (zona horaria: " . date_default_timezone_get() . ")");
             
             // Buscar registro del día actual
             $stmtHoy = $pdo->prepare("
@@ -237,6 +243,7 @@ try {
             
             if ($registroHoy) {
                 // Hay registro hoy
+                error_log("Registro encontrado hoy: " . json_encode($registroHoy));
                 responderJSON([
                     'success' => true,
                     'estado' => $registroHoy['tipo'],
@@ -254,9 +261,11 @@ try {
                 $stmtUltimo->execute([$user['id_usuario']]);
                 $ultimoRegistro = $stmtUltimo->fetch(PDO::FETCH_ASSOC);
                 
+                error_log("No hay registros hoy. Último registro: " . json_encode($ultimoRegistro));
+                
                 responderJSON([
                     'success' => true,
-                    'estado' => 'sin_registros_hoy', // Estado específico para este caso
+                    'estado' => 'sin_registros_hoy',
                     'fecha_hora' => $ultimoRegistro ? $ultimoRegistro['fecha_hora'] : null,
                     'es_hoy' => false,
                     'ultimo_tipo' => $ultimoRegistro ? $ultimoRegistro['tipo'] : null

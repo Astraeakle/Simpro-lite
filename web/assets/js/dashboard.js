@@ -1,6 +1,6 @@
 // File: web/assets/js/dashboard.js
 /**
- * Dashboard de Asistencia - SIMPRO Lite
+ * Dashboard de Asistencia - SIMPRO Lite - CORREGIDO
  */
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -67,6 +67,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
+     * Verificar si una fecha es de hoy (considerando zona horaria local)
+     */
+    function esFechaDeHoy(fechaString) {
+        if (!fechaString) return false;
+        
+        // Crear fecha desde el string del servidor
+        const fechaServidor = new Date(fechaString);
+        const fechaLocal = new Date();
+        
+        // Comparar solo año, mes y día en zona horaria local
+        return fechaServidor.getFullYear() === fechaLocal.getFullYear() &&
+               fechaServidor.getMonth() === fechaLocal.getMonth() &&
+               fechaServidor.getDate() === fechaLocal.getDate();
+    }
+
+    /**
      * Actualizar la interfaz según el estado actual
      */
     function actualizarInterfaz(data) {
@@ -89,8 +105,18 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // Determinar estado y botones a mostrar
-        if (data.es_hoy) {
+        // CORREGIDO: Verificar si es hoy usando la función local
+        const esHoy = esFechaDeHoy(data.fecha_hora);
+        
+        console.log('Verificación de fecha:', {
+            fecha_servidor: data.fecha_hora,
+            es_hoy_servidor: data.es_hoy,
+            es_hoy_local: esHoy,
+            estado: data.estado
+        });
+
+        // Determinar estado y botones a mostrar basado en verificación local
+        if (esHoy && data.estado !== 'sin_registros_hoy') {
             // Hay registros hoy - usar el estado actual
             switch (data.estado) {
                 case 'entrada':
