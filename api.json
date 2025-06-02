@@ -1,0 +1,14 @@
+// GET /api/reportes?empleado_id=123&fecha_inicio=2025-05-01&fecha_fin=2025-05-31
+// Respuesta:
+{
+  "empleado": "Stephany",
+  "periodo": "01/05/2025 - 31/05/2025",
+  "top_apps": [
+    {"app": "Chrome", "minutos": 120},
+    {"app": "VS Code", "minutos": 90}
+  ],
+  "productividad": {
+    "productivo": 70,
+    "distractor": 30
+  }
+}

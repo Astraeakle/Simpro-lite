@@ -1,9 +1,9 @@
--- File: db/database.sql
--- Creación de la base de datos
+-- Base de datos simplificada para SIMPRO Lite
+
 CREATE DATABASE IF NOT EXISTS simpro_lite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE simpro_lite;
 -- Tabla de usuarios
-CREATE TABLE IF NOT EXISTS usuarios (
+CREATE TABLE usuarios (
     id_usuario INT AUTO_INCREMENT PRIMARY KEY,
     nombre_usuario VARCHAR(50) UNIQUE NOT NULL,
     nombre_completo VARCHAR(100) NOT NULL,
@@ -15,134 +15,82 @@ CREATE TABLE IF NOT EXISTS usuarios (
     avatar VARCHAR(255) DEFAULT NULL,
     telefono VARCHAR(20) DEFAULT NULL,
     departamento VARCHAR(50) DEFAULT NULL
-) ENGINE=InnoDB;
-
--- Tabla de tokens de autenticación
-CREATE TABLE IF NOT EXISTS tokens_auth (
-    id_token INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuario INT NOT NULL,
-    token VARCHAR(255) NOT NULL,
-    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
-    fecha_expiracion DATETIME NOT NULL,
-    dispositivo VARCHAR(100) DEFAULT NULL,
-    ip_address VARCHAR(45) DEFAULT NULL,
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- Tabla de registros de asistencia
-CREATE TABLE IF NOT EXISTS registros_asistencia (
-    id_registro INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuario INT NOT NULL,
-    tipo ENUM('entrada', 'salida', 'break', 'fin_break') NOT NULL,
-    fecha_hora DATETIME NOT NULL,
-    latitud DECIMAL(10, 8) DEFAULT NULL,
-    longitud DECIMAL(11, 8) DEFAULT NULL,
-    direccion VARCHAR(255) DEFAULT NULL,
-    dispositivo VARCHAR(100) NOT NULL,
-    ip_address VARCHAR(45) DEFAULT NULL,
-    metodo ENUM('web', 'cliente', 'movil') DEFAULT 'web',
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- Tabla de actividad de aplicaciones
-CREATE TABLE IF NOT EXISTS actividad_apps (
-    id_actividad INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuario INT NOT NULL,
-    nombre_app VARCHAR(100) NOT NULL,
-    titulo_ventana VARCHAR(255) DEFAULT NULL,
-    fecha_hora_inicio DATETIME NOT NULL,
-    fecha_hora_fin DATETIME DEFAULT NULL,
-    tiempo_segundos INT DEFAULT NULL,
-    categoria ENUM('productiva', 'distractora', 'neutral') DEFAULT 'neutral',
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- Tabla de proyectos
-CREATE TABLE IF NOT EXISTS proyectos (
-    id_proyecto INT AUTO_INCREMENT PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
-    descripcion TEXT DEFAULT NULL,
-    fecha_inicio DATE NOT NULL,
-    fecha_fin_estimada DATE DEFAULT NULL,
-    fecha_fin_real DATE DEFAULT NULL,
-    estado ENUM('planificacion', 'en_progreso', 'completado', 'cancelado') DEFAULT 'planificacion',
-    id_responsable INT DEFAULT NULL,
-    FOREIGN KEY (id_responsable) REFERENCES usuarios(id_usuario) ON DELETE SET NULL
-) ENGINE=InnoDB;
-
--- Tabla de tareas
-CREATE TABLE IF NOT EXISTS tareas (
-    id_tarea INT AUTO_INCREMENT PRIMARY KEY,
-    id_proyecto INT NOT NULL,
-    titulo VARCHAR(100) NOT NULL,
-    descripcion TEXT DEFAULT NULL,
-    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
-    fecha_limite DATETIME DEFAULT NULL,
-    prioridad ENUM('baja', 'media', 'alta', 'urgente') DEFAULT 'media',
-    estado ENUM('pendiente', 'en_progreso', 'en_revision', 'completada', 'cancelada') DEFAULT 'pendiente',
-    id_asignado INT DEFAULT NULL,
-    FOREIGN KEY (id_proyecto) REFERENCES proyectos(id_proyecto) ON DELETE CASCADE,
-    FOREIGN KEY (id_asignado) REFERENCES usuarios(id_usuario) ON DELETE SET NULL
-) ENGINE=InnoDB;
-
--- Tabla de configuración del sistema
-CREATE TABLE IF NOT EXISTS configuracion (
-    id_config INT AUTO_INCREMENT PRIMARY KEY,
-    clave VARCHAR(50) NOT NULL UNIQUE,
-    valor TEXT NOT NULL,
-    descripcion TEXT DEFAULT NULL,
-    editable BOOLEAN DEFAULT TRUE,
-    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
-
--- Tabla de logs del sistema
-CREATE TABLE IF NOT EXISTS logs_sistema (
-    id_log INT AUTO_INCREMENT PRIMARY KEY,
-    fecha_hora DATETIME DEFAULT CURRENT_TIMESTAMP,
-    tipo VARCHAR(20) NOT NULL,
-    modulo VARCHAR(50) NOT NULL,
-    mensaje TEXT NOT NULL,
-    id_usuario INT DEFAULT NULL,
-    ip_address VARCHAR(45) DEFAULT NULL,
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE SET NULL
-) ENGINE=InnoDB;
-
--- Tabla de notificaciones
-CREATE TABLE IF NOT EXISTS notificaciones (
-    id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuario INT NOT NULL,
-    titulo VARCHAR(100) NOT NULL,
-    mensaje TEXT NOT NULL,
-    fecha_envio DATETIME DEFAULT CURRENT_TIMESTAMP,
-    fecha_leido DATETIME DEFAULT NULL,
-    leido BOOLEAN DEFAULT FALSE,
-    tipo ENUM('sistema', 'asistencia', 'tarea', 'proyecto') DEFAULT 'sistema',
-    id_referencia INT DEFAULT NULL,
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
-CREATE TABLE sesiones_monitor (
-    id_sesion INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuario INT NOT NULL,
-    fecha_inicio DATETIME NOT NULL,
-    fecha_fin DATETIME DEFAULT NULL,
-    tipo ENUM('trabajo', 'break') DEFAULT 'trabajo',
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE
 );
 
--- Índices para mejorar el rendimiento
-CREATE INDEX idx_usuario_asistencia ON registros_asistencia(id_usuario);
-CREATE INDEX idx_fecha_asistencia ON registros_asistencia(fecha_hora);
-CREATE INDEX idx_usuario_actividad ON actividad_apps(id_usuario);
-CREATE INDEX idx_fecha_actividad ON actividad_apps(fecha_hora_inicio);
-CREATE INDEX idx_proyecto_tarea ON tareas(id_proyecto);
-CREATE INDEX idx_usuario_notificaciones ON notificaciones(id_usuario);
+-- Tabla de asistencia
+CREATE TABLE registros_asistencia (
+    id_registro INT PRIMARY KEY AUTO_INCREMENT,
+    id_usuario INT NOT NULL,
+    tipo ENUM('entrada', 'salida') NOT NULL,
+    fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    latitud DECIMAL(10, 8) NULL,
+    longitud DECIMAL(11, 8) NULL,
+    ip_address VARCHAR(45) NULL,
+    notas TEXT NULL,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+);
 
+-- Tabla de actividades del usuario
+CREATE TABLE actividad_apps (
+    id_actividad INT PRIMARY KEY AUTO_INCREMENT,
+    id_usuario INT NOT NULL,
+    nombre_app VARCHAR(255) NOT NULL,
+    titulo_ventana TEXT NULL,
+    fecha_hora_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    tiempo_segundos INT NOT NULL DEFAULT 0,
+    session_id VARCHAR(100) NULL,
+    categoria ENUM('productiva', 'distractora', 'neutral') DEFAULT 'neutral',
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
+    INDEX idx_usuario_fecha (id_usuario, fecha_hora_inicio),
+    INDEX idx_categoria (categoria),
+    INDEX idx_app (nombre_app)
+);
 
+-- Tabla de jornadas laborales
+CREATE TABLE jornadas (
+    id_jornada INT PRIMARY KEY AUTO_INCREMENT,
+    id_usuario INT NOT NULL,
+    fecha DATE NOT NULL,
+    hora_inicio TIME NULL,
+    hora_fin TIME NULL,
+    estado ENUM('trabajando', 'break', 'finalizada') DEFAULT 'trabajando',
+    total_horas DECIMAL(4,2) DEFAULT 0,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
+    UNIQUE KEY unique_user_date (id_usuario, fecha)
+);
 
--- Insertar los nuevos usuarios
+-- Tabla de tokens de autenticación
+CREATE TABLE tokens_auth (
+    id_token INT PRIMARY KEY AUTO_INCREMENT,
+    id_usuario INT NOT NULL,
+    token VARCHAR(500) NOT NULL,
+    fecha_expiracion TIMESTAMP NOT NULL,
+    dispositivo VARCHAR(255) NULL,
+    activo BOOLEAN DEFAULT TRUE,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+);
+
+-- Tabla de configuración del sistema
+CREATE TABLE configuracion_sistema (
+    id_config INT PRIMARY KEY AUTO_INCREMENT,
+    clave VARCHAR(100) UNIQUE NOT NULL,
+    valor TEXT NOT NULL,
+    descripcion TEXT NULL,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Insertar datos iniciales
 INSERT INTO usuarios (nombre_usuario, nombre_completo, contraseña_hash, rol, fecha_creacion, ultimo_acceso, estado, telefono, departamento) VALUES
 ('admin', 'Administrador SIMPRO', '$2y$10$ra3uVfglOefN.6X3CVUdUezRyUVdQq6sx9nln7QVx5c.3MXIrqR5u', 'admin', '2025-05-04 18:09:12', '2025-05-10 19:29:57', 'activo', NULL, NULL),
 ('Stephany', 'Stephany Lisseth Huertas Huallcca', '$2y$10$LXWdRopgCHuLGjcyrQrE5e4ArUuCwUP6hdrxMLSPLDJuVzH0Izp22', 'empleado', '2025-05-06 12:56:06', '2025-05-12 16:32:01', 'activo', '989164070', 'Desarrollo'),
 ('Ashley', 'Ashley Galarza', '$2y$10$wLRUXwdQ0BgA.HA4/.y2xeezhxy7S1wwOzUu2JHqHQCQPA4p4lPRO', 'supervisor', '2025-05-07 21:01:17', '2025-05-12 16:31:45', 'activo', NULL, NULL),
 ('Joselyn', 'Joselyn Briggith Valverde Estrella', '$2y$10$bBuu..aSc8nFlvIlmncoJuQrk1UF4JlQDF4tsmVIDgY/MEHjqRTie', 'empleado', '2025-05-09 11:30:49', '2025-05-12 16:38:13', 'activo', '910031973', NULL);
+
+
+-- Configuración inicial
+INSERT INTO configuracion_sistema (clave, valor, descripcion) VALUES 
+('intervalo_monitor', '10', 'Intervalo de monitoreo en segundos'),
+('duracion_minima_actividad', '5', 'Duración mínima para registrar actividad'),
+('token_expiration_hours', '12', 'Horas de duración del token');

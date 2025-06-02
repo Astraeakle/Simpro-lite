@@ -10,21 +10,29 @@ class SecurityMiddleware {
     }
     
     private function verificarToken() {
-        // Obtener todos los encabezados
-        $headers = getallheaders();
-        $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : '';
-        // Verificar si existe el encabezado Authorization
+        // Método 1: Obtener Authorization header de múltiples formas
+        $authHeader = $this->getAuthorizationHeader();
+        
         if (!empty($authHeader) && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
-            $token = $matches[1];
+            $token = trim($matches[1]);
+            
+            // Debug: Log del token recibido
+            error_log("Token recibido en middleware: " . substr($token, 0, 50) . "...");
+            
             // Verificar el token JWT
             $payload = JWT::verificar($token);
             if ($payload) {
+                error_log("Token verificado exitosamente para usuario: " . $payload['sub']);
                 return [
-                    'id_usuario' => $payload['id_usuario'],
-                    'nombre' => $payload['nombre'],
+                    'id_usuario' => $payload['sub'], // Cambiar de id_usuario a sub
+                    'nombre' => $payload['name'],
                     'rol' => $payload['rol']
                 ];
+            } else {
+                error_log("Token JWT inválido o expirado");
             }
+        } else {
+            error_log("No se encontró Authorization header válido");
         }
         
         // Si no hay token válido, intentar obtener de la cookie de sesión
@@ -57,6 +65,44 @@ class SecurityMiddleware {
                 }
             }
         }        
+        return null;
+    }
+    
+    /**
+     * Obtener el header Authorization de múltiples fuentes
+     */
+    private function getAuthorizationHeader() {
+        $headers = null;
+        
+        // Método 1: getallheaders() si está disponible
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            if (isset($headers['Authorization'])) {
+                return $headers['Authorization'];
+            }
+            // Probar variantes de capitalización
+            foreach ($headers as $key => $value) {
+                if (strtolower($key) === 'authorization') {
+                    return $value;
+                }
+            }
+        }
+        
+        // Método 2: Variables de servidor HTTP_*
+        if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+            return $_SERVER['HTTP_AUTHORIZATION'];
+        }
+        
+        // Método 3: Redirection de Apache
+        if (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+            return $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+        }
+        
+        // Método 4: CGI/FastCGI
+        if (isset($_SERVER['PHP_AUTH_DIGEST'])) {
+            return $_SERVER['PHP_AUTH_DIGEST'];
+        }
+        
         return null;
     }
     
