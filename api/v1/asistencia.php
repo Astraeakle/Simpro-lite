@@ -2,15 +2,11 @@
 // File: api/v1/asistencia.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
-
-// CORREGIDO: Establecer zona horaria de Perú
 date_default_timezone_set('America/Lima');
-
 require_once __DIR__ . '/../../web/config/config.php';
 require_once __DIR__ . '/../../web/config/database.php';
 require_once __DIR__ . '/middleware.php';
 require_once __DIR__ . '/../../web/core/queries.php';
-
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
@@ -55,11 +51,9 @@ function validarTipoRegistro($tipo) {
 }
 
 function validarSecuenciaRegistro($tipoActual, $ultimoTipo, $esHoy = false) {
-    // Si no hay registros HOY, solo se permite entrada
     if (!$esHoy || $ultimoTipo === null) {
         return $tipoActual === 'entrada';
     }
-    
     // Definir transiciones válidas para registros del mismo día
     $transicionesValidas = [
         'entrada' => ['break', 'salida'],

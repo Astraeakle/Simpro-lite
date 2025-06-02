@@ -1,14 +1,9 @@
 // File: web/assets/js/geolocalizacion.js
-/**
- * Módulo de Geolocalización - SIMPRO Lite
- */
-
 class Geolocalizador {
     constructor() {
         this.ultimaUbicacion = null;
         this.errores = [];
     }
-
     async obtenerUbicacion() {
         return new Promise((resolve, reject) => {
             if (!navigator.geolocation) {
@@ -16,13 +11,11 @@ class Geolocalizador {
                 reject('Geolocalización no soportada');
                 return;
             }
-
             const opciones = {
                 enableHighAccuracy: true,
                 timeout: 10000,
                 maximumAge: 0
             };
-
             navigator.geolocation.getCurrentPosition(
                 (posicion) => {
                     this.ultimaUbicacion = {
@@ -39,9 +32,7 @@ class Geolocalizador {
                     reject(mensajeError);
                 },
                 opciones
-            );
-        });
-    }
+            );});}
 
     obtenerMensajeError(error) {
         switch(error.code) {

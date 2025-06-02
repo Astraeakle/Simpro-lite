@@ -1,9 +1,5 @@
 <?php
-/**
- * Utilidades generales para SIMPRO Lite
- * File: web/core/utilidades.php
- */
-
+// File: web/core/utilidades.php
 // Función para sanitizar entradas
 function limpiarEntrada($data) {
     $data = trim($data);
@@ -11,7 +7,6 @@ function limpiarEntrada($data) {
     $data = htmlspecialchars($data);
     return $data;
 }
-
 // Función para generar respuestas JSON
 function responderJSON($data, $codigo = 200) {
     http_response_code($codigo);
@@ -19,12 +14,10 @@ function responderJSON($data, $codigo = 200) {
     echo json_encode($data);
     exit;
 }
-
 // Función para validar usuario
 function validarusuario($usuario) {
     return filter_var($usuario, FILTER_VALIDATE_usuario);
 }
-
 // Función para obtener la IP del cliente
 function obtenerIP() {
     if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
@@ -36,7 +29,6 @@ function obtenerIP() {
     }
     return $ip;
 }
-
 // Función para comprobar si una sesión está activa
 function estaAutenticado() {
     session_start();
