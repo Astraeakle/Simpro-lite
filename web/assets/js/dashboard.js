@@ -304,33 +304,29 @@ document.addEventListener('DOMContentLoaded', function() {
      * Mostrar alerta
      */
     function mostrarAlerta(tipo, mensaje) {
-        const alertaContainer = document.getElementById('alertaContainer');
-        if (!alertaContainer) return;
-
-        const alerta = document.createElement('div');
-        alerta.className = `alert alert-${tipo} alert-dismissible fade show`;
-        alerta.role = 'alert';
-
-        const iconos = {
-            success: 'fas fa-check-circle',
-            error: 'fas fa-exclamation-triangle',
-            warning: 'fas fa-exclamation-circle',
-            info: 'fas fa-info-circle'
-        };
-
-        const icono = iconos[tipo] || iconos.info;
-
-        alerta.innerHTML = `
-            <i class="${icono} me-2"></i> ${mensaje}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        // Remove any existing alerts first
+        document.querySelectorAll('.custom-alert').forEach(el => el.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `custom-alert alert alert-${tipo} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        alertDiv.innerHTML = `
+            ${mensaje}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
         `;
-
-        alertaContainer.appendChild(alerta);
-
-        // Auto-remover después de 5 segundos
+        
+        document.body.appendChild(alertDiv);
+        
+        // Auto-hide after 5 seconds
         setTimeout(() => {
-            alerta.classList.remove('show');
-            setTimeout(() => alerta.remove(), 300);
+            alertDiv.classList.remove('show');
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.parentNode.removeChild(alertDiv);
+                }
+            }, 150);
         }, 5000);
     }
 

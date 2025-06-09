@@ -1,264 +1,263 @@
-<?php
-// File: web/modulos/reportes/personal.php
-$userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
-$idUsuario = isset($userData['id']) ? $userData['id'] : 0;
-$nombre = isset($userData['nombre_completo']) ? $userData['nombre_completo'] : 'Usuario';
-$rol = isset($userData['rol']) ? $userData['rol'] : '';
+    <?php
+    // File: web/modulos/reportes/personal.php
+    $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
+    $idUsuario = isset($userData['id']) ? $userData['id'] : 0;
+    $nombre = isset($userData['nombre_completo']) ? $userData['nombre_completo'] : 'Usuario';
+    $rol = isset($userData['rol']) ? $userData['rol'] : '';
 
-if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervisor')) {
-    header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
-    exit;
-}
-?>
+    if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervisor')) {
+        header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
+        exit;
+    }
+    ?>
 
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-chart-line text-primary"></i> Mi Productividad
-        </h1>
-        <div class="btn-group" role="group">
-            <button type="button" class="btn btn-outline-primary btn-sm" onclick="actualizarReportes()">
-                <i class="fas fa-sync-alt"></i> Actualizar
-            </button>
-            <button type="button" class="btn btn-outline-success btn-sm" onclick="exportarDatos()">
-                <i class="fas fa-download"></i> Exportar
-            </button>
+    <div class="container-fluid py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-chart-line text-primary"></i> Mi Productividad
+            </h1>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="actualizarReportes()">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
+                <button type="button" class="btn btn-outline-success btn-sm" onclick="exportarDatos()">
+                    <i class="fas fa-download"></i> Exportar
+                </button>
+            </div>
         </div>
-    </div>
 
-    <!-- Filtros de fecha -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Filtros de Período</h6>
+        <!-- Filtros de fecha -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Filtros de Período</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="fechaInicio">Fecha Inicio:</label>
+                        <input type="date" id="fechaInicio" class="form-control"
+                            value="<?php echo date('Y-m-d', strtotime('-7 days')); ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="fechaFin">Fecha Fin:</label>
+                        <input type="date" id="fechaFin" class="form-control" value="<?php echo date('Y-m-d'); ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary form-control" onclick="aplicarFiltros()">
+                            <i class="fas fa-filter"></i> Aplicar Filtros
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <label>&nbsp;</label>
+                        <select class="form-control" id="periodoRapido" onchange="aplicarPeriodoRapido()">
+                            <option value="">Períodos rápidos</option>
+                            <option value="hoy">Hoy</option>
+                            <option value="ayer">Ayer</option>
+                            <option value="semana">Esta semana</option>
+                            <option value="mes">Este mes</option>
+                            <option value="30dias">Últimos 30 días</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-3">
-                    <label for="fechaInicio">Fecha Inicio:</label>
-                    <input type="date" id="fechaInicio" class="form-control"
-                        value="<?php echo date('Y-m-d', strtotime('-7 days')); ?>">
+
+        <!-- Resumen General -->
+        <div class="row" id="resumenGeneral">
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-primary shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    Días Trabajados</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="diasTrabajados">-</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label for="fechaFin">Fecha Fin:</label>
-                    <input type="date" id="fechaFin" class="form-control" value="<?php echo date('Y-m-d'); ?>">
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-success shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                    Horas Promedio/Día</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="horasPromedio">-</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clock fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label>&nbsp;</label>
-                    <button class="btn btn-primary form-control" onclick="aplicarFiltros()">
-                        <i class="fas fa-filter"></i> Aplicar Filtros
-                    </button>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-info shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                    Total Actividades</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalActividades">-</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-mouse fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label>&nbsp;</label>
-                    <select class="form-control" id="periodoRapido" onchange="aplicarPeriodoRapido()">
-                        <option value="">Períodos rápidos</option>
-                        <option value="hoy">Hoy</option>
-                        <option value="ayer">Ayer</option>
-                        <option value="semana">Esta semana</option>
-                        <option value="mes">Este mes</option>
-                        <option value="30dias">Últimos 30 días</option>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-warning shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                    Tiempo Total (Horas)</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="tiempoTotalHoras">-</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-stopwatch fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráficos -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Distribución de Productividad</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="graficoProductividad" width="400" height="400"></canvas>
+                        <div class="mt-3">
+                            <div class="row text-center">
+                                <div class="col">
+                                    <span class="badge badge-success" id="productivaPercent">0%</span>
+                                    <br><small>Productiva</small>
+                                </div>
+                                <div class="col">
+                                    <span class="badge badge-danger" id="distractoraPercent">0%</span>
+                                    <br><small>Distractora</small>
+                                </div>
+                                <div class="col">
+                                    <span class="badge badge-secondary" id="neutralPercent">0%</span>
+                                    <br><small>Neutral</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Productividad Diaria</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="graficoDiario" width="400" height="400"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Aplicaciones -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Aplicaciones Más Utilizadas</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="tablaTopApps">
+                        <thead>
+                            <tr>
+                                <th>Aplicación</th>
+                                <th>Categoría</th>
+                                <th>Tiempo Total (h)</th>
+                                <th>Tiempo Promedio (min)</th>
+                                <th>Frecuencia de Uso</th>
+                                <th>% del Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="text-center">Cargando datos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalle de Actividades -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Actividades Recientes</h6>
+                <div class="dropdown no-arrow">
+                    <select class="form-control form-control-sm" id="filtroCategoria" onchange="filtrarActividades()">
+                        <option value="">Todas las categorías</option>
+                        <option value="productiva">Productiva</option>
+                        <option value="distractora">Distractora</option>
+                        <option value="neutral">Neutral</option>
                     </select>
                 </div>
             </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="tablaActividades">
+                        <thead>
+                            <tr>
+                                <th>Fecha/Hora</th>
+                                <th>Aplicación</th>
+                                <th>Título de Ventana</th>
+                                <th>Categoría</th>
+                                <th>Duración (min)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" class="text-center">Cargando actividades...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <nav>
+                    <ul class="pagination justify-content-center" id="paginacionActividades">
+                    </ul>
+                </nav>
+            </div>
         </div>
     </div>
 
-    <!-- Resumen General -->
-    <div class="row" id="resumenGeneral">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Días Trabajados</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="diasTrabajados">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-calendar fa-2x text-gray-300"></i>
-                        </div>
+    <!-- Loading Modal -->
+    <div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" data-backdrop="static">
+        <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-body text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="sr-only">Cargando...</span>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Horas Promedio/Día</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="horasPromedio">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-clock fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Total Actividades</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalActividades">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-mouse fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Tiempo Total (Horas)</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="tiempoTotalHoras">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-stopwatch fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
+                    <p class="mt-2">Cargando datos...</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Gráficos -->
-    <div class="row">
-        <div class="col-lg-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Distribución de Productividad</h6>
-                </div>
-                <div class="card-body">
-                    <canvas id="graficoProductividad" width="400" height="400"></canvas>
-                    <div class="mt-3">
-                        <div class="row text-center">
-                            <div class="col">
-                                <span class="badge badge-success" id="productivaPercent">0%</span>
-                                <br><small>Productiva</small>
-                            </div>
-                            <div class="col">
-                                <span class="badge badge-danger" id="distractoraPercent">0%</span>
-                                <br><small>Distractora</small>
-                            </div>
-                            <div class="col">
-                                <span class="badge badge-secondary" id="neutralPercent">0%</span>
-                                <br><small>Neutral</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Productividad Diaria</h6>
-                </div>
-                <div class="card-body">
-                    <canvas id="graficoDiario" width="400" height="400"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Top Aplicaciones -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Aplicaciones Más Utilizadas</h6>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" id="tablaTopApps">
-                    <thead>
-                        <tr>
-                            <th>Aplicación</th>
-                            <th>Categoría</th>
-                            <th>Tiempo Total (h)</th>
-                            <th>Tiempo Promedio (min)</th>
-                            <th>Frecuencia de Uso</th>
-                            <th>% del Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="6" class="text-center">Cargando datos...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Detalle de Actividades -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <h6 class="m-0 font-weight-bold text-primary">Actividades Recientes</h6>
-            <div class="dropdown no-arrow">
-                <select class="form-control form-control-sm" id="filtroCategoria" onchange="filtrarActividades()">
-                    <option value="">Todas las categorías</option>
-                    <option value="productiva">Productiva</option>
-                    <option value="distractora">Distractora</option>
-                    <option value="neutral">Neutral</option>
-                </select>
-            </div>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" id="tablaActividades">
-                    <thead>
-                        <tr>
-                            <th>Fecha/Hora</th>
-                            <th>Aplicación</th>
-                            <th>Título de Ventana</th>
-                            <th>Categoría</th>
-                            <th>Duración (min)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="5" class="text-center">Cargando actividades...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <nav>
-                <ul class="pagination justify-content-center" id="paginacionActividades">
-                </ul>
-            </nav>
-        </div>
-    </div>
-</div>
-
-<!-- Loading Modal -->
-<div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" data-backdrop="static">
-    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
-        <div class="modal-content">
-            <div class="modal-body text-center">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="sr-only">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos...</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-<script>
+    <script>
 document.addEventListener('DOMContentLoaded', function() {
             let graficoProductividad = null;
             let graficoDiario = null;
@@ -426,13 +425,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const colores = {
                     'Productiva': '
                     #28a745',
-            'Distractora': '
-# dc3545 ',
+                'Distractora': '
+    # dc3545 ',
                     'Neutral': '
                     #6c757d'
-        };
+            };
 
-        graficoProductividad = new Chart(ctx1, {
+            graficoProductividad = new Chart(ctx1, {
                             type: 'doughnut',
                             data: {
                                 labels: labels,
@@ -440,8 +439,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                         data: valores,
                                         backgroundColor: labels.map(l => colores[l] || '
                                             #007bff'),
-                    borderWidth: 2,
-                    borderColor: '# fff '
+                        borderWidth: 2,
+                        borderColor: '# fff '
                                         }]
                                 },
                                 options: {
@@ -549,15 +548,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             } [app.categoria] || 'secondary';
 
                             return `
-                <tr>
-                    <td><strong>${app.nombre_app}</strong></td>
-                    <td><span class="badge badge-${categoriaClass}">${app.categoria}</span></td>
-                    <td>${app.tiempo_total_horas}h</td>
-                    <td>${app.tiempo_promedio_minutos} min</td>
-                    <td>${app.frecuencia_uso}</td>
-                    <td>${porcentaje}%</td>
-                </tr>
-            `;
+                    <tr>
+                        <td><strong>${app.nombre_app}</strong></td>
+                        <td><span class="badge badge-${categoriaClass}">${app.categoria}</span></td>
+                        <td>${app.tiempo_total_horas}h</td>
+                        <td>${app.tiempo_promedio_minutos} min</td>
+                        <td>${app.frecuencia_uso}</td>
+                        <td>${porcentaje}%</td>
+                    </tr>
+                `;
                         }).join('');
                     }
 
@@ -581,14 +580,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             } [act.categoria] || 'secondary';
 
                             return `
-                <tr>
-                    <td>${fechaFormateada}</td>
-                    <td><strong>${act.nombre_app}</strong></td>
-                    <td>${act.titulo_ventana || 'Sin título'}</td>
-                    <td><span class="badge badge-${categoriaClass}">${act.categoria}</span></td>
-                    <td>${act.tiempo_minutos} min</td>
-                </tr>
-            `;
+                    <tr>
+                        <td>${fechaFormateada}</td>
+                        <td><strong>${act.nombre_app}</strong></td>
+                        <td>${act.titulo_ventana || 'Sin título'}</td>
+                        <td><span class="badge badge-${categoriaClass}">${act.categoria}</span></td>
+                        <td>${act.tiempo_minutos} min</td>
+                    </tr>
+                `;
                         }).join('');
                     }
 
@@ -651,7 +650,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         window.open(
                             `/simpro-lite/api/v1/reportes.php/export?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&token=${token}`
-                            );
+                        );
                     }
 
                     function getAuthToken() {
@@ -678,4 +677,4 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.aplicarPeriodoRapido = aplicarPeriodoRapido;
                     window.filtrarActividades = filtrarActividades;
                 });
-</script>
+    </script>

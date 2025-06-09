@@ -486,6 +486,6 @@ $titulo_pagina = 'Reportes y Estadísticas'
 
 <!-- Scripts específicos para reportes -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="../../assets/js/reportes.js"></script>
+<script src="../api/v1/reportes.php"></script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
