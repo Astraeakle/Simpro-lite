@@ -31,7 +31,9 @@ function obtenerIP() {
 }
 // Función para comprobar si una sesión está activa
 function estaAutenticado() {
-    session_start();
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
     return isset($_SESSION['usuario_id']);
 }
 
@@ -45,7 +47,9 @@ function requiereAutenticacion() {
 
 // Función para verificar permisos de rol
 function tienePermiso($rol_requerido) {
-    session_start();
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
     $roles = [
         'admin' => 3,
         'supervisor' => 2,

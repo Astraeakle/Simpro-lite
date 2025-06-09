@@ -1,5 +1,6 @@
 <?php
-// File: web/core/autenticacion.phprequire_once 'basedatos.php';
+// File: web/core/autenticacion.php
+require_once 'basedatos.php';
 require_once 'utilidades.php';
 class Autenticacion {
     public static function login($usuario, $password) {
@@ -14,7 +15,9 @@ class Autenticacion {
                 $usuarioData = $result->fetch_assoc();
                 
                 if (password_verify($password, $usuarioData['contraseña_hash'])) {
-                    session_start();
+                    if (session_status() === PHP_SESSION_NONE) {
+                        session_start();
+                    }
                     $_SESSION['usuario_id'] = $usuarioData['id_usuario'];
                     $_SESSION['usuario_nombre'] = $usuarioData['nombre_completo'];
                     $_SESSION['usuario_rol'] = $usuarioData['rol'];
@@ -32,7 +35,9 @@ class Autenticacion {
         }
     }
     public static function logout() {
-        session_start();
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
         
         if (isset($_SESSION['usuario'])) {
             registrarLog("Cierre de sesión: {$_SESSION['usuario']}", 'auth');
@@ -112,5 +117,60 @@ class Autenticacion {
         
         return $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
     }
+    
+    public static function verificarSesion() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        
+        // Verificar primero en sesión PHP
+        if (isset($_SESSION['usuario_id']) && !empty($_SESSION['usuario_id'])) {
+            return true;
+        }
+        
+        // Si no hay sesión PHP, verificar en cookies
+        if (isset($_COOKIE['user_data']) && !empty($_COOKIE['user_data'])) {
+            $userData = json_decode($_COOKIE['user_data'], true);
+            if ($userData && isset($userData['id'])) {
+                // Restaurar sesión desde cookie
+                $_SESSION['usuario_id'] = $userData['id'];
+                $_SESSION['usuario_nombre'] = $userData['nombre_completo'];
+                $_SESSION['usuario_rol'] = $userData['rol'];
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    
+public static function obtenerUsuarioActual() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    // Si hay datos en sesión, usarlos
+    if (isset($_SESSION['usuario_id'])) {
+        return [
+            'id_usuario' => $_SESSION['usuario_id'],
+            'nombre_completo' => $_SESSION['usuario_nombre'],
+            'rol' => $_SESSION['usuario_rol']
+        ];
+    }
+    
+    // Si no, obtener desde cookies
+    if (isset($_COOKIE['user_data'])) {
+        $userData = json_decode($_COOKIE['user_data'], true);
+        if ($userData && isset($userData['id'])) {
+            return [
+                'id_usuario' => $userData['id'],
+                'nombre_completo' => $userData['nombre_completo'],
+                'rol' => $userData['rol']
+            ];
+        }
+    }
+    
+    return null;
+}
 }
 ?>

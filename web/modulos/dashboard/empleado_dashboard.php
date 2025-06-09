@@ -52,7 +52,7 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
                             data-default-text="<i class='fas fa-sign-out-alt'></i> Registrar Salida">
                             <i class="fas fa-sign-out-alt"></i> Registrar Salida
                         </button>
-                        <a href="/simpro-lite/web/index.php?modulo=reportes&vista=personal" class="btn btn-primary">
+                        <a href="/simpro-lite/web/index.php?modulo=reports&vista=reports" class="btn btn-primary">
                             <i class="fas fa-chart-bar"></i> Mi Productividad
                         </a>
                     </div>

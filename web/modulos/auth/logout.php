@@ -2,7 +2,9 @@
 // File: web/modulos/auth/logout.php
 
 // Destruir la sesión PHP
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 session_destroy();
 
 // Eliminar las cookies relacionadas con la autenticación
@@ -17,6 +19,7 @@ if (isset($_COOKIE['user_data'])) {
 
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,6 +27,7 @@ if (isset($_COOKIE['user_data'])) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
 </head>
+
 <body>
     <div class="container mt-5 text-center">
         <div class="spinner-border text-primary mb-3" role="status">
@@ -39,11 +43,11 @@ if (isset($_COOKIE['user_data'])) {
         // Eliminar token y datos de usuario del localStorage
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
-        
+
         // Eliminar cookies (refuerzo de lo que ya hizo PHP)
         document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie = "user_data=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        
+
         // Pequeña demora antes de redirigir para mostrar el mensaje
         setTimeout(function() {
             // Redirigir a la página de login
@@ -52,4 +56,5 @@ if (isset($_COOKIE['user_data'])) {
     });
     </script>
 </body>
+
 </html>
