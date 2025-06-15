@@ -104,13 +104,105 @@ class SecurityMiddleware {
         }
         
         return null;
+    }    
+
+    function verificarAutenticacion() {
+        $headers = getallheaders();
+        
+        // Verificar si existe el header Authorization
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        
+        if (empty($authHeader)) {
+            // Verificar en cookies como fallback
+            if (isset($_COOKIE['user_data'])) {
+                $userData = json_decode($_COOKIE['user_data'], true);
+                if ($userData && isset($userData['id'])) {
+                    return [
+                        'success' => true,
+                        'user_id' => $userData['id'],
+                        'user_data' => $userData
+                    ];
+                }
+            }
+            return ['success' => false, 'message' => 'Token de autorización requerido'];
+        }
+        
+        // Extraer token del header Bearer
+        if (!preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+            return ['success' => false, 'message' => 'Formato de token inválido'];
+        }
+        
+        $token = $matches[1];
+        
+        try {
+            // Decodificar el token (base64 encode de user_data)
+            $userData = base64_decode($token);
+            $userDataArray = json_decode($userData, true);
+            
+            if (!$userDataArray || !isset($userDataArray['id'])) {
+                return ['success' => false, 'message' => 'Token inválido'];
+            }
+            
+            // Verificar que el usuario existe y está activo en la base de datos
+            $db = Database::getInstance()->getConnection();
+            $stmt = $db->prepare("SELECT id, usuario, nombre_completo, email, rol, estado FROM usuarios WHERE id = ? AND estado = 'activo'");
+            $stmt->bind_param("i", $userDataArray['id']);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $user = $result->fetch_assoc();
+            $stmt->close();
+            
+            if (!$user) {
+                return ['success' => false, 'message' => 'Usuario no válido o inactivo'];
+            }
+            
+            return [
+                'success' => true,
+                'user_id' => $user['id'],
+                'user_data' => $user
+            ];
+            
+        } catch (Exception $e) {
+            error_log("Error en verificarAutenticacion: " . $e->getMessage());
+            return ['success' => false, 'message' => 'Error al verificar token'];
+        }
     }
     
-    public function verificarRol($usuario, $rolesPermitidos) {
-        if (!isset($usuario['rol']) || !in_array($usuario['rol'], $rolesPermitidos)) {
-            return false;
+    function verificarRol($rolesPermitidos) {
+        $auth = verificarAutenticacion();
+        if (!$auth['success']) {
+            return $auth;
         }
-        return true;
+        
+        $rolUsuario = $auth['user_data']['rol'];
+        if (!in_array($rolUsuario, $rolesPermitidos)) {
+            return ['success' => false, 'message' => 'Acceso denegado - Permisos insuficientes'];
+        }
+        
+        return $auth;
+    }
+    
+    function sendJsonResponse($data, $statusCode = 200) {
+        http_response_code($statusCode);
+        header('Content-Type: application/json');
+        echo json_encode($data);
+        exit();
+    }
+    
+    function sendError($message, $code = 400) {
+        sendJsonResponse([
+            'success' => false,
+            'error' => $message,
+            'code' => $code
+        ], $code);
+    }
+    
+    function sendSuccess($data, $message = 'Operación exitosa') {
+        sendJsonResponse([
+            'success' => true,
+            'message' => $message,
+            'data' => $data
+        ]);
     }
 }
 ?>

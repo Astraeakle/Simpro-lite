@@ -20,7 +20,7 @@ $titulo_pagina = 'Reportes y Estadísticas'
     <div class="row">
 
         <!-- Contenido principal -->
-        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+        <main class="col-md-9 col-lg-10 px-md-4 mx-auto">
             <div
                 class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2">
@@ -76,12 +76,6 @@ $titulo_pagina = 'Reportes y Estadísticas'
                     <button class="nav-link active" id="resumen-tab" data-bs-toggle="tab" data-bs-target="#resumen"
                         type="button" role="tab">
                         <i class="fas fa-tachometer-alt"></i> Resumen General
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="asistencia-tab" data-bs-toggle="tab" data-bs-target="#asistencia"
-                        type="button" role="tab">
-                        <i class="fas fa-clock"></i> Asistencia
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -209,61 +203,6 @@ $titulo_pagina = 'Reportes y Estadísticas'
                                             </tbody>
                                         </table>
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab Asistencia -->
-                <div class="tab-pane fade" id="asistencia" role="tabpanel">
-                    <div class="row mt-4">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <h5 class="card-title mb-0">
-                                        <i class="fas fa-user-clock me-2"></i>
-                                        Registros de Asistencia
-                                    </h5>
-                                    <button type="button" class="btn btn-sm btn-success" onclick="exportarAsistencia()">
-                                        <i class="fas fa-file-excel"></i> Exportar
-                                    </button>
-                                </div>
-                                <div class="card-body">
-                                    <div class="table-responsive">
-                                        <table class="table table-striped table-hover" id="tabla_asistencia">
-                                            <thead class="table-dark">
-                                                <tr>
-                                                    <th>Fecha</th>
-                                                    <th>Usuario</th>
-                                                    <th>Entrada</th>
-                                                    <th>Salida</th>
-                                                    <th>Horas Trabajadas</th>
-                                                    <th>Estado</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <!-- Se llenará dinámicamente -->
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Gráfico semanal de asistencia -->
-                    <div class="row mt-4">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="card-title mb-0">
-                                        <i class="fas fa-chart-bar me-2"></i>
-                                        Tendencia Semanal de Asistencia
-                                    </h5>
-                                </div>
-                                <div class="card-body">
-                                    <canvas id="grafico_asistencia_semanal" height="100"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -486,6 +425,6 @@ $titulo_pagina = 'Reportes y Estadísticas'
 
 <!-- Scripts específicos para reportes -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="../api/v1/reportes.php"></script>
+<script src="/simpro-lite/web/assets/js/reportes.js"></script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
