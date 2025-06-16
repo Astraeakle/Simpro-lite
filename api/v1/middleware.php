@@ -109,63 +109,33 @@ class SecurityMiddleware {
     function verificarAutenticacion() {
         $headers = getallheaders();
         
-        // Verificar si existe el header Authorization
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        
-        if (empty($authHeader)) {
-            // Verificar en cookies como fallback
-            if (isset($_COOKIE['user_data'])) {
-                $userData = json_decode($_COOKIE['user_data'], true);
-                if ($userData && isset($userData['id'])) {
-                    return [
-                        'success' => true,
-                        'user_id' => $userData['id'],
-                        'user_data' => $userData
-                    ];
-                }
-            }
-            return ['success' => false, 'message' => 'Token de autorización requerido'];
-        }
-        
-        // Extraer token del header Bearer
-        if (!preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
-            return ['success' => false, 'message' => 'Formato de token inválido'];
-        }
-        
-        $token = $matches[1];
-        
-        try {
-            // Decodificar el token (base64 encode de user_data)
-            $userData = base64_decode($token);
-            $userDataArray = json_decode($userData, true);
-            
-            if (!$userDataArray || !isset($userDataArray['id'])) {
-                return ['success' => false, 'message' => 'Token inválido'];
-            }
-            
-            // Verificar que el usuario existe y está activo en la base de datos
-            $db = Database::getInstance()->getConnection();
-            $stmt = $db->prepare("SELECT id, usuario, nombre_completo, email, rol, estado FROM usuarios WHERE id = ? AND estado = 'activo'");
-            $stmt->bind_param("i", $userDataArray['id']);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $user = $result->fetch_assoc();
-            $stmt->close();
-            
-            if (!$user) {
-                return ['success' => false, 'message' => 'Usuario no válido o inactivo'];
-            }
-            
+        // 1. Verificar token JWT primero
+        $jwt = JWT::verificarDesdeHeader();
+        if ($jwt) {
             return [
                 'success' => true,
-                'user_id' => $user['id'],
-                'user_data' => $user
+                'user_id' => $jwt['sub'],
+                'user_data' => [
+                    'id' => $jwt['sub'],
+                    'nombre_completo' => $jwt['name'],
+                    'rol' => $jwt['rol']
+                ]
             ];
-            
-        } catch (Exception $e) {
-            error_log("Error en verificarAutenticacion: " . $e->getMessage());
-            return ['success' => false, 'message' => 'Error al verificar token'];
         }
+        
+        // 2. Fallback a cookie de sesión
+        if (isset($_COOKIE['user_data'])) {
+            $userData = json_decode($_COOKIE['user_data'], true);
+            if ($userData && isset($userData['id'])) {
+                return [
+                    'success' => true,
+                    'user_id' => $userData['id'],
+                    'user_data' => $userData
+                ];
+            }
+        }
+        
+        return ['success' => false, 'message' => 'Autenticación requerida'];
     }
     
     function verificarRol($rolesPermitidos) {

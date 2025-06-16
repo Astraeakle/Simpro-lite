@@ -1,95 +1,55 @@
 <?php
 // File: web/modulos/reportes/personal.php
-$userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
-$idUsuario = isset($userData['id']) ? $userData['id'] : 0;
-$nombre = isset($userData['nombre_completo']) ? $userData['nombre_completo'] : 'Usuario';
-$rol = isset($userData['rol']) ? $userData['rol'] : '';
-
-if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervisor')) {
-    header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
-    exit;
-}
 ?>
-
 <div class="container-fluid py-4">
+    <!-- Encabezado -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-chart-line text-primary"></i> Mi Productividad
         </h1>
-        <div class="btn-group" role="group">
+        <div>
             <button type="button" class="btn btn-outline-primary btn-sm" onclick="actualizarReportes()">
                 <i class="fas fa-sync-alt"></i> Actualizar
-            </button>
-            <button type="button" class="btn btn-outline-success btn-sm" onclick="exportarDatos()">
-                <i class="fas fa-download"></i> Exportar
             </button>
         </div>
     </div>
 
-    <!-- Filtros de fecha -->
+    <!-- Filtros básicos -->
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Filtros de Período</h6>
-        </div>
-        <div class="card-body">
+        <div class="card-body p-3">
             <div class="row">
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label for="fecha_inicio">Fecha Inicio:</label>
                     <input type="date" id="fecha_inicio" class="form-control"
                         value="<?php echo date('Y-m-d', strtotime('-7 days')); ?>">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label for="fecha_fin">Fecha Fin:</label>
                     <input type="date" id="fecha_fin" class="form-control" value="<?php echo date('Y-m-d'); ?>">
                 </div>
-                <div class="col-md-3">
-                    <label>&nbsp;</label>
-                    <button class="btn btn-primary form-control" onclick="aplicarFiltros()">
-                        <i class="fas fa-filter"></i> Aplicar Filtros
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="aplicarFiltros()">
+                        <i class="fas fa-filter"></i> Aplicar
                     </button>
-                </div>
-                <div class="col-md-3">
-                    <label>&nbsp;</label>
-                    <select class="form-control" id="periodoRapido" onchange="aplicarPeriodoRapido()">
-                        <option value="">Períodos rápidos</option>
-                        <option value="hoy">Hoy</option>
-                        <option value="ayer">Ayer</option>
-                        <option value="semana">Esta semana</option>
-                        <option value="mes">Este mes</option>
-                        <option value="30dias">Últimos 30 días</option>
-                    </select>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Resumen General -->
-    <div class="row" id="resumenGeneral">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-left-primary shadow h-100">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Días Trabajados</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="diasTrabajados">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-calendar fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Horas Promedio/Día</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="horasPromedio">-</div>
+                                Tiempo Total
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="tiempoTotalHoras">
+                                <i class="fas fa-spinner fa-spin"></i> Cargando...
+                            </div>
+                            <small class="text-muted">Horas trabajadas</small>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-clock fa-2x text-gray-300"></i>
@@ -99,34 +59,42 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
             </div>
         </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
+        <div class="col-md-4">
+            <div class="card border-left-success shadow h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Productividad
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="productividadPercent">
+                                <i class="fas fa-spinner fa-spin"></i> Cargando...
+                            </div>
+                            <small class="text-muted">% de tiempo productivo</small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-left-info shadow h-100">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Total Actividades</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalActividades">-</div>
+                                Actividades
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalActividades">
+                                <i class="fas fa-spinner fa-spin"></i> Cargando...
+                            </div>
+                            <small class="text-muted">Registros capturados</small>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-mouse fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Tiempo Total (Horas)</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="tiempoTotalHoras">-</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-stopwatch fa-2x text-gray-300"></i>
+                            <i class="fas fa-tasks fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
@@ -134,621 +102,486 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
         </div>
     </div>
 
-    <!-- Gráficos -->
-    <div class="row">
-        <div class="col-lg-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Distribución de Productividad</h6>
-                </div>
-                <div class="card-body">
-                    <canvas id="graficoProductividad" width="400" height="400"></canvas>
-                    <div class="mt-3">
-                        <div class="row text-center">
-                            <div class="col">
-                                <span class="badge badge-success" id="productivaPercent">0%</span>
-                                <br><small>Productiva</small>
-                            </div>
-                            <div class="col">
-                                <span class="badge badge-danger" id="distractoraPercent">0%</span>
-                                <br><small>Distractora</small>
-                            </div>
-                            <div class="col">
-                                <span class="badge badge-secondary" id="neutralPercent">0%</span>
-                                <br><small>Neutral</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Productividad Diaria</h6>
-                </div>
-                <div class="card-body">
-                    <canvas id="graficoDiario" width="400" height="400"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Top Aplicaciones -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Aplicaciones Más Utilizadas</h6>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" id="tablaTopApps">
-                    <thead>
-                        <tr>
-                            <th>Aplicación</th>
-                            <th>Categoría</th>
-                            <th>Tiempo Total (h)</th>
-                            <th>Tiempo Promedio (min)</th>
-                            <th>Frecuencia de Uso</th>
-                            <th>% del Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="6" class="text-center">Cargando datos...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Detalle de Actividades -->
+    <!-- Gráfico principal -->
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <h6 class="m-0 font-weight-bold text-primary">Actividades Recientes</h6>
+            <h6 class="m-0 font-weight-bold text-primary">Distribución de Tiempo</h6>
             <div class="dropdown no-arrow">
-                <select class="form-control form-control-sm" id="filtroCategoria" onchange="filtrarActividades()">
-                    <option value="">Todas las categorías</option>
-                    <option value="productiva">Productiva</option>
-                    <option value="distractora">Distractora</option>
-                    <option value="neutral">Neutral</option>
-                </select>
+                <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink" data-toggle="dropdown"
+                    aria-haspopup="true" aria-expanded="false">
+                    <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                </a>
+                <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                    aria-labelledby="dropdownMenuLink">
+                    <div class="dropdown-header">Opciones:</div>
+                    <a class="dropdown-item" href="#" onclick="actualizarReportes()">
+                        <i class="fas fa-sync-alt fa-sm fa-fw mr-2 text-gray-400"></i>
+                        Actualizar
+                    </a>
+                </div>
             </div>
         </div>
         <div class="card-body">
+            <div class="chart-container position-relative" style="height: 300px;">
+                <canvas id="graficoProductividad"></canvas>
+            </div>
+            <div class="mt-4 text-center">
+                <span class="badge badge-success text-white mr-3 px-3 py-2" id="productivaPercent">
+                    <i class="fas fa-spinner fa-spin"></i> Cargando...
+                </span>
+                <span class="badge badge-danger text-white mr-3 px-3 py-2" id="distractoraPercent">
+                    <i class="fas fa-spinner fa-spin"></i> Cargando...
+                </span>
+                <span class="badge badge-secondary text-white px-3 py-2" id="neutralPercent">
+                    <i class="fas fa-spinner fa-spin"></i> Cargando...
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de aplicaciones más usadas -->
+    <div class="card shadow">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Aplicaciones Más Usadas</h6>
+            <small class="text-muted">Top 10 aplicaciones por tiempo de uso</small>
+        </div>
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-bordered" id="tablaActividades">
-                    <thead>
+                <table class="table table-hover mb-0">
+                    <thead class="thead-light">
                         <tr>
-                            <th>Fecha/Hora</th>
-                            <th>Aplicación</th>
-                            <th>Título de Ventana</th>
-                            <th>Categoría</th>
-                            <th>Duración (min)</th>
+                            <th class="border-0">Aplicación</th>
+                            <th class="border-0">Tiempo de Uso</th>
+                            <th class="border-0">Categoría</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="tablaTopApps">
                         <tr>
-                            <td colspan="5" class="text-center">Cargando actividades...</td>
+                            <td colspan="3" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="sr-only">Cargando...</span>
+                                </div>
+                                <p class="mt-2 mb-0 text-muted">Cargando datos...</p>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-            <nav>
-                <ul class="pagination justify-content-center" id="paginacionActividades">
-                </ul>
-            </nav>
         </div>
     </div>
 </div>
 
-<!-- Loading Modal -->
-<div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" data-backdrop="static">
-    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
-        <div class="modal-content">
-            <div class="modal-body text-center">
-                <div class="spinner-border text-primary" role="status">
+<!-- Modal de carga -->
+<div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" aria-labelledby="loadingModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-body text-center p-4">
+                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
                     <span class="sr-only">Cargando...</span>
                 </div>
-                <p class="mt-2">Cargando datos...</p>
+                <h5 class="mb-2">Procesando datos...</h5>
+                <p class="mb-0 text-muted">Por favor espera mientras cargamos tu información</p>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Scripts necesarios -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
-// Función para obtener el token de autenticación
-function getAuthToken() {
-    const userData = getCookie('user_data');
-    if (userData) {
-        try {
-            const parsedData = JSON.parse(userData);
-            return btoa(JSON.stringify(parsedData));
-        } catch (e) {
-            console.error('Error parsing user_data:', e);
-            return '';
-        }
-    }
-    return '';
-}
+// Configuración de la base URL de la API
+const API_BASE_URL = window.location.origin + '/simpro-lite/api/v1';
 
-// Función para obtener cookies
+// Funciones globales para evitar errores de referencia
+let graficoProductividad = null;
+
+// Función para obtener el valor de una cookie
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
-    return '';
+    return null;
 }
 
-// Función para mostrar alertas
-function mostrarAlerta(tipo, mensaje) {
-    // Puedes implementar un sistema de notificaciones más sofisticado aquí
-    alert(`${tipo.toUpperCase()}: ${mensaje}`);
-}
+// Función auxiliar para hacer solicitudes autenticadas
+async function hacerSolicitudAutenticada(url, opciones = {}) {
+    // Primero intentar localStorage, luego cookies
+    let token = localStorage.getItem('token');
 
-// Función fetchData para llamadas a la API
-async function fetchData(endpoint, params = {}) {
-    try {
-        const token = getAuthToken();
-        const queryString = new URLSearchParams(params).toString();
-        const response = await fetch(`/simpro-lite/api/v1/reportes.php${endpoint}?${queryString}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json' // Asegurar que queremos JSON
-            }
-        });
+    console.log('Token en localStorage:', token ? 'Presente' : 'Ausente');
 
-        // Verificar primero el tipo de contenido
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const text = await response.text();
-            throw new Error(`Respuesta no es JSON (${response.status}): ${text.substring(0, 100)}`);
+    if (!token) {
+        token = getCookie('auth_token');
+        console.log('Token en cookies:', token ? 'Presente' : 'Ausente');
+    }
+
+    if (!token) {
+        throw new Error('No se encontró token de autenticación');
+    }
+
+    console.log('Usando token:', token ? 'Sí' : 'No');
+
+    const defaultOptions = {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
         }
+    };
+
+    const finalOptions = {
+        ...defaultOptions,
+        ...opciones,
+        headers: {
+            ...defaultOptions.headers,
+            ...opciones.headers
+        }
+    };
+
+    console.log('Haciendo solicitud a:', url);
+    console.log('Headers:', finalOptions.headers);
+
+    try {
+        const response = await fetch(url, finalOptions);
+
+        console.log('Respuesta recibida:', response.status, response.statusText);
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
+            const errorText = await response.text();
+            console.error('Error en respuesta:', response.status, errorText);
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        return await response.json();
+        const data = await response.json();
+        console.log('Datos recibidos:', data);
+        return data;
+
     } catch (error) {
-        console.error(`Error en fetchData (${endpoint}):`, error);
-        mostrarAlerta('error', `Error al obtener datos: ${error.message}`);
+        console.error('Error en fetch:', error);
         throw error;
     }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    let graficoProductividad = null;
-    let graficoDiario = null;
-    let datosActuales = {};
-    let paginaActual = 1;
-    const registrosPorPagina = 20;
+// Función principal para cargar los reportes
+function cargarReportes() {
+    mostrarModal(true);
 
-    // Cargar datos iniciales
-    cargarDatos();
+    Promise.all([
+        cargarResumenGeneral(),
+        cargarDistribucionTiempo(),
+        cargarTopApps()
+    ]).then(() => {
+        mostrarModal(false);
+    }).catch(error => {
+        console.error('Error cargando reportes:', error);
+        mostrarModal(false);
+        mostrarAlerta('Error al cargar los reportes: ' + error.message, 'error');
+    });
+}
 
-    function mostrarCargando() {
-        const loadingDiv = document.createElement('div');
-        loadingDiv.id = 'customLoading';
-        loadingDiv.style.position = 'fixed';
-        loadingDiv.style.top = '0';
-        loadingDiv.style.left = '0';
-        loadingDiv.style.width = '100%';
-        loadingDiv.style.height = '100%';
-        loadingDiv.style.backgroundColor = 'rgba(0,0,0,0.5)';
-        loadingDiv.style.zIndex = '9999';
-        loadingDiv.style.display = 'flex';
-        loadingDiv.style.justifyContent = 'center';
-        loadingDiv.style.alignItems = 'center';
-        loadingDiv.innerHTML = `
-            <div style="background: white; padding: 20px; border-radius: 5px;">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="sr-only">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos...</p>
-            </div>
-        `;
-        document.body.appendChild(loadingDiv);
-    }
-
-    function ocultarCargando() {
-        const loadingDiv = document.getElementById('customLoading');
-        if (loadingDiv) {
-            loadingDiv.remove();
-        }
-    }
-
-    function cargarDatos() {
-        mostrarCargando();
-        Promise.all([
-            cargarResumenGeneral(),
-            cargarReporteProductividad(),
-            cargarActividades()
-        ]).then(() => {
-            ocultarCargando();
-        }).catch(error => {
-            ocultarCargando();
-            console.error('Error cargando datos:', error);
-            mostrarAlerta('error', 'Error al cargar los datos de productividad');
-        });
-    }
-
-    async function cargarResumenGeneral() {
-        try {
-            const fechaInicio = document.getElementById('fecha_inicio').value;
-            const fechaFin = document.getElementById('fecha_fin').value;
-
-            const data = await fetchData('/resumen', {
-                fecha_inicio: fechaInicio,
-                fecha_fin: fechaFin
-            });
-
-            if (data.success) {
-                actualizarResumenGeneral(data.data);
-            } else {
-                throw new Error(data.error || 'Error al cargar resumen');
-            }
-        } catch (error) {
-            console.error('Error en cargarResumenGeneral:', error);
-            throw error;
-        }
-    }
-
-    async function cargarReporteProductividad() {
-        try {
-            const fechaInicio = document.getElementById('fecha_inicio').value;
-            const fechaFin = document.getElementById('fecha_fin').value;
-
-            const data = await fetchData('/productividad', {
-                fecha_inicio: fechaInicio,
-                fecha_fin: fechaFin
-            });
-
-            if (data.success) {
-                datosActuales.productividad = data.data;
-                actualizarGraficos(data.data);
-                actualizarTopApps(data.data.top_aplicaciones);
-            } else {
-                throw new Error(data.error || 'Error al cargar productividad');
-            }
-        } catch (error) {
-            console.error('Error en cargarReporteProductividad:', error);
-            throw error;
-        }
-    }
-
-    async function cargarActividades() {
-        try {
-            const fechaInicio = document.getElementById('fecha_inicio').value;
-            const fechaFin = document.getElementById('fecha_fin').value;
-            const categoria = document.getElementById('filtroCategoria').value;
-
-            const params = {
-                fecha_inicio: fechaInicio,
-                fecha_fin: fechaFin,
-                page: paginaActual
-            };
-
-            if (categoria) {
-                params.categoria = categoria;
-            }
-
-            const data = await fetchData('/actividades', params);
-
-            if (data.success) {
-                datosActuales.actividades = data.data.actividades;
-                actualizarTablaActividades(data.data.actividades);
-
-                // Actualizar paginación
-                actualizarPaginacion(data.data.pagination);
-            } else {
-                throw new Error(data.error || 'Error al cargar actividades');
-            }
-        } catch (error) {
-            console.error('Error en cargarActividades:', error);
-            throw error;
-        }
-    }
-
-    function actualizarPaginacion(pagination) {
-        const paginacionContainer = document.getElementById('paginacionActividades');
-        if (!paginacionContainer) return;
-
-        paginacionContainer.innerHTML = '';
-
-        const totalPaginas = pagination.last_page;
-        const paginaActual = pagination.current_page;
-
-        // Botón Anterior
-        if (paginaActual > 1) {
-            const li = document.createElement('li');
-            li.className = 'page-item';
-            li.innerHTML =
-                `<a class="page-link" href="#" onclick="cambiarPagina(${paginaActual - 1})">&laquo;</a>`;
-            paginacionContainer.appendChild(li);
-        }
-
-        // Números de página
-        for (let i = 1; i <= totalPaginas; i++) {
-            const li = document.createElement('li');
-            li.className = `page-item ${i === paginaActual ? 'active' : ''}`;
-            li.innerHTML = `<a class="page-link" href="#" onclick="cambiarPagina(${i})">${i}</a>`;
-            paginacionContainer.appendChild(li);
-        }
-
-        // Botón Siguiente
-        if (paginaActual < totalPaginas) {
-            const li = document.createElement('li');
-            li.className = 'page-item';
-            li.innerHTML =
-                `<a class="page-link" href="#" onclick="cambiarPagina(${paginaActual + 1})">&raquo;</a>`;
-            paginacionContainer.appendChild(li);
-        }
-    }
-
-    function cambiarPagina(nuevaPagina) {
-        paginaActual = nuevaPagina;
-        cargarActividades();
-    }
-
-    function actualizarResumenGeneral(datos) {
-        document.getElementById('diasTrabajados').textContent = datos.asistencia?.dias_trabajados || '-';
-        document.getElementById('horasPromedio').textContent = (datos.asistencia?.promedio_horas_diarias ||
-            '0') + 'h';
-        document.getElementById('totalActividades').textContent = (datos.productividad?.total_actividades ||
-            '0').toLocaleString();
-        document.getElementById('tiempoTotalHoras').textContent = (datos.productividad?.tiempo_total_horas ||
-            '0') + 'h';
-    }
-
-    function actualizarGraficos(datos) {
-        // Gráfico de productividad (pie chart)
-        const ctx1 = document.getElementById('graficoProductividad').getContext('2d');
-
-        if (graficoProductividad) {
-            graficoProductividad.destroy();
-        }
-
-        const categorias = datos.resumen_categoria || [];
-        const labels = categorias.map(c => c.categoria?.charAt(0)?.toUpperCase() + c.categoria?.slice(1) || '');
-        const valores = categorias.map(c => parseFloat(c.tiempo_total_horas || 0));
-        const colores = {
-            'Productiva': '#28a745',
-            'Distractora': '#dc3545',
-            'Neutral': '#6c757d'
-        };
-
-        graficoProductividad = new Chart(ctx1, {
-            type: 'doughnut',
-            data: {
-                labels: labels,
-                datasets: [{
-                    data: valores,
-                    backgroundColor: labels.map(l => colores[l] || '#007bff'),
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
-                }
-            }
-        });
-
-        // Actualizar badges de porcentaje
-        const total = valores.reduce((a, b) => a + b, 0);
-        categorias.forEach(cat => {
-            const porcentaje = total > 0 ? ((cat.tiempo_total_horas / total) * 100).toFixed(1) : 0;
-            const elementId = cat.categoria?.toLowerCase() + 'Percent';
-            const element = document.getElementById(elementId);
-            if (element) element.textContent = porcentaje + '%';
-        });
-
-        // Gráfico diario (line chart)
-        const ctx2 = document.getElementById('graficoDiario').getContext('2d');
-
-        if (graficoDiario) {
-            graficoDiario.destroy();
-        }
-
-        const productividadDiaria = datos.productividad_diaria || [];
-        const fechas = productividadDiaria.map(d => {
-            const fecha = new Date(d.fecha);
-            return fecha.toLocaleDateString('es-ES', {
-                month: 'short',
-                day: 'numeric'
-            });
-        });
-
-        graficoDiario = new Chart(ctx2, {
-            type: 'line',
-            data: {
-                labels: fechas,
-                datasets: [{
-                        label: 'Productiva',
-                        data: productividadDiaria.map(d => d.productiva || 0),
-                        borderColor: '#28a745',
-                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Distractora',
-                        data: productividadDiaria.map(d => d.distractora || 0),
-                        borderColor: '#dc3545',
-                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Neutral',
-                        data: productividadDiaria.map(d => d.neutral || 0),
-                        borderColor: '#6c757d',
-                        backgroundColor: 'rgba(108, 117, 125, 0.1)',
-                        tension: 0.1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Horas'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        position: 'top'
-                    }
-                }
-            }
-        });
-    }
-
-    function actualizarTopApps(apps = []) {
-        const tbody = document.querySelector('#tablaTopApps tbody');
-        if (!tbody) return;
-
-        if (!apps || apps.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay datos disponibles</td></tr>';
-            return;
-        }
-
-        const totalTiempo = apps.reduce((sum, app) => sum + parseFloat(app.tiempo_total_horas || 0), 0);
-
-        tbody.innerHTML = apps.map(app => {
-            const porcentaje = totalTiempo > 0 ? ((app.tiempo_total_horas / totalTiempo) * 100).toFixed(
-                1) : 0;
-            const categoriaClass = {
-                'productiva': 'success',
-                'distractora': 'danger',
-                'neutral': 'secondary'
-            } [app.categoria?.toLowerCase()] || 'secondary';
-
-            return `
-                <tr>
-                    <td><strong>${app.nombre_app || 'Desconocido'}</strong></td>
-                    <td><span class="badge badge-${categoriaClass}">${app.categoria || 'Sin categoría'}</span></td>
-                    <td>${app.tiempo_total_horas || '0'}h</td>
-                    <td>${app.tiempo_promedio_minutos || '0'} min</td>
-                    <td>${app.frecuencia_uso || '0'}</td>
-                    <td>${porcentaje}%</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    function actualizarTablaActividades(actividades = []) {
-        const tbody = document.querySelector('#tablaActividades tbody');
-        if (!tbody) return;
-
-        if (!actividades || actividades.length === 0) {
-            tbody.innerHTML =
-                '<tr><td colspan="5" class="text-center">No hay actividades registradas</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = actividades.map(act => {
-            const fecha = new Date(act.fecha_hora_inicio);
-            const fechaFormateada = fecha.toLocaleString('es-ES');
-            const categoriaClass = {
-                'productiva': 'success',
-                'distractora': 'danger',
-                'neutral': 'secondary'
-            } [act.categoria?.toLowerCase()] || 'secondary';
-
-            return `
-                <tr>
-                    <td>${fechaFormateada}</td>
-                    <td><strong>${act.nombre_app || 'Desconocido'}</strong></td>
-                    <td>${act.titulo_ventana || 'Sin título'}</td>
-                    <td><span class="badge badge-${categoriaClass}">${act.categoria || 'Sin categoría'}</span></td>
-                    <td>${act.tiempo_minutos || '0'} min</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    function aplicarFiltros() {
-        paginaActual = 1;
-        cargarDatos();
-    }
-
-    function aplicarPeriodoRapido() {
-        const periodo = document.getElementById('periodoRapido').value;
-        const hoy = new Date();
-        let fechaInicio, fechaFin;
-
-        switch (periodo) {
-            case 'hoy':
-                fechaInicio = fechaFin = hoy.toISOString().split('T')[0];
-                break;
-            case 'ayer':
-                const ayer = new Date(hoy);
-                ayer.setDate(ayer.getDate() - 1);
-                fechaInicio = fechaFin = ayer.toISOString().split('T')[0];
-                break;
-            case 'semana':
-                const inicioSemana = new Date(hoy);
-                inicioSemana.setDate(hoy.getDate() - hoy.getDay());
-                fechaInicio = inicioSemana.toISOString().split('T')[0];
-                fechaFin = hoy.toISOString().split('T')[0];
-                break;
-            case 'mes':
-                fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
-                fechaFin = hoy.toISOString().split('T')[0];
-                break;
-            case '30dias':
-                const treintaDias = new Date(hoy);
-                treintaDias.setDate(hoy.getDate() - 30);
-                fechaInicio = treintaDias.toISOString().split('T')[0];
-                fechaFin = hoy.toISOString().split('T')[0];
-                break;
-            default:
-                return;
-        }
-
-        document.getElementById('fecha_inicio').value = fechaInicio;
-        document.getElementById('fecha_fin').value = fechaFin;
-        aplicarFiltros();
-    }
-
-    function filtrarActividades() {
-        paginaActual = 1;
-        cargarActividades();
-    }
-
-    function actualizarReportes() {
-        cargarDatos();
-    }
-
-    function exportarDatos() {
-        const token = getAuthToken();
+// Cargar resumen general
+async function cargarResumenGeneral() {
+    try {
         const fechaInicio = document.getElementById('fecha_inicio').value;
         const fechaFin = document.getElementById('fecha_fin').value;
 
-        window.open(
-            `/simpro-lite/api/v1/reportes.php/export?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&token=${token}`
-        );
+        const url =
+            `${API_BASE_URL}/reportes.php?action=resumen_general&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        const data = await hacerSolicitudAutenticada(url);
+
+        // Actualizar elementos del DOM
+        document.getElementById('tiempoTotalHoras').textContent = formatearTiempo(data.tiempo_total);
+        document.getElementById('totalActividades').textContent = data.total_actividades.toLocaleString();
+        document.getElementById('productividadPercent').textContent = `${data.porcentaje_productivo}%`;
+
+    } catch (error) {
+        console.error('Error cargando resumen general:', error);
+        // Mostrar datos por defecto en caso de error
+        document.getElementById('tiempoTotalHoras').textContent = '0h 0m';
+        document.getElementById('totalActividades').textContent = '0';
+        document.getElementById('productividadPercent').textContent = '0%';
+        throw error;
+    }
+}
+
+// Cargar distribución de tiempo
+async function cargarDistribucionTiempo() {
+    try {
+        const fechaInicio = document.getElementById('fecha_inicio').value;
+        const fechaFin = document.getElementById('fecha_fin').value;
+
+        const url =
+            `${API_BASE_URL}/reportes.php?action=distribucion_tiempo&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        const data = await hacerSolicitudAutenticada(url);
+
+        // Actualizar badges
+        const productiva = data.find(item => item.categoria === 'productiva') || {
+            porcentaje: 0
+        };
+        const distractora = data.find(item => item.categoria === 'distractora') || {
+            porcentaje: 0
+        };
+        const neutral = data.find(item => item.categoria === 'neutral') || {
+            porcentaje: 0
+        };
+
+        document.getElementById('productivaPercent').innerHTML =
+            `<i class="fas fa-check-circle mr-1"></i> Productiva: ${productiva.porcentaje}%`;
+        document.getElementById('distractoraPercent').innerHTML =
+            `<i class="fas fa-times-circle mr-1"></i> Distractora: ${distractora.porcentaje}%`;
+        document.getElementById('neutralPercent').innerHTML =
+            `<i class="fas fa-minus-circle mr-1"></i> Neutral: ${neutral.porcentaje}%`;
+
+        // Actualizar gráfico
+        actualizarGrafico(data);
+
+    } catch (error) {
+        console.error('Error cargando distribución de tiempo:', error);
+        // Mostrar datos por defecto
+        document.getElementById('productivaPercent').innerHTML =
+            '<i class="fas fa-check-circle mr-1"></i> Productiva: 0%';
+        document.getElementById('distractoraPercent').innerHTML =
+            '<i class="fas fa-times-circle mr-1"></i> Distractora: 0%';
+        document.getElementById('neutralPercent').innerHTML =
+            '<i class="fas fa-minus-circle mr-1"></i> Neutral: 0%';
+        throw error;
+    }
+}
+
+// Cargar top de aplicaciones
+async function cargarTopApps() {
+    try {
+        const fechaInicio = document.getElementById('fecha_inicio').value;
+        const fechaFin = document.getElementById('fecha_fin').value;
+
+        const url =
+            `${API_BASE_URL}/reportes.php?action=top_apps&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`;
+        const data = await hacerSolicitudAutenticada(url);
+
+        // Actualizar tabla
+        const tbody = document.getElementById('tablaTopApps');
+        tbody.innerHTML = '';
+
+        if (data.length === 0) {
+            tbody.innerHTML =
+                '<tr><td colspan="3" class="text-center py-4 text-muted">No hay datos disponibles para el período seleccionado</td></tr>';
+            return;
+        }
+
+        data.forEach(app => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="mr-3">
+                            <i class="fas fa-${getIconoApp(app.aplicacion)} fa-lg text-${getColorCategoria(app.categoria)}"></i>
+                        </div>
+                        <div>
+                            <div class="font-weight-bold">${app.aplicacion}</div>
+                            <small class="text-muted">${app.frecuencia_uso} usos</small>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div class="font-weight-bold">${formatearTiempo(app.tiempo_total)}</div>
+                    <small class="text-muted">${app.porcentaje}% del tiempo</small>
+                </td>
+                <td>
+                    <span class="badge badge-${getColorCategoria(app.categoria)} text-white">
+                        ${capitalizar(app.categoria)}
+                    </span>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+    } catch (error) {
+        console.error('Error cargando top apps:', error);
+        const tbody = document.getElementById('tablaTopApps');
+        tbody.innerHTML =
+            '<tr><td colspan="3" class="text-center py-4 text-danger">Error al cargar aplicaciones</td></tr>';
+        throw error;
+    }
+}
+
+// Actualizar gráfico de distribución
+function actualizarGrafico(data) {
+    const ctx = document.getElementById('graficoProductividad').getContext('2d');
+
+    if (graficoProductividad) {
+        graficoProductividad.destroy();
     }
 
-    // Hacer funciones globales
-    window.actualizarReportes = actualizarReportes;
-    window.exportarDatos = exportarDatos;
-    window.aplicarFiltros = aplicarFiltros;
-    window.aplicarPeriodoRapido = aplicarPeriodoRapido;
-    window.filtrarActividades = filtrarActividades;
-    window.cambiarPagina = cambiarPagina;
+    const labels = data.map(item => capitalizar(item.categoria));
+    const valores = data.map(item => item.porcentaje);
+    const colores = data.map(item => getColorGrafico(item.categoria));
+
+    graficoProductividad = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: valores,
+                backgroundColor: colores,
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            cutout: '70%',
+            animation: {
+                animateScale: true,
+                animateRotate: true
+            }
+        }
+    });
+}
+
+// Funciones auxiliares
+function formatearTiempo(tiempoStr) {
+    if (!tiempoStr || tiempoStr === '00:00:00') return '0h 0m';
+
+    const partes = tiempoStr.split(':');
+    const horas = parseInt(partes[0]);
+    const minutos = parseInt(partes[1]);
+
+    if (horas > 0) {
+        return `${horas}h ${minutos}m`;
+    }
+    return `${minutos}m`;
+}
+
+function getIconoApp(nombreApp) {
+    const iconos = {
+        'Chrome': 'chrome',
+        'Firefox': 'firefox-browser',
+        'Visual Studio Code': 'code',
+        'Photoshop': 'image',
+        'Word': 'file-word',
+        'Excel': 'file-excel',
+        'PowerPoint': 'file-powerpoint',
+        'Slack': 'slack',
+        'Teams': 'microsoft',
+        'Zoom': 'video',
+        'Notepad': 'file-alt',
+        'Calculator': 'calculator',
+        'Explorer': 'folder-open'
+    };
+
+    return iconos[nombreApp] || 'desktop';
+}
+
+function getColorCategoria(categoria) {
+    const colores = {
+        'productiva': 'success',
+        'distractora': 'danger',
+        'neutral': 'secondary'
+    };
+
+    return colores[categoria] || 'primary';
+}
+
+function getColorGrafico(categoria) {
+    const colores = {
+        'productiva': '#28a745',
+        'distractora': '#dc3545',
+        'neutral': '#6c757d'
+    };
+
+    return colores[categoria] || '#007bff';
+}
+
+function capitalizar(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function mostrarModal(mostrar) {
+    const modal = document.getElementById('loadingModal');
+    if (mostrar) {
+        $('#loadingModal').modal('show');
+    } else {
+        $('#loadingModal').modal('hide');
+    }
+}
+
+function mostrarAlerta(mensaje, tipo = 'info') {
+    const alertClass = tipo === 'error' ? 'alert-danger' : 'alert-info';
+    const alerta = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${tipo === 'error' ? 'exclamation-triangle' : 'info-circle'} mr-2"></i>
+            ${mensaje}
+            <button type="button" class="close" data-dismiss="alert">
+                <span>&times;</span>
+            </button>
+        </div>
+    `;
+
+    const container = document.querySelector('.container-fluid');
+    const existingAlert = container.querySelector('.alert');
+    if (existingAlert) {
+        existingAlert.remove();
+    }
+
+    container.insertAdjacentHTML('afterbegin', alerta);
+
+    setTimeout(() => {
+        const alertElement = container.querySelector('.alert');
+        if (alertElement) {
+            alertElement.remove();
+        }
+    }, 5000);
+}
+
+// Funciones públicas para los botones
+function aplicarFiltros() {
+    const fechaInicio = document.getElementById('fecha_inicio').value;
+    const fechaFin = document.getElementById('fecha_fin').value;
+
+    if (!fechaInicio || !fechaFin) {
+        mostrarAlerta('Por favor selecciona ambas fechas', 'error');
+        return;
+    }
+    if (new Date(fechaInicio) > new Date(fechaFin)) {
+        mostrarAlerta('La fecha de inicio no puede ser mayor a la fecha fin', 'error');
+        return;
+    }
+
+    cargarReportes();
+}
+
+function actualizarReportes() {
+    cargarReportes();
+}
+
+// Inicializar cuando se carga la página
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar si Chart.js está disponible
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js no está cargado');
+        mostrarAlerta('Error: Chart.js no está disponible', 'error');
+        return;
+    }
+
+    // Verificar token de autenticación
+    const tokenLS = localStorage.getItem('token');
+    const tokenCookie = getCookie('auth_token');
+
+    if (!tokenLS && !tokenCookie) {
+        mostrarAlerta('Error: No se encontró token de autenticación', 'error');
+        return;
+    }
+
+    // Cargar datos iniciales
+    setTimeout(() => {
+        cargarReportes();
+    }, 100);
 });
 </script>

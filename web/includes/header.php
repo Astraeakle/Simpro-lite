@@ -4,10 +4,6 @@
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
 $tema = isset($userData['preferencias']['tema']) ? $userData['preferencias']['tema'] : 'light';
 ?>
-
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <!DOCTYPE html>
 <html lang="es" data-bs-theme="<?php echo $tema; ?>">
 

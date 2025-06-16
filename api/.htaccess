@@ -1,6 +1,4 @@
 # File: api/.htaccess
-
-# Activar el motor de reescritura
 RewriteEngine On
 RewriteBase /simpro-lite/api/
 
@@ -35,3 +33,9 @@ Options -Indexes -MultiViews
     php_value upload_max_filesize 20M
     php_value post_max_size 20M
 </IfModule>
+
+# Permitir acceso a archivos PHP
+<Files "*.php">
+    Order allow,deny
+    Allow from all
+</Files>
