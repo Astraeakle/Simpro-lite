@@ -37,6 +37,7 @@ class ProductivityMonitor:
         self.auto_login()
 
     def load_config(self):
+        """Cargar configuración local por defecto"""
         config_path = os.path.join(os.path.dirname(
             os.path.abspath(__file__)), "config", "config.json")
         try:
@@ -48,7 +49,9 @@ class ProductivityMonitor:
                 "api_url": "http://localhost/simpro-lite/api/v1",
                 "login_url": "http://localhost/simpro-lite/api/v1/autenticar.php",
                 "activity_url": "http://localhost/simpro-lite/api/v1/actividad.php",
+                "config_url": "http://localhost/simpro-lite/api/v1/api_config.php",
                 "intervalo": 10,
+                "duracion_minima_actividad": 5,
                 "apps_productivas": [
                     "chrome.exe", "firefox.exe", "edge.exe", "code.exe", "vscode.exe",
                     "word.exe", "excel.exe", "powerpoint.exe", "outlook.exe", "teams.exe",
@@ -63,6 +66,81 @@ class ProductivityMonitor:
                     "youtube.exe", "twitch.exe", "origin.exe", "uplay.exe", "battlenet.exe"
                 ]
             }
+
+    def load_server_config(self):
+        """Obtener configuración desde el servidor - FIXED"""
+        if not self.token:
+            print("No hay token para obtener configuración del servidor")
+            return False
+
+        try:
+            config_url = self.config.get(
+                'config_url', f"{self.config['api_url']}/api_config.php")
+
+            print(f"🔧 Obteniendo configuración desde: {config_url}")
+
+            response = requests.get(
+                config_url,
+                headers={'Authorization': f'Bearer {self.token}'},
+                timeout=10
+            )
+
+            print(f"🔧 Status de configuración: {response.status_code}")
+            print(f"🔧 Respuesta configuración: {response.text}")
+
+            if response.status_code == 200:
+                # Verificar si la respuesta es JSON válido
+                response_text = response.text.strip()
+                if not response_text:
+                    print("⚠️ Respuesta vacía del servidor de configuración")
+                    return False
+
+                try:
+                    data = response.json()
+                except json.JSONDecodeError as e:
+                    print(f"⚠️ Error parseando JSON de configuración: {e}")
+                    print(f"⚠️ Respuesta recibida: {response_text}")
+                    return False
+
+                if data.get('success'):
+                    server_config = data.get('config', {})
+
+                    # Actualizar configuración local con la del servidor
+                    self.config.update({
+                        'intervalo': server_config.get('intervalo', self.config.get('intervalo', 10)),
+                        'duracion_minima_actividad': server_config.get('duracion_minima_actividad', 5),
+                        'apps_productivas': server_config.get('apps_productivas', self.config.get('apps_productivas', [])),
+                        'apps_distractoras': server_config.get('apps_distractoras', self.config.get('apps_distractoras', []))
+                    })
+
+                    print(f"✅ Configuración actualizada desde servidor:")
+                    print(f"   - Intervalo: {self.config['intervalo']}s")
+                    print(
+                        f"   - Duración mínima: {self.config['duracion_minima_actividad']}s")
+                    print(
+                        f"   - Apps productivas: {len(self.config['apps_productivas'])}")
+                    print(
+                        f"   - Apps distractoras: {len(self.config['apps_distractoras'])}")
+
+                    return True
+                else:
+                    print(f"❌ Error en respuesta de configuración: {data}")
+                    return False
+            elif response.status_code == 404:
+                print(
+                    "⚠️ Endpoint de configuración no encontrado, usando configuración local")
+                return False
+            else:
+                print(
+                    f"❌ Error HTTP obteniendo configuración: {response.status_code}")
+                return False
+
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Error de conexión obteniendo configuración: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ Error inesperado obteniendo configuración: {e}")
+            return False
 
     def setup_db(self):
         db_dir = os.path.join(os.path.dirname(
@@ -325,6 +403,7 @@ class ProductivityMonitor:
             print(f"Error guardando credenciales: {e}")
 
     def login_success(self):
+        """Método actualizado que incluye carga de configuración del servidor"""
         self.status_label.config(
             text=f"Conectado: {self.user_data.get('nombre')}")
         self.login_button.config(state=tk.DISABLED)
@@ -335,6 +414,12 @@ class ProductivityMonitor:
 
         self.username_entry.config(state=tk.DISABLED)
         self.password_entry.config(state=tk.DISABLED)
+
+        # 🆕 NUEVO: Cargar configuración del servidor después del login
+        if self.load_server_config():
+            self.status_var.set("Conectado - Configuración sincronizada")
+        else:
+            self.status_var.set("Conectado - Usando configuración local")
 
     def logout(self):
         if self.monitoring_active:
@@ -381,6 +466,7 @@ class ProductivityMonitor:
         threading.Thread(target=monitor_work_status, daemon=True).start()
 
     def check_work_status(self):
+        """FIXED - Leer correctamente el estado desde diagnostico.estado_actual.calculado"""
         if not self.token:
             return
 
@@ -391,7 +477,7 @@ class ProductivityMonitor:
                 base_url = base_url.replace('/actividad.php', '')
 
             estado_url = f"{base_url}/estado_jornada.php"
-            print(f"Verificando estado de jornada en: {estado_url}")
+            # print(f"Verificando estado de jornada en: {estado_url}")
 
             response = requests.get(
                 estado_url,
@@ -399,13 +485,16 @@ class ProductivityMonitor:
                 timeout=10
             )
 
-            print(
-                f"Estado jornada response: {response.status_code} - {response.text}")
+            # print(f"Estado jornada response: {response.status_code} - {response.text}")
 
             if response.status_code == 200:
                 data = response.json()
                 if data.get('success'):
-                    estado = data.get('estado', 'sin_iniciar')
+                    # 🔧 FIX: Leer el estado desde diagnostico.estado_actual.calculado
+                    diagnostico = data.get('diagnostico', {})
+                    estado_actual = diagnostico.get('estado_actual', {})
+                    estado = estado_actual.get('calculado', 'sin_iniciar')
+
                     print(f"Estado actual de jornada: {estado}")
 
                     if estado == 'trabajando':
@@ -481,6 +570,7 @@ class ProductivityMonitor:
             return f"{hours}h {minutes}m"
 
     def record_activity(self, app_info):
+        """Método actualizado que usa duracion_minima_actividad del servidor"""
         now = datetime.now()
         current_key = f"{app_info['app']}|{app_info['title']}"
 
@@ -549,7 +639,14 @@ class ProductivityMonitor:
             print(f"Error actualizando actividad: {e}")
 
     def finalize_current_activity(self):
-        if not self.current_activity or self.current_activity['duration'] < 5:
+        """Método actualizado que usa duracion_minima_actividad del servidor"""
+        if not self.current_activity:
+            return
+
+        # 🆕 Usar duracion_minima_actividad del servidor
+        duracion_minima = self.config.get('duracion_minima_actividad', 5)
+
+        if self.current_activity['duration'] < duracion_minima:
             return
 
         self.tree.insert('', 0, values=(
@@ -594,6 +691,7 @@ class ProductivityMonitor:
             print(f"Error cargando actividades: {e}")
 
     def sync_data(self):
+        """Método actualizado que usa duracion_minima_actividad del servidor"""
         if not self.token:
             messagebox.showerror("Error", "No hay sesión activa")
             return
@@ -613,15 +711,18 @@ class ProductivityMonitor:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            # FILTRAR actividades con duración mínima y datos válidos
+            # 🆕 USAR duracion_minima_actividad del servidor
+            duracion_minima = self.config.get('duracion_minima_actividad', 5)
+
             cursor.execute('''
                 SELECT * FROM activities 
                 WHERE synced = 0 
-                AND duration >= 5 
+                AND duration >= ? 
                 AND app IS NOT NULL 
                 AND app != ''
                 AND timestamp IS NOT NULL
-            ''')
+            ''', (duracion_minima,))
+
             activities = cursor.fetchall()
 
             if not activities:
