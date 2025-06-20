@@ -141,11 +141,18 @@ switch ($method) {
             case 'actualizar':
                 handleActualizarUsuario();
                 break;
+            default:
+                sendError('Acción POST no válida');
+        }
+        break;
+        
+    case 'DELETE':
+        switch ($action) {
             case 'eliminar':
                 handleEliminarUsuario();
                 break;
             default:
-                sendError('Acción POST no válida');
+                sendError('Acción DELETE no válida');
         }
         break;
         
@@ -332,22 +339,23 @@ function handleActualizarUsuario() {
 
 // Función para eliminar un usuario
 function handleEliminarUsuario() {
+    global $userId; // ID del usuario autenticado
+    
     try {
-        // Obtener datos del POST
-        $input = json_decode(file_get_contents('php://input'), true);
+        $id = $_GET['id'] ?? null;
         
-        if (empty($input['id_usuario'])) {
-            sendError('ID de usuario requerido');
+        if (!$id || !is_numeric($id)) {
+            sendError('ID de usuario requerido y válido');
         }
         
-        logError("Eliminando usuario ID: " . $input['id_usuario']);
+        logError("Eliminando usuario ID: " . $id);
         
         $db = Database::getConnection();
         
         // Llamar al procedimiento almacenado para eliminar
         $stmt = $db->prepare("CALL sp_eliminar_usuario(?, ?, @resultado)");
         $stmt->execute([
-            $input['id_usuario'],
+            $id,
             $userId // Usuario actual (del token)
         ]);
         
@@ -357,7 +365,7 @@ function handleEliminarUsuario() {
         $resultadoJson = json_decode($resultado['resultado'], true);
         
         if ($resultadoJson['success']) {
-            logError("Usuario eliminado exitosamente: ID " . $input['id_usuario']);
+            logError("Usuario eliminado exitosamente: ID " . $id);
             sendJsonResponse($resultadoJson);
         } else {
             logError("Error eliminando usuario: " . $resultadoJson['error']);

@@ -1,8 +1,13 @@
 <?php
 // File: web/modulos/admin/config.php
-require_once __DIR__ . '/../../web/core/autenticacion.php';
-if (!estaAutenticado() || !tienePermiso('admin')) {
-    header('Location: /login.php');
+require_once __DIR__ . '/../../core/autenticacion.php';
+
+// Verificar autenticación y permisos usando el mismo método que usuarios.php
+$userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
+$rol = isset($userData['rol']) ? $userData['rol'] : '';
+
+if ($rol !== 'admin') {
+    header('Location: /simpro-lite/web/index.php?modulo=dashboard');
     exit;
 }
 
@@ -28,11 +33,11 @@ $configuracion = DB::select("SELECT * FROM configuracion WHERE editable = 1");
 
 <div class="container">
     <h2>Configuración del Sistema</h2>
-    
+
     <?php if (isset($mensaje)): ?>
     <div class="alert alert-info"><?= htmlspecialchars($mensaje) ?></div>
     <?php endif; ?>
-    
+
     <div class="card">
         <div class="card-body">
             <form method="post">
@@ -49,17 +54,15 @@ $configuracion = DB::select("SELECT * FROM configuracion WHERE editable = 1");
                         <tr>
                             <td><?= htmlspecialchars($item['clave']) ?></td>
                             <td>
-                                <input type="text" 
-                                       name="config[<?= $item['clave'] ?>]" 
-                                       value="<?= htmlspecialchars($item['valor']) ?>" 
-                                       class="form-control">
+                                <input type="text" name="config[<?= $item['clave'] ?>]"
+                                    value="<?= htmlspecialchars($item['valor']) ?>" class="form-control">
                             </td>
                             <td><?= htmlspecialchars($item['descripcion']) ?></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
-                
+
                 <div class="text-end mt-3">
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-save"></i> Guardar Cambios

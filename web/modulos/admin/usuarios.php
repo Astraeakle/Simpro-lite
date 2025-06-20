@@ -1,7 +1,7 @@
 <?php
 // File: web/modulos/admin/usuarios.php
 require_once __DIR__ . '/../../core/autenticacion.php';
-require_once __DIR__ . '/../../config/database.php'; // AÑADIR ESTA LÍNEA
+require_once __DIR__ . '/../../config/database.php'; 
 
 // Verificar autenticación y permisos de administrador
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
@@ -506,9 +506,45 @@ function prepararEliminacion(id, nombreUsuario) {
 }
 
 // Confirmar eliminación
-function confirmarEliminacion() {
-    if (usuarioAEliminar) {
-        window.location.href = `?eliminar=${usuarioAEliminar}`;
+async function confirmarEliminacion() {
+    if (!usuarioAEliminar) {
+        return;
+    }
+
+    try {
+        // Deshabilitar botón para evitar doble click
+        const btnEliminar = document.querySelector('#modalEliminar .btn-danger');
+        const textoOriginal = btnEliminar.innerHTML;
+        btnEliminar.disabled = true;
+        btnEliminar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Eliminando...';
+
+        // Hacer la solicitud de eliminación a la API
+        const data = await hacerSolicitudAutenticada(
+            `${API_BASE_URL}/usuarios.php?action=eliminar&id=${usuarioAEliminar}`, {
+                method: 'DELETE'
+            });
+
+        if (data.success) {
+            // Cerrar modal
+            bootstrap.Modal.getInstance(document.getElementById('modalEliminar')).hide();
+
+            // Mostrar mensaje de éxito
+            mostrarAlerta(data.message || 'Usuario eliminado correctamente', 'success');
+
+            // Recargar la lista de usuarios
+            await cargarUsuarios();
+        } else {
+            throw new Error(data.error || 'Error al eliminar usuario');
+        }
+    } catch (error) {
+        console.error('Error eliminando usuario:', error);
+        mostrarAlerta('Error al eliminar usuario: ' + error.message, 'danger');
+    } finally {
+        // Restaurar botón
+        const btnEliminar = document.querySelector('#modalEliminar .btn-danger');
+        btnEliminar.disabled = false;
+        btnEliminar.innerHTML = '<i class="fas fa-trash"></i> Eliminar';
+        usuarioAEliminar = null;
     }
 }
 
