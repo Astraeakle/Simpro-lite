@@ -34,7 +34,8 @@ try {
                         <?= ucfirst($usuario['estado']) ?>
                     </span>
                 </td>
-                <td><?= $usuario['ultimo_acceso'] ? date('d/m H:i', strtotime($usuario['ultimo_acceso'])) : 'Nunca' ?></td>
+                <td><?= $usuario['ultimo_acceso'] ? date('d/m H:i', strtotime($usuario['ultimo_acceso'])) : 'Nunca' ?>
+                </td>
             </tr>
             <?php endforeach; ?>
         </tbody>

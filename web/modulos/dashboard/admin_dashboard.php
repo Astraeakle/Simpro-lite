@@ -17,10 +17,7 @@ if ($rol !== 'admin') {
     <div class="alert alert-success" role="alert">
         <h4 class="alert-heading">¡Bienvenido al Panel de Administración!</h4>
         <p>Has ingresado correctamente como <strong>administrador</strong>.</p>
-        <hr>
-        <p class="mb-0">Desde aquí podrás administrar usuarios, configurar el sistema y ver reportes generales.</p>
     </div>
-    
     <div class="row">
         <div class="col-md-12">
             <div class="card shadow mb-4">
@@ -28,10 +25,9 @@ if ($rol !== 'admin') {
                     <h6 class="m-0 font-weight-bold text-primary">Panel de Administración</h6>
                 </div>
                 <div class="card-body">
-                    <p>Este es el dashboard de administrador. Aquí se mostrarán las estadísticas, reportes y opciones de administración.</p>
-                    
                     <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-                        <a href="/simpro-lite/web/index.php?modulo=admin&vista=usuarios" class="btn btn-primary me-md-2">
+                        <a href="/simpro-lite/web/index.php?modulo=admin&vista=usuarios"
+                            class="btn btn-primary me-md-2">
                             <i class="fas fa-users"></i> Administrar Usuarios
                         </a>
                         <a href="/simpro-lite/web/index.php?modulo=admin&vista=config" class="btn btn-secondary">
