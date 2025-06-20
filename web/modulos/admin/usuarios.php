@@ -1,6 +1,7 @@
 <?php
 // File: web/modulos/admin/usuarios.php
 require_once __DIR__ . '/../../core/autenticacion.php';
+require_once __DIR__ . '/../../config/database.php'; // AÑADIR ESTA LÍNEA
 
 // Verificar autenticación y permisos de administrador
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
@@ -28,19 +29,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Llamar al procedimiento almacenado para crear usuario
                 $db = Database::getConnection();
-                $stmt = $db->prepare("CALL sp_crear_usuario(?, ?, ?, ?, ?, ?, ?)");
+                $stmt = $db->prepare("CALL sp_crear_usuario(?, ?, ?, ?, ?, ?, ?, @resultado)");
                 $stmt->execute([
                     $_POST['nombre_usuario'],
                     $_POST['nombre_completo'],
                     password_hash($_POST['password'], PASSWORD_DEFAULT),
                     $_POST['rol'] ?? 'empleado',
+                    $_POST['estado'] ?? 'activo',
                     $_POST['telefono'] ?? null,
-                    $_POST['departamento'] ?? null,
-                    'activo'
+                    $_POST['departamento'] ?? null
                 ]);
                 
-                $mensaje = 'Usuario creado exitosamente';
-                $tipoMensaje = 'success';
+                // Obtener el resultado del procedimiento almacenado
+                $result = $db->query("SELECT @resultado as resultado")->fetch(PDO::FETCH_ASSOC);
+                $resultado = json_decode($result['resultado'], true);
+                
+                if ($resultado['success']) {
+                    $mensaje = $resultado['message'];
+                    $tipoMensaje = 'success';
+                } else {
+                    throw new Exception($resultado['error']);
+                }
                 break;
                 
             case 'editar':
@@ -50,34 +59,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $db = Database::getConnection();
                 
-                // Si se proporciona nueva contraseña, actualizarla también
+                // Preparar campos para actualización
+                $campos = [
+                    'nombre_usuario' => $_POST['nombre_usuario'],
+                    'nombre_completo' => $_POST['nombre_completo'],
+                    'rol' => $_POST['rol'],
+                    'telefono' => $_POST['telefono'] ?? null,
+                    'departamento' => $_POST['departamento'] ?? null,
+                    'estado' => $_POST['estado']
+                ];
+                
+                // Si se proporciona nueva contraseña, incluirla
                 if (!empty($_POST['password'])) {
-                    $stmt = $db->prepare("CALL sp_actualizar_usuario_completo(?, ?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([
-                        $_POST['id_usuario'],
-                        $_POST['nombre_usuario'],
-                        $_POST['nombre_completo'],
-                        password_hash($_POST['password'], PASSWORD_DEFAULT),
-                        $_POST['rol'],
-                        $_POST['telefono'] ?? null,
-                        $_POST['departamento'] ?? null,
-                        $_POST['estado']
-                    ]);
-                } else {
-                    $stmt = $db->prepare("CALL sp_actualizar_usuario(?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([
-                        $_POST['id_usuario'],
-                        $_POST['nombre_usuario'],
-                        $_POST['nombre_completo'],
-                        $_POST['rol'],
-                        $_POST['telefono'] ?? null,
-                        $_POST['departamento'] ?? null,
-                        $_POST['estado']
-                    ]);
+                    $campos['contraseña_hash'] = password_hash($_POST['password'], PASSWORD_DEFAULT);
                 }
                 
-                $mensaje = 'Usuario actualizado exitosamente';
-                $tipoMensaje = 'success';
+                $stmt = $db->prepare("CALL sp_actualizar_usuario(?, ?, @resultado)");
+                $stmt->execute([
+                    $_POST['id_usuario'],
+                    json_encode($campos)
+                ]);
+                
+                // Obtener el resultado del procedimiento almacenado
+                $result = $db->query("SELECT @resultado as resultado")->fetch(PDO::FETCH_ASSOC);
+                $resultado = json_decode($result['resultado'], true);
+                
+                if ($resultado['success']) {
+                    $mensaje = $resultado['message'];
+                    $tipoMensaje = 'success';
+                } else {
+                    throw new Exception($resultado['error']);
+                }
                 break;
         }
     } catch (Exception $e) {
@@ -90,11 +102,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if (isset($_GET['eliminar']) && is_numeric($_GET['eliminar'])) {
     try {
         $db = Database::getConnection();
-        $stmt = $db->prepare("CALL sp_eliminar_usuario(?)");
-        $stmt->execute([$_GET['eliminar']]);
+        $stmt = $db->prepare("CALL sp_eliminar_usuario(?, ?, @resultado)");
+        $stmt->execute([
+            $_GET['eliminar'],
+            $userData['id_usuario'] ?? 0 // ID del usuario actual
+        ]);
         
-        $mensaje = 'Usuario eliminado exitosamente';
-        $tipoMensaje = 'success';
+        // Obtener el resultado del procedimiento almacenado
+        $result = $db->query("SELECT @resultado as resultado")->fetch(PDO::FETCH_ASSOC);
+        $resultado = json_decode($result['resultado'], true);
+        
+        if ($resultado['success']) {
+            $mensaje = $resultado['message'];
+            $tipoMensaje = 'success';
+        } else {
+            throw new Exception($resultado['error']);
+        }
     } catch (Exception $e) {
         $mensaje = 'Error al eliminar usuario: ' . $e->getMessage();
         $tipoMensaje = 'danger';
