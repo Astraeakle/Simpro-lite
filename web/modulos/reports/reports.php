@@ -1,5 +1,5 @@
 <?php
-// web/modulos/reportes/reports.php
+// FILE: web/modulos/reportes/reports.php
 require_once __DIR__ . '/../../../bootstrap.php'; 
 require_once __DIR__ . '/../../core/autenticacion.php';
 

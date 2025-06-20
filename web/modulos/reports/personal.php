@@ -11,6 +11,9 @@
             <button type="button" class="btn btn-outline-primary btn-sm" onclick="actualizarReportes()">
                 <i class="fas fa-sync-alt"></i> Actualizar
             </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="procesarExportacion()">
+                <i class="fas fa-download"></i> Exportar
+            </button>
         </div>
     </div>
 
