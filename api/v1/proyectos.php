@@ -45,7 +45,7 @@ try {
                          FROM proyectos p
                          LEFT JOIN usuarios u ON p.id_responsable = u.id_usuario
                          WHERE p.id_responsable = ? OR EXISTS (
-                             SELECT 1 FROM tareas t 
+                             SELECT 1 FROM actividad t 
                              WHERE t.id_proyecto = p.id_proyecto AND t.id_asignado = ?
                          )
                          ORDER BY p.fecha_inicio DESC",

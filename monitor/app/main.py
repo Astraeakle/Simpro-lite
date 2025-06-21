@@ -24,7 +24,7 @@ except ImportError:
 
 class ProductivityMonitor:
     def __init__(self):
-        self.config = self.load_config()
+        self.config = self.get_minimal_config()
         self.running = False
         self.monitoring_active = False
         self.current_activity = None
@@ -32,42 +32,124 @@ class ProductivityMonitor:
         self.token = None
         self.user_data = None
         self.activity_start_time = None
+        self.config_loaded_from_server = False
         self.setup_db()
         self.create_ui()
         self.auto_login()
 
-    def load_config(self):
-        """Cargar configuración local por defecto"""
-        config_path = os.path.join(os.path.dirname(
-            os.path.abspath(__file__)), "config", "config.json")
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-            return config
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {
-                "api_url": "http://localhost/simpro-lite/api/v1",
-                "login_url": "http://localhost/simpro-lite/api/v1/autenticar.php",
-                "activity_url": "http://localhost/simpro-lite/api/v1/actividad.php",
-                "config_url": "http://localhost/simpro-lite/api/v1/api_config.php",
-                "intervalo": 10,
-                "duracion_minima_actividad": 5,
-                "apps_productivas": [
-                    "chrome.exe", "firefox.exe", "edge.exe", "code.exe", "vscode.exe",
-                    "word.exe", "excel.exe", "powerpoint.exe", "outlook.exe", "teams.exe",
-                    "zoom.exe", "slack.exe", "notepad.exe", "sublime_text.exe", "pycharm64.exe",
-                    "atom.exe", "idea64.exe", "eclipse.exe", "netbeans.exe", "photoshop.exe",
-                    "illustrator.exe", "indesign.exe", "blender.exe", "unity.exe"
-                ],
-                "apps_distractoras": [
-                    "steam.exe", "epicgameslauncher.exe", "discord.exe", "spotify.exe",
-                    "netflix.exe", "vlc.exe", "tiktok.exe", "facebook.exe", "twitter.exe",
-                    "instagram.exe", "whatsapp.exe", "telegram.exe", "skype.exe",
-                    "youtube.exe", "twitch.exe", "origin.exe", "uplay.exe", "battlenet.exe"
-                ]
-            }
-
+    def get_minimal_config(self):
+        return {
+            "api_url": "http://localhost/simpro-lite/api/v1",
+            "login_url": "http://localhost/simpro-lite/api/v1/autenticar.php",
+            "config_url": "http://localhost/simpro-lite/api/v1/api_config.php",
+            # Valores por defecto temporales hasta cargar desde servidor
+            "intervalo": 10,
+            "duracion_minima_actividad": 1,
+            "apps_productivas": [],
+            "apps_distractoras": []
+        }
+    
     def load_server_config(self):
+        if not self.token:
+            print("❌ No hay token para obtener configuración del servidor")
+            return False
+
+        try:
+            config_url = self.config.get('config_url')
+            if not config_url:
+                print("❌ URL de configuración no definida")
+                return False
+            print(f"🔧 Obteniendo configuración desde: {config_url}")
+            response = requests.get(
+                config_url,
+                headers={'Authorization': f'Bearer {self.token}'},
+                timeout=15
+            )
+
+            print(f"🔧 Status de configuración: {response.status_code}")
+
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    print(
+                        f"🔧 Respuesta configuración: {json.dumps(data, indent=2)}")
+
+                    if data.get('success'):
+                        server_config = data.get('config', {})
+
+                        if not server_config:
+                            print("⚠️ Configuración del servidor está vacía")
+                            return False
+
+                        # 🆕 REEMPLAZAR TODA la configuración con la del servidor
+                        self.config = {
+                            # URLs base
+                            'api_url': server_config.get('api_url', self.config.get('api_url')),
+                            'login_url': server_config.get('login_url', self.config.get('login_url')),
+                            'activity_url': server_config.get('activity_url', f"{self.config.get('api_url')}/actividad.php"),
+                            'config_url': server_config.get('config_url', self.config.get('config_url')),
+                            'estado_jornada_url': server_config.get('estado_jornada_url', f"{self.config.get('api_url')}/estado_jornada.php"),
+                            'verificar_tabla_url': server_config.get('verificar_tabla_url', f"{self.config.get('api_url')}/verificar_tabla.php"),
+
+                            # Configuración numérica
+                            'intervalo': server_config.get('intervalo', 10),
+                            'duracion_minima_actividad': server_config.get('duracion_minima_actividad', 5),
+                            'token_expiration_hours': server_config.get('token_expiration_hours', 12),
+                            'max_actividades_pendientes': server_config.get('max_actividades_pendientes', 100),
+                            'auto_sync_interval': server_config.get('auto_sync_interval', 300),
+                            'max_title_length': server_config.get('max_title_length', 255),
+                            'max_appname_length': server_config.get('max_appname_length', 100),
+                            'min_sync_duration': server_config.get('min_sync_duration', 5),
+                            'sync_retry_attempts': server_config.get('sync_retry_attempts', 3),
+
+                            # Arrays de aplicaciones
+                            'apps_productivas': server_config.get('apps_productivas', []),
+                            'apps_distractoras': server_config.get('apps_distractoras', [])
+                        }
+
+                        self.config_loaded_from_server = True
+
+                        print(f"✅ Configuración COMPLETA cargada desde servidor:")
+                        print(f"   - Intervalo: {self.config['intervalo']}s")
+                        print(
+                            f"   - Duración mínima: {self.config['duracion_minima_actividad']}s")
+                        print(
+                            f"   - Apps productivas: {len(self.config['apps_productivas'])}")
+                        print(
+                            f"   - Apps distractoras: {len(self.config['apps_distractoras'])}")
+                        print(
+                            f"   - Token expiration: {self.config['token_expiration_hours']}h")
+                        print(
+                            f"   - Auto sync: {self.config['auto_sync_interval']}s")
+
+                        return True
+                    else:
+                        print(f"❌ Error en respuesta de configuración: {data}")
+                        return False
+
+                except json.JSONDecodeError as e:
+                    print(f"❌ Error parseando JSON de configuración: {e}")
+                    print(f"❌ Respuesta recibida: {response.text}")
+                    return False
+
+            elif response.status_code == 404:
+                print("⚠️ Endpoint de configuración no encontrado")
+                return False
+            elif response.status_code == 401:
+                print("🔒 Token inválido para obtener configuración")
+                return False
+            else:
+                print(
+                    f"❌ Error HTTP obteniendo configuración: {response.status_code}")
+                print(f"❌ Respuesta: {response.text}")
+                return False
+
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Error de conexión obteniendo configuración: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ Error inesperado obteniendo configuración: {e}")
+            return False
         """Obtener configuración desde el servidor - FIXED"""
         if not self.token:
             print("No hay token para obtener configuración del servidor")
@@ -701,7 +783,6 @@ class ProductivityMonitor:
             messagebox.showerror(
                 "Error de Servidor",
                 "El servidor no tiene la tabla 'actividad_apps'.\n"
-                "Contacte al administrador para configurar la base de datos."
             )
             return
 
@@ -729,7 +810,6 @@ class ProductivityMonitor:
                 messagebox.showinfo(
                     "Información", "No hay datos pendientes de sincronización")
                 return
-
             # URL correcta para actividades
             base_url = self.config.get(
                 'api_url', 'http://localhost/simpro-lite/api/v1')
@@ -746,7 +826,6 @@ class ProductivityMonitor:
             for activity in activities:
                 try:
                     # VALIDACIÓN EXHAUSTIVA DE DATOS
-
                     # Estructura: id, activity_id, timestamp, duration, app, title, session_id, category, synced
                     if len(activity) < 8:
                         print(

@@ -26,7 +26,8 @@ if (empty($rol) || ($rol !== 'empleado' && $rol !== 'admin' && $rol !== 'supervi
                     <h6 class="m-0 font-weight-bold text-primary">Mi Panel</h6>
                 </div>
                 <div class="card-body">
-                    <p>Este es tu dashboard personal. Aquí se mostrarán tus estadísticas, tareas asignadas y registros
+                    <p>Este es tu dashboard personal. Aquí se mostrarán tus estadísticas, actividades asignadas y
+                        registros
                         de tiempo.</p>
 
                     <!-- Estado actual -->

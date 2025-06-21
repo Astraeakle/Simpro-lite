@@ -18,9 +18,10 @@ if ($rol !== 'supervisor') {
         <h4 class="alert-heading">¡Bienvenido al Panel de Supervisión!</h4>
         <p>Has ingresado correctamente como <strong>supervisor</strong>.</p>
         <hr>
-        <p class="mb-0">Desde aquí podrás supervisar a tu equipo, gestionar tareas y verificar la productividad.</p>
+        <p class="mb-0">Desde aquí podrás supervisar a tu equipo, gestionar actividades y verificar la productividad.
+        </p>
     </div>
-    
+
     <div class="row">
         <div class="col-md-12">
             <div class="card shadow mb-4">
@@ -28,14 +29,16 @@ if ($rol !== 'supervisor') {
                     <h6 class="m-0 font-weight-bold text-primary">Panel de Supervisión</h6>
                 </div>
                 <div class="card-body">
-                    <p>Este es el dashboard de supervisor. Aquí se mostrarán las estadísticas de equipo, asignaciones y reportes de productividad.</p>
-                    
+                    <p>Este es el dashboard de supervisor. Aquí se mostrarán las estadísticas de equipo, asignaciones y
+                        reportes de productividad.</p>
+
                     <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-                        <a href="/simpro-lite/web/index.php?modulo=reportes&vista=equipo" class="btn btn-primary me-md-2">
+                        <a href="/simpro-lite/web/index.php?modulo=reportes&vista=equipo"
+                            class="btn btn-primary me-md-2">
                             <i class="fas fa-chart-line"></i> Ver Productividad de Equipo
                         </a>
                         <a href="/simpro-lite/web/index.php?modulo=admin&vista=tareas" class="btn btn-secondary">
-                            <i class="fas fa-tasks"></i> Gestionar Tareas
+                            <i class="fas fa-tasks"></i> Gestionar Actividades
                         </a>
                     </div>
                 </div>

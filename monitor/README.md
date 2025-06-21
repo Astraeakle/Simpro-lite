@@ -25,6 +25,7 @@ pip install psutil requests
 Dependencias adicionales según el sistema operativo:
 
 **Windows:**
+
 ```bash
 pip install pywin32
 ```
@@ -34,13 +35,14 @@ No se requieren dependencias adicionales, pero se utiliza AppleScript para algun
 
 **Linux:**
 Asegúrese de tener instalados los siguientes paquetes:
+
 ```bash
 sudo apt-get install wmctrl xdotool
 ```
 
 ## Configuración
 
-Antes de usar la aplicación, configure los ajustes en el archivo `config/config.json`:
+Antes de usar la aplicación, configure los ajustes en el rol `administrador`:
 
 - `api_url`: URL base de la API del servidor SIMPRO Lite.
 - `usuario_id`: ID del usuario (se configura automáticamente tras la autenticación).
@@ -83,7 +85,7 @@ Para extender la funcionalidad:
 
 1. La lógica principal está en `app/main.py`
 2. La captura de aplicaciones está en `app/monitor_apps.py`
-3. Configure las aplicaciones productivas/distractoras en `config/apps_config.json`
+3. Configure las aplicaciones productivas/distractoras en el rol `administrador` en Configuración del sistema
 
 ## Solución de problemas
 
@@ -92,6 +94,6 @@ Si encuentra problemas:
 1. Verifique la conectividad con el servidor
 2. Asegúrese de que sus credenciales sean correctas
 3. Revise los logs en `simpro_monitor.log`
-4. Verifique la configuración en `config/config.json`
+4. Verifique la configuración en la web/bd
 
 Si el problema persiste, contacte al administrador del sistema.
