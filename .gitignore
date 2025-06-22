@@ -9,13 +9,6 @@ merged_code.txt
 *.log
 *.tmp
 
-# Configuraciones locales
-/web/config/config.php
-/monitor/config/config.json
-.env
-/venv/
-*.env.local
-
 # Base de datos y backups
 /monitor/app/data/*
 
