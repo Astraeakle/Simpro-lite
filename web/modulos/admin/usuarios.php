@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_POST['rol'] ?? 'empleado',
                     $_POST['estado'] ?? 'activo',
                     $_POST['telefono'] ?? null,
-                    $_POST['departamento'] ?? null
+                    $_POST['area'] ?? null
                 ]);
                 
                 // Obtener el resultado del procedimiento almacenado
@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'nombre_completo' => $_POST['nombre_completo'],
                     'rol' => $_POST['rol'],
                     'telefono' => $_POST['telefono'] ?? null,
-                    'departamento' => $_POST['departamento'] ?? null,
+                    'area' => $_POST['area'] ?? null,
                     'estado' => $_POST['estado']
                 ];
                 
@@ -166,7 +166,7 @@ if (isset($_GET['eliminar']) && is_numeric($_GET['eliminar'])) {
                             <th class="border-0">Usuario</th>
                             <th class="border-0">Nombre Completo</th>
                             <th class="border-0">Rol</th>
-                            <th class="border-0">Departamento</th>
+                            <th class="border-0">Area</th>
                             <th class="border-0">Estado</th>
                             <th class="border-0">Último Acceso</th>
                             <th class="border-0">Acciones</th>
@@ -249,8 +249,8 @@ if (isset($_GET['eliminar']) && is_numeric($_GET['eliminar'])) {
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="departamento" class="form-label">Departamento</label>
-                                <input type="text" name="departamento" id="departamento" class="form-control">
+                                <label for="area" class="form-label">Area</label>
+                                <input type="text" name="area" id="area" class="form-control">
                             </div>
                         </div>
                     </div>
@@ -408,7 +408,7 @@ async function cargarUsuarios() {
                             ${capitalizar(usuario.rol)}
                         </span>
                     </td>
-                    <td>${usuario.departamento || '<span class="text-muted">No asignado</span>'}</td>
+                    <td>${usuario.area || '<span class="text-muted">No asignado</span>'}</td>
                     <td>
                         <span class="badge badge-${getEstadoColor(usuario.estado)} text-white">
                             ${capitalizar(usuario.estado)}
@@ -468,7 +468,7 @@ async function editarUsuario(id) {
             document.getElementById('nombre_completo').value = usuario.nombre_completo;
             document.getElementById('rol').value = usuario.rol;
             document.getElementById('telefono').value = usuario.telefono || '';
-            document.getElementById('departamento').value = usuario.departamento || '';
+            document.getElementById('area').value = usuario.area || '';
             document.getElementById('estado').value = usuario.estado;
 
             // Mostrar campo de estado para edición

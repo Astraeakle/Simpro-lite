@@ -208,7 +208,7 @@ function handleObtenerUsuario() {
         $db = Database::getConnection();
         
         // Obtener usuario específico
-        $stmt = $db->prepare("SELECT id_usuario, nombre_usuario, nombre_completo, rol, estado, telefono, departamento, fecha_creacion, ultimo_acceso FROM usuarios WHERE id_usuario = ?");
+        $stmt = $db->prepare("SELECT id_usuario, nombre_usuario, nombre_completo, rol, estado, telefono, area, fecha_creacion, ultimo_acceso FROM usuarios WHERE id_usuario = ?");
         $stmt->execute([$id]);
         
         $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -256,7 +256,7 @@ function handleCrearUsuario() {
             $input['rol'],
             $input['estado'] ?? 'activo',
             $input['telefono'] ?? null,
-            $input['departamento'] ?? null
+            $input['area'] ?? null
         ]);
         
         // Obtener el resultado
@@ -293,7 +293,7 @@ function handleActualizarUsuario() {
         $db = Database::getConnection();
         
         // Preparar campos para actualización
-        $camposPermitidos = ['nombre_usuario', 'nombre_completo', 'rol', 'estado', 'telefono', 'departamento'];
+        $camposPermitidos = ['nombre_usuario', 'nombre_completo', 'rol', 'estado', 'telefono', 'area'];
         $camposActualizar = [];
         
         foreach ($camposPermitidos as $campo) {

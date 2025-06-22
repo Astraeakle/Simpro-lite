@@ -106,7 +106,7 @@ if ($rol !== 'supervisor') {
                             <thead>
                                 <tr>
                                     <th>Empleado</th>
-                                    <th>Departamento</th>
+                                    <th>area</th>
                                     <th>Último Acceso</th>
                                     <th>Tiempo Total (30d)</th>
                                     <th>Días Activos (30d)</th>
@@ -137,8 +137,8 @@ if ($rol !== 'supervisor') {
                         <div class="card-body">
                             <div class="row align-items-end">
                                 <div class="col-md-6">
-                                    <label for="filtro-departamento" class="form-label">Filtrar por Departamento</label>
-                                    <select class="form-select" id="filtro-departamento"
+                                    <label for="filtro-area" class="form-label">Filtrar por area</label>
+                                    <select class="form-select" id="filtro-area"
                                         onchange="filtrarEmpleadosDisponibles()">
                                         <option value="">Todos los departamentos</option>
                                     </select>
@@ -168,7 +168,7 @@ if ($rol !== 'supervisor') {
                                     <thead>
                                         <tr>
                                             <th>Empleado</th>
-                                            <th>Departamento</th>
+                                            <th>area</th>
                                             <th>Estado</th>
                                             <th>Último Acceso</th>
                                             <th>Acciones</th>
@@ -193,7 +193,7 @@ if ($rol !== 'supervisor') {
     </div>
 </div>
 
-<!-- Modal para solicitar cambio de departamento -->
+<!-- Modal para solicitar cambio de area -->
 <div class="modal fade" id="modalSolicitudCambio" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -451,7 +451,7 @@ async function cargarMiEquipo() {
                     </div>
                 </td>
                 <td>
-                    <span class="badge bg-secondary">${empleado.departamento || 'Sin departamento'}</span>
+                    <span class="badge bg-secondary">${empleado.area || 'Sin area'}</span>
                 </td>
                 <td>
                     <small>${formatearFecha(empleado.ultimo_acceso)}</small>
@@ -492,7 +492,7 @@ async function cargarMiEquipo() {
 async function cargarDepartamentos() {
     try {
         const data = await apiRequest(`${API_BASE}?accion=departamentos`);
-        const select = document.getElementById('filtro-departamento');
+        const select = document.getElementById('filtro-area');
 
         // Limpiar opciones existentes excepto la primera
         select.innerHTML = '<option value="">Todos los departamentos</option>';
@@ -513,13 +513,13 @@ async function cargarDepartamentos() {
 // Cargar empleados disponibles
 async function cargarEmpleadosDisponibles() {
     try {
-        const departamento = document.getElementById('filtro-departamento').value;
+        const area = document.getElementById('filtro-area').value;
         const params = new URLSearchParams({
             accion: 'empleados_disponibles'
         });
 
-        if (departamento) {
-            params.append('departamento', departamento);
+        if (area) {
+            params.append('area', area);
         }
 
         const data = await apiRequest(`${API_BASE}?${params}`);
@@ -560,7 +560,7 @@ async function cargarEmpleadosDisponibles() {
                         </div>
                     </td>
                     <td>
-                        <span class="badge bg-secondary">${empleado.departamento || 'Sin departamento'}</span>
+                        <span class="badge bg-secondary">${empleado.area || 'Sin area'}</span>
                     </td>
                     <td>
                         <span class="badge ${badge}">${estado}</span>
@@ -708,7 +708,7 @@ function filtrarEmpleadosDisponibles() {
 
 // Limpiar filtros
 function limpiarFiltros() {
-    document.getElementById('filtro-departamento').value = '';
+    document.getElementById('filtro-area').value = '';
     cargarEmpleadosDisponibles();
 }
 
@@ -720,13 +720,13 @@ function exportarReporteEquipo() {
     }
 
     // Crear CSV
-    const headers = ['Empleado', 'Email', 'Departamento', 'Último Acceso', 'Tiempo Total (Hrs)', 'Días Activos'];
+    const headers = ['Empleado', 'Email', 'area', 'Último Acceso', 'Tiempo Total (Hrs)', 'Días Activos'];
     const csvContent = [
         headers.join(','),
         ...miEquipo.map(empleado => [
             `"${empleado.nombre_completo}"`,
             `"${empleado.email}"`,
-            `"${empleado.departamento || 'Sin departamento'}"`,
+            `"${empleado.area || 'Sin area'}"`,
             `"${formatearFecha(empleado.ultimo_acceso)}"`,
             `"${formatearTiempo(empleado.tiempo_total_horas || 0)}"`,
             `"${empleado.dias_activos || 0}"`

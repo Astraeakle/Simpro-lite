@@ -14,7 +14,7 @@ CREATE TABLE `usuarios` (
   `estado` enum('activo','inactivo','bloqueado') COLLATE utf8mb4_unicode_ci DEFAULT 'activo',
   `avatar` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `telefono` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `departamento` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `area` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `supervisor_id` int DEFAULT NULL,
   PRIMARY KEY (`id_usuario`),
   UNIQUE KEY `nombre_usuario` (`nombre_usuario`)

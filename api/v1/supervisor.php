@@ -73,8 +73,8 @@ function manejarGET($pdo, $usuario_actual, $accion) {
             obtenerEmpleadosAsignados($pdo, $usuario_actual['id_usuario']);
             break;
         case 'empleados_disponibles':
-            $departamento = $_GET['departamento'] ?? null;
-            obtenerEmpleadosDisponibles($pdo, $usuario_actual['id_usuario'], $departamento);
+            $area = $_GET['area'] ?? null;
+            obtenerEmpleadosDisponibles($pdo, $usuario_actual['id_usuario'], $area);
             break;
         case 'estadisticas_equipo':
             $fecha_inicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
@@ -172,10 +172,10 @@ function obtenerEmpleadosAsignados($pdo, $supervisor_id) {
     }
 }
 
-function obtenerEmpleadosDisponibles($pdo, $supervisor_id, $departamento) {
+function obtenerEmpleadosDisponibles($pdo, $supervisor_id, $area) {
     try {
         $stmt = $pdo->prepare("CALL sp_obtener_empleados_disponibles(?, ?)");
-        $stmt->execute([$supervisor_id, $departamento]);
+        $stmt->execute([$supervisor_id, $area]);
         $empleados = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         echo json_encode([
@@ -211,11 +211,11 @@ function obtenerEstadisticasEquipo($pdo, $supervisor_id, $fecha_inicio, $fecha_f
 function obtenerDepartamentos($pdo) {
     try {
         $stmt = $pdo->prepare("
-            SELECT DISTINCT departamento 
+            SELECT DISTINCT area 
             FROM usuarios 
-            WHERE departamento IS NOT NULL 
-            AND departamento != '' 
-            ORDER BY departamento
+            WHERE area IS NOT NULL 
+            AND area != '' 
+            ORDER BY area
         ");
         $stmt->execute();
         $departamentos = $stmt->fetchAll(PDO::FETCH_COLUMN);
