@@ -22,27 +22,26 @@ $proyectos = DB::select(
     </div>
     <div class="card-body">
         <?php if ($proyectos): ?>
-            <div class="list-group">
-                <?php foreach ($proyectos as $proyecto): ?>
-                    <?php 
+        <div class="list-group">
+            <?php foreach ($proyectos as $proyecto): ?>
+            <?php 
                     $porcentaje = $proyecto['total_tareas'] > 0 ? 
                         round(($proyecto['tareas_completadas'] / $proyecto['total_tareas']) * 100) : 0;
                     ?>
-                    <a href="#" class="list-group-item list-group-item-action">
-                        <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1"><?= htmlspecialchars($proyecto['nombre']) ?></h6>
-                            <small class="text-muted"><?= $proyecto['estado'] ?></small>
-                        </div>
-                        <div class="progress mt-2" style="height: 5px;">
-                            <div class="progress-bar bg-info" 
-                                 style="width: <?= $porcentaje ?>%"></div>
-                        </div>
-                        <small><?= $porcentaje ?>% completado</small>
-                    </a>
-                <?php endforeach; ?>
-            </div>
+            <a href="#" class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1"><?= htmlspecialchars($proyecto['nombre']) ?></h6>
+                    <small class="text-muted"><?= $proyecto['estado'] ?></small>
+                </div>
+                <div class="progress mt-2" style="height: 5px;">
+                    <div class="progress-bar bg-info" style="width: <?= $porcentaje ?>%"></div>
+                </div>
+                <small><?= $porcentaje ?>% completado</small>
+            </a>
+            <?php endforeach; ?>
+        </div>
         <?php else: ?>
-            <div class="alert alert-info mb-0">No tienes proyectos asignados</div>
+        <div class="alert alert-info mb-0">No tienes proyectos asignados</div>
         <?php endif; ?>
     </div>
 </div>
