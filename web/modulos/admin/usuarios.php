@@ -249,10 +249,19 @@ if (isset($_GET['eliminar']) && is_numeric($_GET['eliminar'])) {
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="area" class="form-label">Area</label>
-                                <input type="text" name="area" id="area" class="form-control">
+                                <label for="area" class="form-label">Área</label>
+                                <select name="area" id="area" class="form-select">
+                                    <option value="Administración">Administración</option>
+                                    <option value="Contabilidad">Contabilidad</option>
+                                    <option value="Ingeniería">Ingeniería</option>
+                                    <option value="Marketing">Marketing</option>
+                                    <option value="Proyectos">Proyectos</option>
+                                    <option value="Ambiental">Ambiental</option>
+                                    <option value="Derecho">Derecho</option>
+                                </select>
                             </div>
                         </div>
+
                     </div>
 
                     <div class="row" id="estadoRow" style="display: none;">

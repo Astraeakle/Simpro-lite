@@ -81,8 +81,8 @@ function manejarGET($pdo, $usuario_actual, $accion) {
             $fecha_fin = $_GET['fecha_fin'] ?? date('Y-m-t');
             obtenerEstadisticasEquipo($pdo, $usuario_actual['id_usuario'], $fecha_inicio, $fecha_fin);
             break;
-        case 'departamentos':
-            obtenerDepartamentos($pdo);
+        case 'areas':
+            obtenerAreas($pdo);
             break;
         default:
             http_response_code(400);
@@ -208,26 +208,41 @@ function obtenerEstadisticasEquipo($pdo, $supervisor_id, $fecha_inicio, $fecha_f
     }
 }
 
-function obtenerDepartamentos($pdo) {
+function obtenerAreas($pdo) {
     try {
+        // Cambiar este query que no funciona bien
         $stmt = $pdo->prepare("
-            SELECT DISTINCT area 
-            FROM usuarios 
-            WHERE area IS NOT NULL 
-            AND area != '' 
-            ORDER BY area
+            SELECT COLUMN_TYPE 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_NAME = 'usuarios' 
+            AND COLUMN_NAME = 'area'
+            AND TABLE_SCHEMA = DATABASE()
         ");
         $stmt->execute();
-        $departamentos = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Extraer los valores del ENUM
+        if ($result && isset($result['COLUMN_TYPE'])) {
+            preg_match('/enum\((.*)\)/', $result['COLUMN_TYPE'], $matches);
+            $areas = [];
+            
+            if (isset($matches[1])) {
+                $values = str_getcsv($matches[1], ',', "'");
+                $areas = $values;
+            }
+        } else {
+            // Fallback con las áreas hardcodeadas si falla el query
+            $areas = ['Administración','Contabilidad','Ingeniería','Marketing','Proyectos','Ambiental','Derecho'];
+        }
         
         echo json_encode([
             'success' => true,
-            'data' => $departamentos
+            'data' => $areas
         ]);
     } catch (Exception $e) {
         echo json_encode([
             'success' => false,
-            'error' => 'Error al obtener departamentos: ' . $e->getMessage()
+            'error' => 'Error al obtener areas: ' . $e->getMessage()
         ]);
     }
 }

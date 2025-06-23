@@ -14,7 +14,7 @@ CREATE TABLE `usuarios` (
   `estado` enum('activo','inactivo','bloqueado') COLLATE utf8mb4_unicode_ci DEFAULT 'activo',
   `avatar` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `telefono` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `area` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `area` ENUM('Administración','Contabilidad','Ingeniería','Marketing','Proyectos','Ambiental','Derecho') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `supervisor_id` int DEFAULT NULL,
   PRIMARY KEY (`id_usuario`),
   UNIQUE KEY `nombre_usuario` (`nombre_usuario`)
@@ -569,6 +569,298 @@ BEGIN
         UPDATE usuarios 
         SET ultimo_acceso = NOW() 
         WHERE nombre_usuario = p_nombre_usuario;
+    END IF;
+END ;;
+
+DELIMITER ;
+
+
+DELIMITER ;;
+
+-- Procedimiento para obtener empleados disponibles para asignar a un supervisor
+CREATE PROCEDURE `sp_obtener_empleados_disponibles`(
+    IN p_supervisor_id INT,
+    IN p_area VARCHAR(50)
+)
+BEGIN
+    SELECT 
+        id_usuario,
+        nombre_usuario,
+        nombre_completo,
+        area,
+        telefono,
+        fecha_creacion,
+        ultimo_acceso,
+        estado
+    FROM usuarios
+    WHERE rol = 'empleado'
+    AND estado = 'activo'
+    AND (supervisor_id IS NULL OR supervisor_id = p_supervisor_id)
+    AND (p_area IS NULL OR area = p_area)
+    ORDER BY nombre_completo;
+END ;;
+
+-- Procedimiento para obtener empleados asignados a un supervisor
+CREATE PROCEDURE `sp_obtener_empleados_supervisor`(
+    IN p_supervisor_id INT
+)
+BEGIN
+    SELECT 
+        u.id_usuario,
+        u.nombre_usuario,
+        u.nombre_completo,
+        u.area,
+        u.telefono,
+        u.fecha_creacion,
+        u.ultimo_acceso,
+        u.estado,
+        -- Estadísticas básicas de actividad (últimos 30 días)
+        COALESCE(
+            (SELECT SEC_TO_TIME(SUM(tiempo_segundos))
+             FROM actividad_apps aa
+             WHERE aa.id_usuario = u.id_usuario
+             AND aa.fecha_hora_inicio >= DATE_SUB(NOW(), INTERVAL 30 DAY)), 
+            '00:00:00'
+        ) AS tiempo_total_mes,
+        COALESCE(
+            (SELECT COUNT(DISTINCT DATE(fecha_hora_inicio))
+             FROM actividad_apps aa
+             WHERE aa.id_usuario = u.id_usuario
+             AND aa.fecha_hora_inicio >= DATE_SUB(NOW(), INTERVAL 30 DAY)),
+            0
+        ) AS dias_activos_mes
+    FROM usuarios u
+    WHERE u.supervisor_id = p_supervisor_id
+    AND u.rol = 'empleado'
+    ORDER BY u.nombre_completo;
+END ;;
+
+-- Procedimiento para asignar empleado a supervisor
+CREATE PROCEDURE `sp_asignar_empleado_supervisor`(
+    IN p_supervisor_id INT,
+    IN p_empleado_id INT,
+    OUT p_resultado JSON
+)
+BEGIN
+    DECLARE v_empleado_existe INT DEFAULT 0;
+    DECLARE v_supervisor_existe INT DEFAULT 0;
+    DECLARE v_empleado_disponible INT DEFAULT 0;
+    DECLARE v_supervisor_rol VARCHAR(20) DEFAULT '';
+    DECLARE v_empleado_nombre VARCHAR(100) DEFAULT '';
+    DECLARE v_error_msg VARCHAR(255) DEFAULT '';
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_error_msg = MESSAGE_TEXT;
+        SET p_resultado = JSON_OBJECT('success', false, 'error', v_error_msg);
+        ROLLBACK;
+    END;
+
+    START TRANSACTION;
+
+    -- Verificar que el supervisor existe y es supervisor
+    SELECT COUNT(*), rol INTO v_supervisor_existe, v_supervisor_rol
+    FROM usuarios 
+    WHERE id_usuario = p_supervisor_id AND estado = 'activo';
+
+    IF v_supervisor_existe = 0 OR v_supervisor_rol != 'supervisor' THEN
+        SET p_resultado = JSON_OBJECT('success', false, 'error', 'Supervisor no válido');
+        ROLLBACK;
+    ELSE
+        -- Verificar que el empleado existe y está disponible
+        SELECT COUNT(*), nombre_completo INTO v_empleado_existe, v_empleado_nombre
+        FROM usuarios 
+        WHERE id_usuario = p_empleado_id 
+        AND rol = 'empleado' 
+        AND estado = 'activo'
+        AND (supervisor_id IS NULL OR supervisor_id = p_supervisor_id);
+
+        IF v_empleado_existe = 0 THEN
+            SET p_resultado = JSON_OBJECT('success', false, 'error', 'Empleado no disponible para asignación');
+            ROLLBACK;
+        ELSE
+            -- Asignar empleado al supervisor
+            UPDATE usuarios 
+            SET supervisor_id = p_supervisor_id
+            WHERE id_usuario = p_empleado_id;
+
+            -- Registrar en logs
+            INSERT INTO logs_sistema (tipo, modulo, mensaje, id_usuario)
+            VALUES ('INFO', 'SUPERVISOR', 
+                   CONCAT('Empleado ', v_empleado_nombre, ' asignado al supervisor ID: ', p_supervisor_id),
+                   p_supervisor_id);
+
+            SET p_resultado = JSON_OBJECT(
+                'success', true, 
+                'message', CONCAT('Empleado "', v_empleado_nombre, '" asignado correctamente')
+            );
+            COMMIT;
+        END IF;
+    END IF;
+END ;;
+
+-- Procedimiento para remover empleado de supervisor
+CREATE PROCEDURE `sp_remover_empleado_supervisor`(
+    IN p_supervisor_id INT,
+    IN p_empleado_id INT,
+    OUT p_resultado JSON
+)
+BEGIN
+    DECLARE v_empleado_asignado INT DEFAULT 0;
+    DECLARE v_empleado_nombre VARCHAR(100) DEFAULT '';
+    DECLARE v_error_msg VARCHAR(255) DEFAULT '';
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_error_msg = MESSAGE_TEXT;
+        SET p_resultado = JSON_OBJECT('success', false, 'error', v_error_msg);
+        ROLLBACK;
+    END;
+
+    START TRANSACTION;
+
+    -- Verificar que el empleado está asignado a este supervisor
+    SELECT COUNT(*), nombre_completo INTO v_empleado_asignado, v_empleado_nombre
+    FROM usuarios 
+    WHERE id_usuario = p_empleado_id 
+    AND supervisor_id = p_supervisor_id
+    AND rol = 'empleado';
+
+    IF v_empleado_asignado = 0 THEN
+        SET p_resultado = JSON_OBJECT('success', false, 'error', 'Empleado no está asignado a este supervisor');
+        ROLLBACK;
+    ELSE
+        -- Remover asignación
+        UPDATE usuarios 
+        SET supervisor_id = NULL
+        WHERE id_usuario = p_empleado_id;
+
+        -- Registrar en logs
+        INSERT INTO logs_sistema (tipo, modulo, mensaje, id_usuario)
+        VALUES ('INFO', 'SUPERVISOR', 
+               CONCAT('Empleado ', v_empleado_nombre, ' removido del supervisor ID: ', p_supervisor_id),
+               p_supervisor_id);
+
+        SET p_resultado = JSON_OBJECT(
+            'success', true, 
+            'message', CONCAT('Empleado "', v_empleado_nombre, '" removido del equipo')
+        );
+        COMMIT;
+    END IF;
+END ;;
+
+-- Procedimiento para obtener estadísticas del equipo de un supervisor
+CREATE PROCEDURE `sp_estadisticas_equipo_supervisor`(
+    IN p_supervisor_id INT,
+    IN p_fecha_inicio DATE,
+    IN p_fecha_fin DATE
+)
+BEGIN
+    SELECT 
+        -- Datos básicos del equipo
+        COUNT(u.id_usuario) as total_empleados,
+        SUM(CASE WHEN u.estado = 'activo' THEN 1 ELSE 0 END) as empleados_activos,
+        
+        -- Estadísticas de actividad
+        SEC_TO_TIME(COALESCE(SUM(aa.tiempo_total), 0)) as tiempo_total_equipo,
+        ROUND(COALESCE(AVG(aa.tiempo_total), 0) / 3600, 2) as promedio_horas_empleado,
+        
+        -- Productividad
+        ROUND(
+            COALESCE(
+                SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_total ELSE 0 END) / 
+                GREATEST(SUM(aa.tiempo_total), 1) * 100,
+                0
+            ), 2
+        ) as porcentaje_productivo_equipo,
+        
+        -- Días trabajados
+        COALESCE(MAX(aa.dias_trabajados), 0) as max_dias_trabajados,
+        ROUND(COALESCE(AVG(aa.dias_trabajados), 0), 1) as promedio_dias_trabajados
+        
+    FROM usuarios u
+    LEFT JOIN (
+        SELECT 
+            id_usuario,
+            SUM(tiempo_segundos) as tiempo_total,
+            COUNT(DISTINCT DATE(fecha_hora_inicio)) as dias_trabajados,
+            categoria
+        FROM actividad_apps
+        WHERE DATE(fecha_hora_inicio) BETWEEN p_fecha_inicio AND p_fecha_fin
+        GROUP BY id_usuario, categoria
+    ) aa ON u.id_usuario = aa.id_usuario
+    WHERE u.supervisor_id = p_supervisor_id
+    AND u.rol = 'empleado';
+END ;;
+
+-- Procedimiento para crear solicitud de cambio (para empleados de otro area)
+CREATE PROCEDURE `sp_crear_solicitud_cambio`(
+    IN p_supervisor_id INT,
+    IN p_empleado_id INT,
+    IN p_motivo TEXT,
+    OUT p_resultado JSON
+)
+BEGIN
+    DECLARE v_supervisor_depto VARCHAR(50) DEFAULT '';
+    DECLARE v_empleado_depto VARCHAR(50) DEFAULT '';
+    DECLARE v_empleado_nombre VARCHAR(100) DEFAULT '';
+    DECLARE v_supervisor_nombre VARCHAR(100) DEFAULT '';
+    DECLARE v_admin_count INT DEFAULT 0;
+    DECLARE v_error_msg VARCHAR(255) DEFAULT '';
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            v_error_msg = MESSAGE_TEXT;
+        SET p_resultado = JSON_OBJECT('success', false, 'error', v_error_msg);
+        ROLLBACK;
+    END;
+
+    START TRANSACTION;
+
+    -- Obtener información del supervisor y empleado
+    SELECT area, nombre_completo INTO v_supervisor_depto, v_supervisor_nombre
+    FROM usuarios 
+    WHERE id_usuario = p_supervisor_id AND rol = 'supervisor';
+
+    SELECT area, nombre_completo INTO v_empleado_depto, v_empleado_nombre
+    FROM usuarios 
+    WHERE id_usuario = p_empleado_id AND rol = 'empleado';
+
+    -- Contar administradores para enviar notificaciones
+    SELECT COUNT(*) INTO v_admin_count
+    FROM usuarios 
+    WHERE rol = 'admin' AND estado = 'activo';
+
+    IF v_admin_count = 0 THEN
+        SET p_resultado = JSON_OBJECT('success', false, 'error', 'No hay administradores disponibles para procesar la solicitud');
+        ROLLBACK;
+    ELSE
+        -- Crear notificaciones para todos los administradores
+        INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo, id_referencia)
+        SELECT 
+            id_usuario,
+            'Solicitud de Asignación Inter-departamental',
+            CONCAT('El supervisor ', v_supervisor_nombre, ' (', v_supervisor_depto, ') solicita asignar al empleado ', 
+                   v_empleado_nombre, ' (', v_empleado_depto, '). Motivo: ', p_motivo),
+            'sistema',
+            p_empleado_id
+        FROM usuarios 
+        WHERE rol = 'admin' AND estado = 'activo';
+
+        -- Registrar en logs
+        INSERT INTO logs_sistema (tipo, modulo, mensaje, id_usuario)
+        VALUES ('INFO', 'SUPERVISOR', 
+               CONCAT('Solicitud creada para asignar empleado de otro area: ', v_empleado_nombre),
+               p_supervisor_id);
+
+        SET p_resultado = JSON_OBJECT(
+            'success', true,
+            'message', 'Solicitud enviada a los administradores para revisión'
+        );
+        COMMIT;
     END IF;
 END ;;
 

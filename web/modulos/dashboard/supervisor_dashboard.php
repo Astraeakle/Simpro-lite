@@ -1,13 +1,10 @@
 <?php
 // File: web/modulos/dashboard/supervisor_dashboard.php
-
-// Verificar que el usuario está autenticado como supervisor
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
 $rol = isset($userData['rol']) ? $userData['rol'] : '';
 $nombre = isset($userData['nombre_completo']) ? $userData['nombre_completo'] : 'Supervisor';
 $supervisor_id = isset($userData['id_usuario']) ? $userData['id_usuario'] : 0;
 
-// Si no es supervisor, redirigir
 if ($rol !== 'supervisor') {
     header('Location: /simpro-lite/web/index.php?modulo=dashboard');
     exit;
@@ -106,7 +103,7 @@ if ($rol !== 'supervisor') {
                             <thead>
                                 <tr>
                                     <th>Empleado</th>
-                                    <th>area</th>
+                                    <th>Área</th>
                                     <th>Último Acceso</th>
                                     <th>Tiempo Total (30d)</th>
                                     <th>Días Activos (30d)</th>
@@ -137,10 +134,10 @@ if ($rol !== 'supervisor') {
                         <div class="card-body">
                             <div class="row align-items-end">
                                 <div class="col-md-6">
-                                    <label for="filtro-area" class="form-label">Filtrar por area</label>
+                                    <label for="filtro-area" class="form-label">Filtrar por área</label>
                                     <select class="form-select" id="filtro-area"
                                         onchange="filtrarEmpleadosDisponibles()">
-                                        <option value="">Todos los departamentos</option>
+                                        <option value="">Todas las Áreas</option>
                                     </select>
                                 </div>
                                 <div class="col-md-6">
@@ -168,7 +165,7 @@ if ($rol !== 'supervisor') {
                                     <thead>
                                         <tr>
                                             <th>Empleado</th>
-                                            <th>area</th>
+                                            <th>Área</th>
                                             <th>Estado</th>
                                             <th>Último Acceso</th>
                                             <th>Acciones</th>
@@ -193,7 +190,7 @@ if ($rol !== 'supervisor') {
     </div>
 </div>
 
-<!-- Modal para solicitar cambio de area -->
+<!-- Modal para solicitar cambio de área -->
 <div class="modal fade" id="modalSolicitudCambio" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -210,9 +207,9 @@ if ($rol !== 'supervisor') {
                     </div>
                     <div class="mb-3">
                         <label for="motivo_solicitud" class="form-label">Motivo de la solicitud</label>
-                        <textdepartamentoclass="form-control" id="motivo_solicitud" rows="4"
+                        <textarea class="form-control" id="motivo_solicitud" rows="4"
                             placeholder="Explique por qué necesita asignar este empleado a su equipo..." required>
-                            </textdepartamento>
+                        </textarea>
                     </div>
                 </form>
             </div>
@@ -253,7 +250,7 @@ if ($rol !== 'supervisor') {
 document.addEventListener('DOMContentLoaded', function() {
     // Cargar datos iniciales
     cargarEstadisticasEquipo();
-    cargarDepartamentos();
+    cargarAreas();
 
     // Event listeners para las pestañas
     document.getElementById('mi-equipo-tab').addEventListener('shown.bs.tab', function() {
@@ -451,7 +448,7 @@ async function cargarMiEquipo() {
                     </div>
                 </td>
                 <td>
-                    <span class="badge bg-secondary">${empleado.area || 'Sin area'}</span>
+                    <span class="badge bg-secondary">${empleado.area || 'Sin área'}</span>
                 </td>
                 <td>
                     <small>${formatearFecha(empleado.ultimo_acceso)}</small>
@@ -488,25 +485,22 @@ async function cargarMiEquipo() {
     }
 }
 
-// Cargar departamentos para el filtro
-async function cargarDepartamentos() {
+// Cargar áreas para el filtro
+async function cargarAreas() {
     try {
-        const data = await apiRequest(`${API_BASE}?accion=departamentos`);
+        const data = await apiRequest(`${API_BASE}?accion=areas`);
         const select = document.getElementById('filtro-area');
-
         // Limpiar opciones existentes excepto la primera
-        select.innerHTML = '<option value="">Todos los departamentos</option>';
-
-        // Agregar departamentos
-        data.data.forEach(dept => {
+        select.innerHTML = '<option value="">Todas las Áreas</option>';
+        data.data.forEach(area => {
             const option = document.createElement('option');
-            option.value = dept;
-            option.textContent = dept;
+            option.value = area;
+            option.textContent = area;
             select.appendChild(option);
         });
 
     } catch (error) {
-        console.error('Error al cargar departamentos:', error);
+        console.error('Error al cargar áreas:', error);
     }
 }
 
@@ -540,7 +534,7 @@ async function cargarEmpleadosDisponibles() {
         }
 
         tbody.innerHTML = empleadosDisponibles.map(empleado => {
-            const puedeAsignar = !empleado.supervisor_actual || empleado.mismo_departamento;
+            const puedeAsignar = !empleado.supervisor_actual || empleado.misma_area;
             const badge = empleado.supervisor_actual ?
                 'bg-warning' : 'bg-success';
             const estado = empleado.supervisor_actual ?
@@ -560,7 +554,7 @@ async function cargarEmpleadosDisponibles() {
                         </div>
                     </td>
                     <td>
-                        <span class="badge bg-secondary">${empleado.area || 'Sin area'}</span>
+                        <span class="badge bg-secondary">${empleado.area || 'Sin área'}</span>
                     </td>
                     <td>
                         <span class="badge ${badge}">${estado}</span>
@@ -668,7 +662,6 @@ async function enviarSolicitudCambio() {
     }
 }
 
-// Mostrar modal para confirmar remoción
 function mostrarModalRemover(empleadoId, nombreEmpleado) {
     document.getElementById('empleado_remover_id').value = empleadoId;
     document.getElementById('nombre_empleado_remover').textContent = nombreEmpleado;
@@ -677,7 +670,6 @@ function mostrarModalRemover(empleadoId, nombreEmpleado) {
     modal.show();
 }
 
-// Confirmar remoción de empleado
 async function confirmarRemoverEmpleado() {
     try {
         const empleadoId = document.getElementById('empleado_remover_id').value;
@@ -696,23 +688,18 @@ async function confirmarRemoverEmpleado() {
         cargarMiEquipo();
         cargarEstadisticasEquipo();
 
-    } catch (error) {
-        // El error ya se muestra en apiRequest
-    }
+    } catch (error) {}
 }
 
-// Filtrar empleados disponibles
 function filtrarEmpleadosDisponibles() {
     cargarEmpleadosDisponibles();
 }
 
-// Limpiar filtros
 function limpiarFiltros() {
     document.getElementById('filtro-area').value = '';
     cargarEmpleadosDisponibles();
 }
 
-// Exportar reporte del equipo
 function exportarReporteEquipo() {
     if (miEquipo.length === 0) {
         mostrarAlerta('warning', 'No hay empleados en tu equipo para exportar');
@@ -720,13 +707,13 @@ function exportarReporteEquipo() {
     }
 
     // Crear CSV
-    const headers = ['Empleado', 'Email', 'area', 'Último Acceso', 'Tiempo Total (Hrs)', 'Días Activos'];
+    const headers = ['Empleado', 'Email', 'Área', 'Último Acceso', 'Tiempo Total (Hrs)', 'Días Activos'];
     const csvContent = [
         headers.join(','),
         ...miEquipo.map(empleado => [
             `"${empleado.nombre_completo}"`,
             `"${empleado.email}"`,
-            `"${empleado.area || 'Sin area'}"`,
+            `"${empleado.area || 'Sin área'}"`,
             `"${formatearFecha(empleado.ultimo_acceso)}"`,
             `"${formatearTiempo(empleado.tiempo_total_horas || 0)}"`,
             `"${empleado.dias_activos || 0}"`
@@ -901,6 +888,19 @@ function ordenarTabla(tabla, columna, ascendente = true) {
 
 // Event listeners adicionales
 document.addEventListener('DOMContentLoaded', function() {
+    // Cargar datos iniciales
+    cargarEstadisticasEquipo();
+    cargarAreas();
+
+    // Event listeners para las pestañas
+    document.getElementById('mi-equipo-tab').addEventListener('shown.bs.tab', function() {
+        cargarMiEquipo();
+    });
+
+    document.getElementById('asignar-tab').addEventListener('shown.bs.tab', function() {
+        cargarEmpleadosDisponibles();
+    });
+
     // Agregar funcionalidad de búsqueda si existe el campo
     const campoBusqueda = document.getElementById('buscar-empleados');
     if (campoBusqueda) {
