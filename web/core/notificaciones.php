@@ -8,9 +8,6 @@ class NotificacionesManager {
         $this->db = $database;
     }
     
-    /**
-     * EMPLEADO - Notificaciones que recibe
-     */
     public function crearNotificacionEmpleado($id_usuario, $tipo, $titulo, $mensaje, $id_referencia = null) {
         $tipos_empleado = [
             'asignacion_tarea' => 'Te han asignado una nueva tarea',
@@ -23,9 +20,6 @@ class NotificacionesManager {
         return $this->insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia);
     }
     
-    /**
-     * SUPERVISOR - Notificaciones que recibe
-     */
     public function crearNotificacionSupervisor($id_usuario, $tipo, $titulo, $mensaje, $id_referencia = null) {
         $tipos_supervisor = [
             'solicitud_asignacion' => 'Solicitud de asignación inter-departamental',
@@ -38,9 +32,6 @@ class NotificacionesManager {
         return $this->insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia);
     }
     
-    /**
-     * ADMIN - Notificaciones que recibe
-     */
     public function crearNotificacionAdmin($id_usuario, $tipo, $titulo, $mensaje, $id_referencia = null) {
         $tipos_admin = [
             'nuevo_usuario' => 'Nuevo usuario registrado',
@@ -53,11 +44,6 @@ class NotificacionesManager {
         return $this->insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia);
     }
     
-    /**
-     * NOTIFICACIONES AUTOMÁTICAS SEGÚN EVENTOS
-     */
-    
-    // Cuando se asigna una tarea
     public function notificarAsignacionTarea($id_empleado, $id_actividad, $nombre_tarea, $supervisor_nombre) {
         $titulo = "Nueva tarea asignada";
         $mensaje = "El supervisor {$supervisor_nombre} te ha asignado la tarea: {$nombre_tarea}";
@@ -65,7 +51,6 @@ class NotificacionesManager {
         return $this->crearNotificacionEmpleado($id_empleado, 'tarea', $titulo, $mensaje, $id_actividad);
     }
     
-    // Cuando empleado no registra entrada
     public function notificarAusenciaEmpleado($id_supervisor, $nombre_empleado, $fecha) {
         $titulo = "Empleado sin registro de entrada";
         $mensaje = "El empleado {$nombre_empleado} no ha registrado su entrada el {$fecha}";
@@ -73,7 +58,6 @@ class NotificacionesManager {
         return $this->crearNotificacionSupervisor($id_supervisor, 'asistencia', $titulo, $mensaje);
     }
     
-    // Cuando hay solicitud inter-departamental (como en tu ejemplo)
     public function notificarSolicitudInterDepartamental($id_supervisor_destino, $supervisor_origen, $departamento_origen, $detalle) {
         $titulo = "Solicitud de Asignación Inter-departamental";
         $mensaje = "El supervisor {$supervisor_origen} ({$departamento_origen}) solicita: {$detalle}";
@@ -81,9 +65,7 @@ class NotificacionesManager {
         return $this->crearNotificacionSupervisor($id_supervisor_destino, 'sistema', $titulo, $mensaje);
     }
     
-    // Cuando hay problemas de sistema
     public function notificarErrorSistema($mensaje_error, $modulo) {
-        // Notificar a todos los administradores
         $admins = $this->obtenerAdministradores();
         
         foreach ($admins as $admin) {
@@ -92,9 +74,6 @@ class NotificacionesManager {
         }
     }
     
-    /**
-     * OBTENER NOTIFICACIONES
-     */
     public function obtenerNotificaciones($id_usuario, $solo_no_leidas = false, $limite = 20) {
         $where_leido = $solo_no_leidas ? "AND leido = 0" : "";
         
@@ -143,9 +122,6 @@ class NotificacionesManager {
         return $stmt->execute();
     }
     
-    /**
-     * MÉTODOS PRIVADOS
-     */
     private function insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia = null) {
         $sql = "INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo, id_referencia) 
                 VALUES (?, ?, ?, ?, ?)";
@@ -161,11 +137,6 @@ class NotificacionesManager {
         return $this->db->query($sql)->fetch_all(MYSQLI_ASSOC);
     }
     
-    /**
-     * TRIGGERS AUTOMÁTICOS SEGÚN EVENTOS DEL SISTEMA
-     */
-    
-    // Llamar cuando se detecte ausencia
     public function procesarAusencias() {
         $hoy = date('Y-m-d');
         $sql = "SELECT DISTINCT u.id_usuario, u.nombre_completo, u.supervisor_id, 
@@ -177,7 +148,7 @@ class NotificacionesManager {
                 WHERE u.rol = 'empleado' 
                     AND u.estado = 'activo' 
                     AND r.id_registro IS NULL
-                    AND TIME(NOW()) > '09:30:00'"; // Después de las 9:30 AM
+                    AND TIME(NOW()) > '09:30:00'";
         
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param("s", $hoy);
@@ -195,14 +166,13 @@ class NotificacionesManager {
         }
     }
     
-    // Llamar cuando se detecten tareas próximas a vencer
     public function procesarTareasProximasVencer() {
         $sql = "SELECT a.*, u.nombre_completo
                 FROM actividades a
                 JOIN usuarios u ON a.id_asignado = u.id_usuario
                 WHERE a.estado IN ('pendiente', 'en_progreso')
                     AND a.fecha_limite IS NOT NULL
-                    AND DATEDIFF(a.fecha_limite, NOW()) <= 2"; // 2 días o menos
+                    AND DATEDIFF(a.fecha_limite, NOW()) <= 2";
         
         $resultado = $this->db->query($sql);
         

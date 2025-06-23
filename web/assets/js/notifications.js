@@ -6,31 +6,20 @@ class NotificationsManager {
         this.isPolling = false;
         this.unreadCount = 0;
         this.notifications = [];
-        this.pollFrequency = window.notificationConfig?.pollFrequency || 30000; // 30 segundos
+        this.pollFrequency = window.notificationConfig?.pollFrequency || 30000;
         this.userRole = window.notificationConfig?.userRole || '';
         this.userId = window.notificationConfig?.userId || 0;
-        
-        console.log('🔧 Inicializando NotificationsManager con:', {
-            userId: this.userId,
-            userRole: this.userRole,
-            apiUrl: this.apiUrl
-        });
         
         this.init();
     }
     
     init() {
-        // Verificar que el container de notificaciones ya existe
         const notificationContainer = document.getElementById('notification-dropdown-container');
         if (!notificationContainer) {
-            console.error('Container de notificaciones no encontrado en el DOM');
             return;
         }
         
-        // Solo inicializar si el usuario está autenticado
         if (!this.userId || this.userId === 0) {
-            console.log('Usuario no autenticado, sistema de notificaciones no inicializado');
-            // Pero aún así mostrar el container sin funcionalidad
             this.renderEmptyState();
             return;
         }
@@ -39,13 +28,9 @@ class NotificationsManager {
         this.loadUnreadCount();
         this.startPolling();
         this.bindEvents();
-        
-        console.log('✅ Sistema de notificaciones inicializado para:', this.userRole, 'ID:', this.userId);
     }
     
     async loadNotifications() {
-        console.log('📡 Cargando notificaciones...');
-        
         try {
             const response = await fetch(`${this.apiUrl}?action=list&limit=10`, {
                 method: 'GET',
@@ -56,8 +41,6 @@ class NotificationsManager {
                 credentials: 'same-origin'
             });
             
-            console.log('📊 Response status:', response.status);
-            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -65,23 +48,19 @@ class NotificationsManager {
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 const text = await response.text();
-                console.error('❌ Respuesta no es JSON:', text);
                 throw new Error('Respuesta del servidor no es JSON válido');
             }
             
             const data = await response.json();
-            console.log('✅ Data received:', data);
             
             if (data.success) {
                 this.notifications = data.data || [];
                 this.renderNotifications();
             } else {
-                console.error('❌ Error en respuesta:', data.error);
                 this.showError('Error al cargar notificaciones: ' + (data.error || 'Error desconocido'));
                 this.renderErrorState();
             }
         } catch (error) {
-            console.error('❌ Error cargando notificaciones:', error);
             this.showError('Error de conexión: ' + error.message);
             this.renderErrorState();
         }
@@ -104,7 +83,6 @@ class NotificationsManager {
             
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
-                console.warn('⚠️ Response no es JSON para count');
                 return;
             }
             
@@ -113,7 +91,6 @@ class NotificationsManager {
             if (data.success) {
                 const newCount = data.count || 0;
                 
-                // Si hay nuevas notificaciones, hacer animación
                 if (newCount > this.unreadCount) {
                     this.animateBadge();
                 }
@@ -122,7 +99,6 @@ class NotificationsManager {
                 this.updateBadge();
             }
         } catch (error) {
-            console.error('❌ Error cargando contador:', error);
         }
     }
     
@@ -130,7 +106,6 @@ class NotificationsManager {
         const container = document.getElementById('notificationsList');
         
         if (!container) {
-            console.error('❌ Container de lista de notificaciones no encontrado');
             return;
         }
         
@@ -146,8 +121,6 @@ class NotificationsManager {
         
         const html = this.notifications.map(notification => this.renderNotificationItem(notification)).join('');
         container.innerHTML = html;
-        
-        console.log('✅ Notificaciones renderizadas:', this.notifications.length);
     }
     
     renderEmptyState() {
@@ -265,7 +238,6 @@ class NotificationsManager {
             const data = await response.json();
             
             if (data.success) {
-                // Actualizar el estado local
                 const notification = this.notifications.find(n => n.id_notificacion == notificationId);
                 if (notification) {
                     notification.leido = 1;
@@ -277,7 +249,6 @@ class NotificationsManager {
                 this.renderNotifications();
             }
         } catch (error) {
-            console.error('❌ Error marcando como leída:', error);
         }
     }
     
@@ -302,7 +273,6 @@ class NotificationsManager {
             const data = await response.json();
             
             if (data.success) {
-                // Actualizar estado local
                 this.notifications.forEach(notification => {
                     notification.leido = 1;
                     notification.fecha_leido = new Date().toISOString();
@@ -315,13 +285,11 @@ class NotificationsManager {
                 this.showSuccess('Todas las notificaciones marcadas como leídas');
             }
         } catch (error) {
-            console.error('❌ Error marcando todas como leídas:', error);
             this.showError('Error al marcar notificaciones como leídas');
         }
     }
     
     bindEvents() {
-        // Event delegation para items de notificaciones
         document.addEventListener('click', (e) => {
             const notificationItem = e.target.closest('.notification-item');
             if (notificationItem) {
@@ -335,12 +303,10 @@ class NotificationsManager {
                     this.markAsRead(notificationId);
                 }
                 
-                // Manejar clic en notificación (redirigir si es necesario)
                 this.handleNotificationClick(notificationItem);
             }
         });
         
-        // Botón marcar todas como leídas
         document.addEventListener('click', (e) => {
             if (e.target.closest('#markAllReadBtn')) {
                 e.preventDefault();
@@ -349,16 +315,13 @@ class NotificationsManager {
             }
         });
         
-        // Refrescar al abrir dropdown (con fallback sin Bootstrap)
         const dropdownElement = document.getElementById('notificationDropdown');
         if (dropdownElement) {
             dropdownElement.addEventListener('click', (e) => {
-                console.log('📡 Dropdown clicked, recargando notificaciones...');
                 this.loadNotifications();
             });
         }
         
-        // Manejar visibility change para pausar/reanudar polling
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 this.stopPolling();
@@ -372,7 +335,6 @@ class NotificationsManager {
         const type = notificationElement.dataset.type;
         const reference = notificationElement.dataset.reference;
         
-        // Intentar cerrar el dropdown si Bootstrap está disponible
         if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
             const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('notificationDropdown'));
             if (dropdown) {
@@ -380,7 +342,6 @@ class NotificationsManager {
             }
         }
         
-        // Redirigir según el tipo de notificación
         setTimeout(() => {
             switch (type) {
                 case 'tarea':
@@ -401,7 +362,6 @@ class NotificationsManager {
                     window.location.href = '/simpro-lite/web/index.php?modulo=asistencia';
                     break;
                 default:
-                    // Para notificaciones del sistema, ir a la página de notificaciones
                     window.location.href = '/simpro-lite/web/index.php?modulo=notificaciones';
                     break;
             }
@@ -415,8 +375,6 @@ class NotificationsManager {
         this.pollInterval = setInterval(() => {
             this.loadUnreadCount();
         }, this.pollFrequency);
-        
-        console.log('📡 Polling de notificaciones iniciado');
     }
     
     stopPolling() {
@@ -425,10 +383,8 @@ class NotificationsManager {
             this.pollInterval = null;
         }
         this.isPolling = false;
-        console.log('⏹️ Polling de notificaciones detenido');
     }
     
-    // Métodos auxiliares
     getNotificationIcon(tipo) {
         const iconos = {
             'sistema': 'fas fa-cog',
@@ -494,9 +450,6 @@ class NotificationsManager {
     }
     
     showToast(message, type = 'info') {
-        console.log(`📢 Toast [${type}]: ${message}`);
-        
-        // Crear toast notification simple
         const toastId = 'toast-' + Date.now();
         const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
         const icon = type === 'success' ? 'check' : type === 'error' ? 'exclamation-triangle' : 'info';
@@ -513,7 +466,6 @@ class NotificationsManager {
         
         document.body.insertAdjacentHTML('beforeend', toastHtml);
         
-        // Auto-remove después de 5 segundos
         setTimeout(() => {
             const toastElement = document.getElementById(toastId);
             if (toastElement) {
@@ -522,7 +474,6 @@ class NotificationsManager {
         }, 5000);
     }
     
-    // Métodos públicos para crear notificaciones (solo para admin/supervisor)
     async createNotification(data) {
         if (!['admin', 'supervisor'].includes(this.userRole)) {
             throw new Error('No tienes permisos para crear notificaciones');
@@ -555,32 +506,22 @@ class NotificationsManager {
                 throw new Error(result.error || 'Error desconocido');
             }
         } catch (error) {
-            console.error('❌ Error creando notificación:', error);
             this.showError('Error al crear notificación: ' + error.message);
             throw error;
         }
     }
     
-    // Destructor
     destroy() {
         this.stopPolling();
         this.notifications = [];
         this.unreadCount = 0;
-        console.log('🗑️ Sistema de notificaciones destruido');
     }
 }
 
-// Inicializar cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOM loaded, inicializando notificaciones...');
-    
-    // Crear instancia global del manager de notificaciones (siempre)
     window.notificationsManager = new NotificationsManager();
-    
-    console.log('✅ NotificationsManager creado:', window.notificationsManager);
 });
 
-// Exportar para uso como módulo si es necesario
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = NotificationsManager;
 }

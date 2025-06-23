@@ -5,19 +5,16 @@ require_once '../../bootstrap.php';
 require_once 'middleware.php';
 require_once '../../core/notificaciones.php';
 
-// Headers para API
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-// Manejar preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Verificar autenticación
 $usuario = verificarAutenticacion();
 if (!$usuario) {
     http_response_code(401);
@@ -28,7 +25,6 @@ if (!$usuario) {
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
-// Inicializar manager de notificaciones
 $notificaciones = new NotificacionesManager($conexion);
 
 try {
@@ -66,7 +62,6 @@ function handleGetNotifications($notificaciones, $usuario, $conexion) {
             $solo_no_leidas = isset($_GET['unread_only']) && $_GET['unread_only'] == '1';
             $limite = intval($_GET['limit'] ?? 20);
             
-            // Usar procedimiento almacenado
             $stmt = $conexion->prepare("CALL sp_obtener_notificaciones(?, ?, ?)");
             $stmt->bind_param("iii", $usuario['id_usuario'], $solo_no_leidas, $limite);
             $stmt->execute();
@@ -75,7 +70,6 @@ function handleGetNotifications($notificaciones, $usuario, $conexion) {
             $lista = $result->fetch_all(MYSQLI_ASSOC);
             $stmt->close();
             
-            // Formatear datos adicionales
             foreach ($lista as &$notif) {
                 $notif['fecha_formateada'] = formatearFecha($notif['fecha_envio']);
                 $notif['icono'] = obtenerIconoNotificacion($notif['tipo']);
@@ -132,7 +126,6 @@ function handlePostNotifications($notificaciones, $usuario, $input, $conexion) {
     
     switch ($action) {
         case 'create':
-            // Solo admins y supervisores pueden crear notificaciones
             if (!in_array($usuario['rol'], ['admin', 'supervisor'])) {
                 http_response_code(403);
                 echo json_encode(['error' => 'No tienes permisos para crear notificaciones']);
@@ -170,7 +163,6 @@ function handlePostNotifications($notificaciones, $usuario, $input, $conexion) {
             break;
             
         case 'bulk_create':
-            // Crear múltiples notificaciones (solo admin/supervisor)
             if (!in_array($usuario['rol'], ['admin', 'supervisor'])) {
                 http_response_code(403);
                 echo json_encode(['error' => 'No tienes permisos']);
@@ -281,19 +273,18 @@ function handlePutNotifications($notificaciones, $usuario, $input, $conexion) {
     }
 }
 
-// Funciones auxiliares
 function formatearFecha($fecha) {
     $timestamp = strtotime($fecha);
     $ahora = time();
     $diferencia = $ahora - $timestamp;
     
-    if ($diferencia < 3600) { // Menos de 1 hora
+    if ($diferencia < 3600) {
         $minutos = floor($diferencia / 60);
         return $minutos <= 1 ? 'Hace 1 minuto' : "Hace $minutos minutos";
-    } elseif ($diferencia < 86400) { // Menos de 1 día
+    } elseif ($diferencia < 86400) {
         $horas = floor($diferencia / 3600);
         return $horas == 1 ? 'Hace 1 hora' : "Hace $horas horas";
-    } elseif ($diferencia < 604800) { // Menos de 1 semana
+    } elseif ($diferencia < 604800) {
         $dias = floor($diferencia / 86400);
         return $dias == 1 ? 'Ayer' : "Hace $dias días";
     } else {
@@ -324,7 +315,6 @@ function obtenerColorNotificacion($tipo) {
 }
 
 function puedeAccionarNotificacion($notificacion, $usuario) {
-    // Determinar si el usuario puede realizar alguna acción sobre la notificación
     switch ($notificacion['tipo']) {
         case 'tarea':
             return $notificacion['id_referencia'] && 
