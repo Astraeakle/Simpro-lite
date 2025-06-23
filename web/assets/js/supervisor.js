@@ -327,7 +327,7 @@ class SupervisorManager {
             const area = document.getElementById('filtro-area')?.value || null;
             const params = new URLSearchParams({ accion: 'empleados_disponibles' });
             if (area) params.append('area', area);
-
+    
             const result = await this.apiCall(`${this.apiBase}?${params}`);
             const tbody = document.getElementById('lista-empleados-disponibles');
             
@@ -335,9 +335,25 @@ class SupervisorManager {
                 this.log('WARNING: lista-empleados-disponibles element not found');
                 return;
             }
-
+    
             if (result.success && result.data.length > 0) {
-                tbody.innerHTML = result.data.map(empleado => {
+                // Filtrar administradores del lado del cliente también (doble validación)
+                const empleadosFiltered = result.data.filter(empleado => 
+                    empleado.rol !== 'admin' && empleado.rol !== 'administrador'
+                );
+    
+                if (empleadosFiltered.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">
+                                No hay empleados disponibles para asignar
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+    
+                tbody.innerHTML = empleadosFiltered.map(empleado => {
                     const esOtraArea = empleado.area !== this.getAreaSupervisor();
                     const btnClass = esOtraArea ? 'btn-warning' : 'btn-success';
                     const btnText = esOtraArea ? 'Solicitar' : 'Asignar';
@@ -348,6 +364,7 @@ class SupervisorManager {
                             <td>
                                 <strong>${empleado.nombre_completo}</strong><br>
                                 <small class="text-muted">${empleado.nombre_usuario}</small>
+                                <br><small class="badge bg-info">${empleado.rol}</small>
                             </td>
                             <td><span class="badge bg-secondary">${empleado.area}</span></td>
                             <td>${empleado.telefono || 'N/A'}</td>
@@ -366,7 +383,7 @@ class SupervisorManager {
                         </tr>
                     `;
                 }).join('');
-                this.log('Available employees loaded successfully:', result.data.length, 'employees');
+                this.log('Available employees loaded successfully:', empleadosFiltered.length, 'employees');
             } else {
                 tbody.innerHTML = `
                     <tr>
@@ -380,9 +397,16 @@ class SupervisorManager {
             this.log('Exception loading available employees:', error);
         }
     }
-
+    
     async asignarEmpleado(empleadoId, empleadoNombre) {
         this.log('Assigning employee:', empleadoId, empleadoNombre);
+        
+        // Validación adicional antes de mostrar confirmación
+        if (empleadoId === parseInt(this.getSupervisorId())) {
+            this.mostrarError('No puedes asignarte a ti mismo como empleado');
+            return;
+        }
+        
         this.mostrarConfirmacion(
             `¿Asignar empleado "${empleadoNombre}" a tu equipo?`,
             async () => {
@@ -390,7 +414,7 @@ class SupervisorManager {
                     method: 'POST',
                     body: JSON.stringify({ empleado_id: empleadoId })
                 });
-
+    
                 if (result.success) {
                     this.mostrarExito(result.message || 'Empleado asignado correctamente');
                     this.cargarMiEquipo();
@@ -401,6 +425,16 @@ class SupervisorManager {
                 }
             }
         );
+    }
+
+    // Función auxiliar para obtener ID del supervisor
+    getSupervisorId() {
+        try {
+            const userData = JSON.parse(getCookie('user_data') || '{}');
+            return userData.id_usuario || 0;
+        } catch (e) {
+            return 0;
+        }
     }
 
     async removerEmpleado(empleadoId, empleadoNombre) {
