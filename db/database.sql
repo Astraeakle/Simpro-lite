@@ -109,7 +109,7 @@ CREATE TABLE `notificaciones` (
 CREATE TABLE `registros_asistencia` (
   `id_registro` int NOT NULL AUTO_INCREMENT,
   `id_usuario` int NOT NULL,
-  `tipo` enum('entrada','salida') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tipo` enum('entrada','salida','break','fin_break') COLLATE utf8mb4_unicode_ci NOT NULL,
   `fecha_hora` datetime NOT NULL,
   `latitud` decimal(10,8) DEFAULT NULL,
   `longitud` decimal(11,8) DEFAULT NULL,

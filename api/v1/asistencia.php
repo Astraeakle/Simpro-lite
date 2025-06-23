@@ -59,7 +59,7 @@ function validarSecuenciaRegistro($tipoActual, $ultimoTipo, $esHoy = false) {
         'entrada' => ['break', 'salida'],
         'break' => ['fin_break'],
         'fin_break' => ['break', 'salida'],
-        'salida' => [] // Después de salida no se puede registrar más en el mismo día
+        'salida' => [] 
     ];
     
     return isset($transicionesValidas[$ultimoTipo]) && 
