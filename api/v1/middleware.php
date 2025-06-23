@@ -10,21 +10,16 @@ class SecurityMiddleware {
     }
     
     private function verificarToken() {
-        // Método 1: Obtener Authorization header de múltiples formas
         $authHeader = $this->getAuthorizationHeader();
         
         if (!empty($authHeader) && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
             $token = trim($matches[1]);
-            
-            // Debug: Log del token recibido
             error_log("Token recibido en middleware: " . substr($token, 0, 50) . "...");
-            
-            // Verificar el token JWT
             $payload = JWT::verificar($token);
             if ($payload) {
                 error_log("Token verificado exitosamente para usuario: " . $payload['sub']);
                 return [
-                    'id_usuario' => $payload['sub'], // Cambiar de id_usuario a sub
+                    'id_usuario' => $payload['sub'], 
                     'nombre' => $payload['name'],
                     'rol' => $payload['rol']
                 ];
@@ -34,8 +29,6 @@ class SecurityMiddleware {
         } else {
             error_log("No se encontró Authorization header válido");
         }
-        
-        // Si no hay token válido, intentar obtener de la cookie de sesión
         if (isset($_COOKIE['user_data'])) {
             $userData = json_decode($_COOKIE['user_data'], true);
             if (isset($userData['id']) && !empty($userData['id'])) {
@@ -67,14 +60,9 @@ class SecurityMiddleware {
         }        
         return null;
     }
-    
-    /**
-     * Obtener el header Authorization de múltiples fuentes
-     */
     private function getAuthorizationHeader() {
         $headers = null;
         
-        // Método 1: getallheaders() si está disponible
         if (function_exists('getallheaders')) {
             $headers = getallheaders();
             if (isset($headers['Authorization'])) {
@@ -106,14 +94,8 @@ class SecurityMiddleware {
         return null;
     }
 }
-
-// ================================
-// FUNCIONES GLOBALES PARA COMPATIBILIDAD
-// ================================
-
 function verificarAutenticacion() {
     try {
-        // Primero intentar con JWT
         if (class_exists('JWT')) {
             $jwt = JWT::verificarDesdeHeader();
             if ($jwt) {
@@ -128,7 +110,6 @@ function verificarAutenticacion() {
             }
         }
         
-        // Fallback: verificar cookie de sesión
         if (isset($_COOKIE['user_data'])) {
             $userData = json_decode($_COOKIE['user_data'], true);
             
@@ -169,9 +150,6 @@ function verificarAutenticacion() {
     }
 }
 
-/**
- * Función global para verificar roles específicos
- */
 function verificarRol($rolesPermitidos) {
     $auth = verificarAutenticacion();
     if (!$auth['success']) {
@@ -189,19 +167,12 @@ function verificarRol($rolesPermitidos) {
     return $auth;
 }
 
-/**
- * Función helper para respuestas JSON
- */
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     header('Content-Type: application/json');
     echo json_encode($data, JSON_PRETTY_PRINT);
     exit();
 }
-
-/**
- * Función helper para errores
- */
 function sendError($message, $code = 400) {
     sendJsonResponse([
         'success' => false,
@@ -209,10 +180,6 @@ function sendError($message, $code = 400) {
         'code' => $code
     ], $code);
 }
-
-/**
- * Función helper para respuestas exitosas
- */
 function sendSuccess($data, $message = 'Operación exitosa') {
     sendJsonResponse([
         'success' => true,
@@ -221,9 +188,6 @@ function sendSuccess($data, $message = 'Operación exitosa') {
     ]);
 }
 
-/**
- * Función para obtener conexión a BD (helper)
- */
 function obtenerConexionBD() {
     try {
         if (class_exists('DatabaseConfig')) {
