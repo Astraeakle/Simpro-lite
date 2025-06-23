@@ -122,7 +122,8 @@ class NotificacionesManager {
         return $stmt->execute();
     }
     
-    private function insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia = null) {
+    // CORRECCIÓN: Cambiar de private a public para poder usarlo desde la API
+    public function insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia = null) {
         $sql = "INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo, id_referencia) 
                 VALUES (?, ?, ?, ?, ?)";
                 
@@ -192,3 +193,4 @@ class NotificacionesManager {
         }
     }
 }
+?>

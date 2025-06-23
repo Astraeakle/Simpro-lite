@@ -1,4 +1,4 @@
-// web/assets/js/notifications.js
+
 class NotificationsManager {
     constructor() {
         this.apiUrl = window.notificationConfig?.apiUrl || '/simpro-lite/api/v1/notificaciones.php';
@@ -10,20 +10,23 @@ class NotificationsManager {
         this.userRole = window.notificationConfig?.userRole || '';
         this.userId = window.notificationConfig?.userId || 0;
         
+        console.log('NotificationsManager inicializado:', {
+            apiUrl: this.apiUrl,
+            userRole: this.userRole,
+            userId: this.userId
+        });
+        
         this.init();
     }
     
     init() {
         const notificationContainer = document.getElementById('notification-dropdown-container');
         if (!notificationContainer) {
+            console.log('Contenedor de notificaciones no encontrado');
             return;
         }
         
-        if (!this.userId || this.userId === 0) {
-            this.renderEmptyState();
-            return;
-        }
-        
+        console.log('Inicializando sistema de notificaciones...');
         this.loadNotifications();
         this.loadUnreadCount();
         this.startPolling();
@@ -32,7 +35,12 @@ class NotificationsManager {
     
     async loadNotifications() {
         try {
-            const response = await fetch(`${this.apiUrl}?action=list&limit=10`, {
+            console.log('Cargando notificaciones...');
+            const url = `${this.apiUrl}?action=list&limit=10`;
+            
+            console.log('URL de petición:', url);
+            
+            const response = await fetch(url, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -41,27 +49,49 @@ class NotificationsManager {
                 credentials: 'same-origin'
             });
             
+            console.log('Respuesta recibida:', {
+                status: response.status,
+                statusText: response.statusText,
+                headers: Object.fromEntries(response.headers.entries())
+            });
+            
             if (!response.ok) {
+                if (response.status === 401) {
+                    console.log('Error 401 - No autorizado');
+                    // Intentar obtener más información del error
+                    try {
+                        const errorData = await response.json();
+                        console.log('Detalles del error 401:', errorData);
+                        this.renderAuthError(errorData);
+                    } catch (e) {
+                        console.log('No se pudo parsear el error 401');
+                        this.renderAuthError();
+                    }
+                    return;
+                }
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
-                const text = await response.text();
+                const textResponse = await response.text();
+                console.error('Respuesta no es JSON:', textResponse);
                 throw new Error('Respuesta del servidor no es JSON válido');
             }
             
             const data = await response.json();
+            console.log('Datos de notificaciones recibidos:', data);
             
             if (data.success) {
                 this.notifications = data.data || [];
+                console.log(`${this.notifications.length} notificaciones cargadas`);
                 this.renderNotifications();
             } else {
-                this.showError('Error al cargar notificaciones: ' + (data.error || 'Error desconocido'));
+                console.error('Error en la respuesta:', data);
                 this.renderErrorState();
             }
         } catch (error) {
-            this.showError('Error de conexión: ' + error.message);
+            console.error('Error al cargar notificaciones:', error);
             this.renderErrorState();
         }
     }
@@ -78,11 +108,13 @@ class NotificationsManager {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                console.log('Error al obtener contador:', response.status);
+                return;
             }
             
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
+                console.log('Respuesta del contador no es JSON');
                 return;
             }
             
@@ -90,6 +122,7 @@ class NotificationsManager {
             
             if (data.success) {
                 const newCount = data.count || 0;
+                console.log('Contador de no leídas:', newCount);
                 
                 if (newCount > this.unreadCount) {
                     this.animateBadge();
@@ -99,6 +132,7 @@ class NotificationsManager {
                 this.updateBadge();
             }
         } catch (error) {
+            console.error('Error al cargar contador:', error);
         }
     }
     
@@ -106,6 +140,7 @@ class NotificationsManager {
         const container = document.getElementById('notificationsList');
         
         if (!container) {
+            console.log('Contenedor de lista de notificaciones no encontrado');
             return;
         }
         
@@ -121,17 +156,42 @@ class NotificationsManager {
         
         const html = this.notifications.map(notification => this.renderNotificationItem(notification)).join('');
         container.innerHTML = html;
+        console.log('Notificaciones renderizadas exitosamente');
     }
     
-    renderEmptyState() {
+    renderAuthError(errorData = null) {
         const container = document.getElementById('notificationsList');
         if (container) {
+            let debugInfo = '';
+            if (errorData && errorData.debug) {
+                debugInfo = `
+                    <div class="mt-2" style="font-size: 0.8em;">
+                        <strong>Debug:</strong><br>
+                        Cookies: ${errorData.debug.cookies ? errorData.debug.cookies.join(', ') : 'ninguna'}<br>
+                        user_data existe: ${errorData.debug.user_data_exists ? 'sí' : 'no'}<br>
+                        Timestamp: ${errorData.debug.timestamp || 'N/A'}
+                    </div>
+                `;
+            }
+            
             container.innerHTML = `
-                <div class="text-center p-3 text-muted">
-                    <i class="fas fa-user-lock mb-2" style="font-size: 2rem; opacity: 0.5;"></i><br>
-                    <span>Inicia sesión para ver notificaciones</span>
+                <div class="text-center p-3 text-warning">
+                    <i class="fas fa-exclamation-triangle mb-2" style="font-size: 2rem;"></i><br>
+                    <span><strong>Error de autenticación</strong></span><br>
+                    <small>La sesión puede haber expirado</small>
+                    ${debugInfo}
+                    <br>
+                    <button class="btn btn-sm btn-outline-warning mt-2" onclick="window.location.reload()">
+                        <i class="fas fa-refresh"></i> Recargar página
+                    </button>
                 </div>
             `;
+        }
+        
+        // Ocultar badge si hay error de autenticación
+        const badge = document.getElementById('notificationBadge');
+        if (badge) {
+            badge.style.display = 'none';
         }
     }
     
@@ -143,7 +203,7 @@ class NotificationsManager {
                     <i class="fas fa-exclamation-triangle mb-2 text-warning" style="font-size: 2rem;"></i><br>
                     <span>Error al cargar notificaciones</span>
                     <br>
-                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="window.notificationsManager.loadNotifications()">
+                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="window.notificationsManager?.loadNotifications()">
                         <i class="fas fa-refresh"></i> Reintentar
                     </button>
                 </div>
@@ -177,13 +237,6 @@ class NotificationsManager {
                         <small class="text-muted">
                             <i class="fas fa-clock me-1"></i>${timeAgo}
                         </small>
-                        ${notification.referencia_nombre ? `
-                            <div class="mt-1">
-                                <span class="badge bg-secondary">
-                                    ${this.escapeHtml(notification.referencia_nombre)}
-                                </span>
-                            </div>
-                        ` : ''}
                     </div>
                     ${!isRead ? `
                         <div class="flex-shrink-0">
@@ -249,43 +302,7 @@ class NotificationsManager {
                 this.renderNotifications();
             }
         } catch (error) {
-        }
-    }
-    
-    async markAllAsRead() {
-        try {
-            const response = await fetch(this.apiUrl, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    action: 'mark_all_read'
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                this.notifications.forEach(notification => {
-                    notification.leido = 1;
-                    notification.fecha_leido = new Date().toISOString();
-                });
-                
-                this.unreadCount = 0;
-                this.updateBadge();
-                this.renderNotifications();
-                
-                this.showSuccess('Todas las notificaciones marcadas como leídas');
-            }
-        } catch (error) {
-            this.showError('Error al marcar notificaciones como leídas');
+            console.error('Error al marcar como leída:', error);
         }
     }
     
@@ -299,6 +316,8 @@ class NotificationsManager {
                 const notificationId = notificationItem.dataset.id;
                 const isRead = notificationItem.dataset.read === 'true';
                 
+                console.log('Click en notificación:', { notificationId, isRead });
+                
                 if (!isRead) {
                     this.markAsRead(notificationId);
                 }
@@ -307,17 +326,10 @@ class NotificationsManager {
             }
         });
         
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('#markAllReadBtn')) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.markAllAsRead();
-            }
-        });
-        
         const dropdownElement = document.getElementById('notificationDropdown');
         if (dropdownElement) {
             dropdownElement.addEventListener('click', (e) => {
+                console.log('Click en dropdown de notificaciones');
                 this.loadNotifications();
             });
         }
@@ -369,7 +381,9 @@ class NotificationsManager {
     }
     
     startPolling() {
-        if (this.isPolling || !this.userId || this.userId === 0) return;
+        if (this.isPolling) {
+            return;
+        }
         
         this.isPolling = true;
         this.pollInterval = setInterval(() => {
@@ -439,76 +453,6 @@ class NotificationsManager {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
-    }
-    
-    showSuccess(message) {
-        this.showToast(message, 'success');
-    }
-    
-    showError(message) {
-        this.showToast(message, 'error');
-    }
-    
-    showToast(message, type = 'info') {
-        const toastId = 'toast-' + Date.now();
-        const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
-        const icon = type === 'success' ? 'check' : type === 'error' ? 'exclamation-triangle' : 'info';
-        
-        const toastHtml = `
-            <div class="alert alert-dismissible ${bgClass} text-white" id="${toastId}" role="alert" style="position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;">
-                <div class="d-flex align-items-center">
-                    <i class="fas fa-${icon} me-2"></i>
-                    <span>${message}</span>
-                    <button type="button" class="btn-close btn-close-white ms-auto" aria-label="Close" onclick="document.getElementById('${toastId}').remove()"></button>
-                </div>
-            </div>
-        `;
-        
-        document.body.insertAdjacentHTML('beforeend', toastHtml);
-        
-        setTimeout(() => {
-            const toastElement = document.getElementById(toastId);
-            if (toastElement) {
-                toastElement.remove();
-            }
-        }, 5000);
-    }
-    
-    async createNotification(data) {
-        if (!['admin', 'supervisor'].includes(this.userRole)) {
-            throw new Error('No tienes permisos para crear notificaciones');
-        }
-        
-        try {
-            const response = await fetch(this.apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    action: 'create',
-                    ...data
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                this.showSuccess('Notificación creada exitosamente');
-                return result.id_notificacion;
-            } else {
-                throw new Error(result.error || 'Error desconocido');
-            }
-        } catch (error) {
-            this.showError('Error al crear notificación: ' + error.message);
-            throw error;
-        }
     }
     
     destroy() {

@@ -1,18 +1,21 @@
 <?php
-// File: web/includes/nav.php
-
-// Obtener información del usuario
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
+
+if (empty($userData)) {
+    if (!in_array(basename($_SERVER['PHP_SELF']), ['index.php']) || 
+        !in_array($_GET['modulo'] ?? '', ['auth', ''])) {
+        header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
+        exit;
+    }
+}
+
+$id_usuario = isset($userData['id']) ? $userData['id'] : (isset($userData['id_usuario']) ? $userData['id_usuario'] : 0);
 $nombreUsuario = isset($userData['nombre_completo']) ? $userData['nombre_completo'] : 'Usuario';
 $rolUsuario = isset($userData['rol']) ? $userData['rol'] : '';
 
-// Determinar si el usuario está autenticado
-$isAuthenticated = !empty($userData);
+$isAuthenticated = !empty($userData) && $id_usuario > 0;
 ?>
-
-<head>
-    <link rel="stylesheet" href="/simpro-lite/web/assets/css/notifications.css">
-</head>
+<link rel="stylesheet" href="/simpro-lite/web/assets/css/notificaciones.css">
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
         <a class="navbar-brand"
@@ -50,16 +53,14 @@ $isAuthenticated = !empty($userData);
                         <li><a class="dropdown-item"
                                 href="/simpro-lite/web/index.php?modulo=admin&vista=usuarios">Usuarios</a></li>
                         <li><a class="dropdown-item"
-                                href="/simpro-lite/web/index.php?modulo=admin&vista=config">Configuración</a>
-                        </li>
+                                href="/simpro-lite/web/index.php?modulo=admin&vista=config">Configuración</a></li>
                     </ul>
                 </li>
                 <?php endif; ?>
             </ul>
 
             <ul class="navbar-nav">
-                <!-- Sistema de Notificaciones - Solo para usuarios autenticados -->
-                <?php if (in_array($rolUsuario, ['empleado', 'supervisor', 'admin'])): ?>
+                <?php if ($isAuthenticated && in_array($rolUsuario, ['empleado', 'supervisor', 'admin'])): ?>
                 <li class="nav-item dropdown me-3" id="notification-dropdown-container">
                     <a class="nav-link position-relative" href="#" id="notificationDropdown" role="button"
                         data-bs-toggle="dropdown" aria-expanded="false" title="Notificaciones">
@@ -73,10 +74,6 @@ $isAuthenticated = !empty($userData);
                         aria-labelledby="notificationDropdown" style="width: 350px; max-height: 400px;">
                         <div class="dropdown-header d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-bell me-2"></i>Notificaciones</span>
-                            <button class="btn btn-sm btn-link text-decoration-none p-0" id="markAllReadBtn"
-                                title="Marcar todas como leídas">
-                                <i class="fas fa-check-double"></i>
-                            </button>
                         </div>
                         <div class="dropdown-divider"></div>
                         <div id="notificationsList" class="overflow-auto" style="max-height: 300px;">
@@ -84,18 +81,10 @@ $isAuthenticated = !empty($userData);
                                 <i class="fas fa-spinner fa-spin"></i> Cargando notificaciones...
                             </div>
                         </div>
-                        <div class="dropdown-divider"></div>
-                        <div class="dropdown-footer text-center p-2">
-                            <a href="/simpro-lite/web/index.php?modulo=notificaciones"
-                                class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-list me-1"></i> Ver todas
-                            </a>
-                        </div>
                     </div>
                 </li>
                 <?php endif; ?>
 
-                <!-- Dropdown del Usuario -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                         data-bs-toggle="dropdown" aria-expanded="false">
@@ -129,18 +118,14 @@ $isAuthenticated = !empty($userData);
 </nav>
 
 <?php if ($isAuthenticated && in_array($rolUsuario, ['empleado', 'supervisor', 'admin'])): ?>
-<!-- Cargar el script de notificaciones -->
 <script>
-// Configuración global para notificaciones
 window.notificationConfig = {
     apiUrl: '/simpro-lite/api/v1/notificaciones.php',
-    pollFrequency: 30000, // 30 segundos
+    pollFrequency: 30000,
     userRole: '<?php echo $rolUsuario; ?>',
     userId: <?php echo $userData['id_usuario'] ?? 0; ?>
 };
 </script>
 
-<!-- Cargar el script después de que el DOM esté listo -->
 <script src="/simpro-lite/web/assets/js/notifications.js"></script>
-
 <?php endif; ?>
