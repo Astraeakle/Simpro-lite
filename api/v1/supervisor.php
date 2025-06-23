@@ -1,315 +1,301 @@
 <?php
 // File: api/v1/supervisor.php
+// Enhanced version with better error handling and debugging
 
+// Enable error reporting for debugging (remove in production)
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// Set JSON header first
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, DELETE');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
+// Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
     exit(0);
 }
 
-require_once __DIR__ . '/middleware.php';
-require_once __DIR__ . '/../../web/config/database.php';
-
-// Verificar autenticación
-$auth_result = verificarAutenticacion();
-if (!$auth_result['success']) {
-    http_response_code(401);
-    echo json_encode($auth_result);
-    exit;
-}
-
-$usuario_actual = $auth_result['usuario'];
-
-// Solo supervisores pueden usar este endpoint
-if ($usuario_actual['rol'] !== 'supervisor') {
-    http_response_code(403);
-    echo json_encode([
+// Capture any PHP errors/warnings and convert to JSON
+function handleError($errno, $errstr, $errfile, $errline) {
+    $error = [
         'success' => false,
-        'error' => 'Acceso denegado. Solo supervisores pueden acceder.'
-    ]);
+        'error' => 'PHP Error: ' . $errstr,
+        'file' => $errfile,
+        'line' => $errline,
+        'debug' => true
+    ];
+    
+    // Clear any previous output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
+    http_response_code(500);
+    echo json_encode($error, JSON_PRETTY_PRINT);
     exit;
 }
+
+function handleException($exception) {
+    $error = [
+        'success' => false,
+        'error' => 'Exception: ' . $exception->getMessage(),
+        'file' => $exception->getFile(),
+        'line' => $exception->getLine(),
+        'debug' => true
+    ];
+    
+    // Clear any previous output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
+    http_response_code(500);
+    echo json_encode($error, JSON_PRETTY_PRINT);
+    exit;
+}
+
+// Set error handlers
+set_error_handler('handleError');
+set_exception_handler('handleException');
+
+// Start output buffering to catch any unexpected output
+ob_start();
 
 try {
-    $pdo = obtenerConexionBD();
-    $metodo = $_SERVER['REQUEST_METHOD'];
-    $accion = $_GET['accion'] ?? '';
+    // Check if required files exist
+    $middleware_path = __DIR__ . '/middleware.php';
+    $database_path = __DIR__ . '/../../web/config/database.php';
+    
+    if (!file_exists($middleware_path)) {
+        throw new Exception("Middleware file not found: $middleware_path");
+    }
+    
+    if (!file_exists($database_path)) {
+        throw new Exception("Database config file not found: $database_path");
+    }
+    
+    require_once $middleware_path;
+    require_once $database_path;
+    
+    // Auth check
+    $auth = verificarAutenticacion();
+    if (!$auth['success']) {
+        // Clear output buffer and send JSON response
+        ob_clean();
+        http_response_code(401);
+        echo json_encode($auth, JSON_PRETTY_PRINT);
+        exit;
+    }
 
-    switch ($metodo) {
-        case 'GET':
-            manejarGET($pdo, $usuario_actual, $accion);
+    $user = $auth['usuario'];
+    if ($user['rol'] !== 'supervisor') {
+        ob_clean();
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Acceso denegado'], JSON_PRETTY_PRINT);
+        exit;
+    }
+
+    // Get database connection
+    $pdo = obtenerConexionBD();
+    if (!$pdo) {
+        throw new Exception("No se pudo conectar a la base de datos");
+    }
+    
+    $method = $_SERVER['REQUEST_METHOD'];
+    $action = $_GET['accion'] ?? '';
+    
+    // Clear output buffer before processing
+    ob_clean();
+    
+    switch ($method) {
+        case 'GET': 
+            handleGet($pdo, $user, $action); 
             break;
-        case 'POST':
-            manejarPOST($pdo, $usuario_actual, $accion);
+        case 'POST': 
+            handlePost($pdo, $user, $action); 
             break;
-        case 'PUT':
-            manejarPUT($pdo, $usuario_actual, $accion);
-            break;
-        case 'DELETE':
-            manejarDELETE($pdo, $usuario_actual, $accion);
+        case 'DELETE': 
+            handleDelete($pdo, $user, $action); 
             break;
         default:
             http_response_code(405);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Método no permitido'
-            ]);
-            break;
+            echo json_encode(['success' => false, 'error' => 'Método no permitido'], JSON_PRETTY_PRINT);
     }
+    
 } catch (Exception $e) {
+    // Clear output buffer
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
     http_response_code(500);
     echo json_encode([
-        'success' => false,
-        'error' => 'Error del servidor: ' . $e->getMessage()
-    ]);
+        'success' => false, 
+        'error' => 'Error del servidor: ' . $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
+    ], JSON_PRETTY_PRINT);
 }
 
-function manejarGET($pdo, $usuario_actual, $accion) {
-    switch ($accion) {
-        case 'empleados_asignados':
-            obtenerEmpleadosAsignados($pdo, $usuario_actual['id_usuario']);
-            break;
-        case 'empleados_disponibles':
-            $area = $_GET['area'] ?? null;
-            obtenerEmpleadosDisponibles($pdo, $usuario_actual['id_usuario'], $area);
-            break;
-        case 'estadisticas_equipo':
-            $fecha_inicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
-            $fecha_fin = $_GET['fecha_fin'] ?? date('Y-m-t');
-            obtenerEstadisticasEquipo($pdo, $usuario_actual['id_usuario'], $fecha_inicio, $fecha_fin);
-            break;
-        case 'areas':
-            obtenerAreas($pdo);
-            break;
-        default:
-            http_response_code(400);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Acción no válida'
-            ]);
-            break;
-    }
-}
-
-function manejarPOST($pdo, $usuario_actual, $accion) {
-    $input = json_decode(file_get_contents('php://input'), true);
-    
-    switch ($accion) {
-        case 'asignar_empleado':
-            if (!isset($input['empleado_id'])) {
-                http_response_code(400);
+function handleGet($pdo, $user, $action) {
+    try {
+        switch ($action) {
+            case 'empleados_asignados':
+                $stmt = $pdo->prepare("CALL sp_obtener_empleados_supervisor(?)");
+                $stmt->execute([$user['id_usuario']]);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                echo json_encode(['success' => true, 'data' => $data], JSON_PRETTY_PRINT);
+                break;
+                
+            case 'empleados_disponibles':
+                $area = $_GET['area'] ?? null;
+                $stmt = $pdo->prepare("CALL sp_obtener_empleados_disponibles(?, ?)");
+                $stmt->execute([$user['id_usuario'], $area]);
+                $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                echo json_encode(['success' => true, 'data' => $data], JSON_PRETTY_PRINT);
+                break;
+                
+            case 'areas':
+                $stmt = $pdo->query("SELECT DISTINCT area FROM usuarios WHERE area IS NOT NULL ORDER BY area");
+                $areas = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                echo json_encode(['success' => true, 'data' => $areas], JSON_PRETTY_PRINT);
+                break;
+                
+            case 'estadisticas_equipo':
+                $inicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
+                $fin = $_GET['fecha_fin'] ?? date('Y-m-t');
+                $stmt = $pdo->prepare("CALL sp_estadisticas_equipo_supervisor(?, ?, ?)");
+                $stmt->execute([$user['id_usuario'], $inicio, $fin]);
+                $data = $stmt->fetch(PDO::FETCH_ASSOC);
+                echo json_encode(['success' => true, 'data' => $data ?: []], JSON_PRETTY_PRINT);
+                break;
+                
+            case 'debug':
+                // Debug endpoint to test basic functionality
                 echo json_encode([
-                    'success' => false,
-                    'error' => 'ID de empleado requerido'
-                ]);
-                return;
-            }
-            asignarEmpleado($pdo, $usuario_actual['id_usuario'], $input['empleado_id']);
-            break;
-        case 'solicitar_asignacion':
-            if (!isset($input['empleado_id']) || !isset($input['motivo'])) {
+                    'success' => true,
+                    'message' => 'API funcionando correctamente',
+                    'user' => $user,
+                    'timestamp' => date('Y-m-d H:i:s')
+                ], JSON_PRETTY_PRINT);
+                break;
+                
+            default:
                 http_response_code(400);
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'ID de empleado y motivo requeridos'
-                ]);
-                return;
-            }
-            crearSolicitudAsignacion($pdo, $usuario_actual['id_usuario'], $input['empleado_id'], $input['motivo']);
-            break;
-        default:
-            http_response_code(400);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Acción no válida'
-            ]);
-            break;
+                echo json_encode(['success' => false, 'error' => 'Acción no válida: ' . $action], JSON_PRETTY_PRINT);
+        }
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode([
+            'success' => false, 
+            'error' => 'Error en handleGet: ' . $e->getMessage(),
+            'action' => $action
+        ], JSON_PRETTY_PRINT);
     }
 }
 
-function manejarDELETE($pdo, $usuario_actual, $accion) {
-    switch ($accion) {
-        case 'remover_empleado':
-            $empleado_id = $_GET['empleado_id'] ?? null;
-            if (!$empleado_id) {
+function handlePost($pdo, $user, $action) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('JSON inválido: ' . json_last_error_msg());
+        }
+        
+        switch ($action) {
+            case 'asignar_empleado':
+                $empleadoId = $input['empleado_id'] ?? 0;
+                if (!$empleadoId) {
+                    throw new Exception('ID de empleado requerido');
+                }
+                
+                $stmt = $pdo->prepare("CALL sp_asignar_empleado_supervisor(?, ?, @resultado)");
+                $stmt->execute([$user['id_usuario'], $empleadoId]);
+                $result = $pdo->query("SELECT @resultado as resultado")->fetch(PDO::FETCH_ASSOC);
+                $response = json_decode($result['resultado'], true);
+                
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    throw new Exception('Error al decodificar respuesta del procedimiento');
+                }
+                
+                echo json_encode($response, JSON_PRETTY_PRINT);
+                break;
+                
+            case 'solicitar_asignacion':
+                $empleadoId = $input['empleado_id'] ?? 0;
+                $motivo = $input['motivo'] ?? '';
+                
+                if (!$empleadoId) {
+                    throw new Exception('ID de empleado requerido');
+                }
+                
+                if (empty(trim($motivo))) {
+                    throw new Exception('Motivo requerido');
+                }
+                
+                $stmt = $pdo->prepare("CALL sp_crear_solicitud_cambio(?, ?, ?, @resultado)");
+                $stmt->execute([$user['id_usuario'], $empleadoId, $motivo]);
+                $result = $pdo->query("SELECT @resultado as resultado")->fetch(PDO::FETCH_ASSOC);
+                $response = json_decode($result['resultado'], true);
+                
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    throw new Exception('Error al decodificar respuesta del procedimiento');
+                }
+                
+                echo json_encode($response, JSON_PRETTY_PRINT);
+                break;
+                
+            default:
                 http_response_code(400);
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'ID de empleado requerido'
-                ]);
-                return;
-            }
-            removerEmpleado($pdo, $usuario_actual['id_usuario'], $empleado_id);
-            break;
-        default:
-            http_response_code(400);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Acción no válida'
-            ]);
-            break;
-    }
-}
-
-function obtenerEmpleadosAsignados($pdo, $supervisor_id) {
-    try {
-        $stmt = $pdo->prepare("CALL sp_obtener_empleados_supervisor(?)");
-        $stmt->execute([$supervisor_id]);
-        $empleados = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        echo json_encode([
-            'success' => true,
-            'data' => $empleados
-        ]);
-    } catch (Exception $e) {
-        echo json_encode([
-            'success' => false,
-            'error' => 'Error al obtener empleados asignados: ' . $e->getMessage()
-        ]);
-    }
-}
-
-function obtenerEmpleadosDisponibles($pdo, $supervisor_id, $area) {
-    try {
-        $stmt = $pdo->prepare("CALL sp_obtener_empleados_disponibles(?, ?)");
-        $stmt->execute([$supervisor_id, $area]);
-        $empleados = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        echo json_encode([
-            'success' => true,
-            'data' => $empleados
-        ]);
-    } catch (Exception $e) {
-        echo json_encode([
-            'success' => false,
-            'error' => 'Error al obtener empleados disponibles: ' . $e->getMessage()
-        ]);
-    }
-}
-
-function obtenerEstadisticasEquipo($pdo, $supervisor_id, $fecha_inicio, $fecha_fin) {
-    try {
-        $stmt = $pdo->prepare("CALL sp_estadisticas_equipo_supervisor(?, ?, ?)");
-        $stmt->execute([$supervisor_id, $fecha_inicio, $fecha_fin]);
-        $estadisticas = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        echo json_encode([
-            'success' => true,
-            'data' => $estadisticas
-        ]);
-    } catch (Exception $e) {
-        echo json_encode([
-            'success' => false,
-            'error' => 'Error al obtener estadísticas: ' . $e->getMessage()
-        ]);
-    }
-}
-
-function obtenerAreas($pdo) {
-    try {
-        // Cambiar este query que no funciona bien
-        $stmt = $pdo->prepare("
-            SELECT COLUMN_TYPE 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_NAME = 'usuarios' 
-            AND COLUMN_NAME = 'area'
-            AND TABLE_SCHEMA = DATABASE()
-        ");
-        $stmt->execute();
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        // Extraer los valores del ENUM
-        if ($result && isset($result['COLUMN_TYPE'])) {
-            preg_match('/enum\((.*)\)/', $result['COLUMN_TYPE'], $matches);
-            $areas = [];
-            
-            if (isset($matches[1])) {
-                $values = str_getcsv($matches[1], ',', "'");
-                $areas = $values;
-            }
-        } else {
-            // Fallback con las áreas hardcodeadas si falla el query
-            $areas = ['Administración','Contabilidad','Ingeniería','Marketing','Proyectos','Ambiental','Derecho'];
-        }
-        
-        echo json_encode([
-            'success' => true,
-            'data' => $areas
-        ]);
-    } catch (Exception $e) {
-        echo json_encode([
-            'success' => false,
-            'error' => 'Error al obtener areas: ' . $e->getMessage()
-        ]);
-    }
-}
-
-function asignarEmpleado($pdo, $supervisor_id, $empleado_id) {
-    try {
-        $stmt = $pdo->prepare("CALL sp_asignar_empleado_supervisor(?, ?, @resultado)");
-        $stmt->execute([$supervisor_id, $empleado_id]);
-        
-        $result = $pdo->query("SELECT @resultado as resultado")->fetch();
-        $resultado = json_decode($result['resultado'], true);
-        
-        if ($resultado['success']) {
-            echo json_encode($resultado);
-        } else {
-            http_response_code(400);
-            echo json_encode($resultado);
+                echo json_encode(['success' => false, 'error' => 'Acción POST no válida: ' . $action], JSON_PRETTY_PRINT);
         }
     } catch (Exception $e) {
+        http_response_code(500);
         echo json_encode([
-            'success' => false,
-            'error' => 'Error al asignar empleado: ' . $e->getMessage()
-        ]);
+            'success' => false, 
+            'error' => 'Error en handlePost: ' . $e->getMessage(),
+            'action' => $action
+        ], JSON_PRETTY_PRINT);
     }
 }
 
-function removerEmpleado($pdo, $supervisor_id, $empleado_id) {
+function handleDelete($pdo, $user, $action) {
     try {
-        $stmt = $pdo->prepare("CALL sp_remover_empleado_supervisor(?, ?, @resultado)");
-        $stmt->execute([$supervisor_id, $empleado_id]);
-        
-        $result = $pdo->query("SELECT @resultado as resultado")->fetch();
-        $resultado = json_decode($result['resultado'], true);
-        
-        if ($resultado['success']) {
-            echo json_encode($resultado);
-        } else {
-            http_response_code(400);
-            echo json_encode($resultado);
+        switch ($action) {
+            case 'remover_empleado':
+                $empleadoId = $_GET['empleado_id'] ?? 0;
+                
+                if (!$empleadoId) {
+                    throw new Exception('ID de empleado requerido');
+                }
+                
+                $stmt = $pdo->prepare("CALL sp_remover_empleado_supervisor(?, ?, @resultado)");
+                $stmt->execute([$user['id_usuario'], $empleadoId]);
+                $result = $pdo->query("SELECT @resultado as resultado")->fetch(PDO::FETCH_ASSOC);
+                $response = json_decode($result['resultado'], true);
+                
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    throw new Exception('Error al decodificar respuesta del procedimiento');
+                }
+                
+                echo json_encode($response, JSON_PRETTY_PRINT);
+                break;
+                
+            default:
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Acción DELETE no válida: ' . $action], JSON_PRETTY_PRINT);
         }
     } catch (Exception $e) {
+        http_response_code(500);
         echo json_encode([
-            'success' => false,
-            'error' => 'Error al remover empleado: ' . $e->getMessage()
-        ]);
-    }
-}
-
-function crearSolicitudAsignacion($pdo, $supervisor_id, $empleado_id, $motivo) {
-    try {
-        $stmt = $pdo->prepare("CALL sp_crear_solicitud_cambio(?, ?, ?, @resultado)");
-        $stmt->execute([$supervisor_id, $empleado_id, $motivo]);
-        
-        $result = $pdo->query("SELECT @resultado as resultado")->fetch();
-        $resultado = json_decode($result['resultado'], true);
-        
-        if ($resultado['success']) {
-            echo json_encode($resultado);
-        } else {
-            http_response_code(400);
-            echo json_encode($resultado);
-        }
-    } catch (Exception $e) {
-        echo json_encode([
-            'success' => false,
-            'error' => 'Error al crear solicitud: ' . $e->getMessage()
-        ]);
+            'success' => false, 
+            'error' => 'Error en handleDelete: ' . $e->getMessage(),
+            'action' => $action
+        ], JSON_PRETTY_PRINT);
     }
 }
 ?>
