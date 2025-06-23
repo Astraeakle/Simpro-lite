@@ -111,10 +111,6 @@ class SecurityMiddleware {
 // FUNCIONES GLOBALES PARA COMPATIBILIDAD
 // ================================
 
-/**
- * Función global para verificar autenticación
- * Mantiene compatibilidad con código existente
- */
 function verificarAutenticacion() {
     try {
         // Primero intentar con JWT
