@@ -104,75 +104,148 @@ class SecurityMiddleware {
         }
         
         return null;
-    }    
+    }
+}
 
-    function verificarAutenticacion() {
-        $headers = getallheaders();
-        
-        // 1. Verificar token JWT primero
-        $jwt = JWT::verificarDesdeHeader();
-        if ($jwt) {
-            return [
-                'success' => true,
-                'user_id' => $jwt['sub'],
-                'user_data' => [
-                    'id' => $jwt['sub'],
-                    'nombre_completo' => $jwt['name'],
-                    'rol' => $jwt['rol']
-                ]
-            ];
-        }
-        
-        // 2. Fallback a cookie de sesión
-        if (isset($_COOKIE['user_data'])) {
-            $userData = json_decode($_COOKIE['user_data'], true);
-            if ($userData && isset($userData['id'])) {
+// ================================
+// FUNCIONES GLOBALES PARA COMPATIBILIDAD
+// ================================
+
+/**
+ * Función global para verificar autenticación
+ * Mantiene compatibilidad con código existente
+ */
+function verificarAutenticacion() {
+    try {
+        // Primero intentar con JWT
+        if (class_exists('JWT')) {
+            $jwt = JWT::verificarDesdeHeader();
+            if ($jwt) {
                 return [
                     'success' => true,
-                    'user_id' => $userData['id'],
-                    'user_data' => $userData
+                    'usuario' => [
+                        'id_usuario' => $jwt['sub'],
+                        'nombre_completo' => $jwt['name'],
+                        'rol' => $jwt['rol']
+                    ]
                 ];
             }
         }
         
-        return ['success' => false, 'message' => 'Autenticación requerida'];
+        // Fallback: verificar cookie de sesión
+        if (isset($_COOKIE['user_data'])) {
+            $userData = json_decode($_COOKIE['user_data'], true);
+            
+            if ($userData && isset($userData['id']) && !empty($userData['id'])) {
+                // Verificar usuario en base de datos
+                $pdo = obtenerConexionBD();
+                if ($pdo) {
+                    $stmt = $pdo->prepare("SELECT id_usuario, nombre_completo, rol, area FROM usuarios WHERE id_usuario = ? AND estado = 'activo'");
+                    $stmt->execute([$userData['id']]);
+                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($user) {
+                        return [
+                            'success' => true,
+                            'usuario' => [
+                                'id_usuario' => $user['id_usuario'],
+                                'nombre_completo' => $user['nombre_completo'],
+                                'rol' => $user['rol'],
+                                'area' => $user['area']
+                            ]
+                        ];
+                    }
+                }
+            }
+        }
+        
+        return [
+            'success' => false, 
+            'error' => 'Autenticación requerida'
+        ];
+        
+    } catch (Exception $e) {
+        error_log("Error en verificarAutenticacion: " . $e->getMessage());
+        return [
+            'success' => false, 
+            'error' => 'Error interno de autenticación'
+        ];
     }
-    
-    function verificarRol($rolesPermitidos) {
-        $auth = verificarAutenticacion();
-        if (!$auth['success']) {
-            return $auth;
-        }
-        
-        $rolUsuario = $auth['user_data']['rol'];
-        if (!in_array($rolUsuario, $rolesPermitidos)) {
-            return ['success' => false, 'message' => 'Acceso denegado - Permisos insuficientes'];
-        }
-        
+}
+
+/**
+ * Función global para verificar roles específicos
+ */
+function verificarRol($rolesPermitidos) {
+    $auth = verificarAutenticacion();
+    if (!$auth['success']) {
         return $auth;
     }
     
-    function sendJsonResponse($data, $statusCode = 200) {
-        http_response_code($statusCode);
-        header('Content-Type: application/json');
-        echo json_encode($data);
-        exit();
+    $rolUsuario = $auth['usuario']['rol'];
+    if (!in_array($rolUsuario, (array)$rolesPermitidos)) {
+        return [
+            'success' => false, 
+            'error' => 'Acceso denegado - Permisos insuficientes'
+        ];
     }
     
-    function sendError($message, $code = 400) {
-        sendJsonResponse([
-            'success' => false,
-            'error' => $message,
-            'code' => $code
-        ], $code);
-    }
-    
-    function sendSuccess($data, $message = 'Operación exitosa') {
-        sendJsonResponse([
-            'success' => true,
-            'message' => $message,
-            'data' => $data
-        ]);
+    return $auth;
+}
+
+/**
+ * Función helper para respuestas JSON
+ */
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    header('Content-Type: application/json');
+    echo json_encode($data, JSON_PRETTY_PRINT);
+    exit();
+}
+
+/**
+ * Función helper para errores
+ */
+function sendError($message, $code = 400) {
+    sendJsonResponse([
+        'success' => false,
+        'error' => $message,
+        'code' => $code
+    ], $code);
+}
+
+/**
+ * Función helper para respuestas exitosas
+ */
+function sendSuccess($data, $message = 'Operación exitosa') {
+    sendJsonResponse([
+        'success' => true,
+        'message' => $message,
+        'data' => $data
+    ]);
+}
+
+/**
+ * Función para obtener conexión a BD (helper)
+ */
+function obtenerConexionBD() {
+    try {
+        if (class_exists('DatabaseConfig')) {
+            $config = DatabaseConfig::getConfig();
+            return new PDO(
+                "mysql:host={$config['host']};dbname={$config['database']};charset={$config['charset']}",
+                $config['username'],
+                $config['password'],
+                [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+                ]
+            );
+        }
+        return null;
+    } catch (Exception $e) {
+        error_log("Error conectando a BD: " . $e->getMessage());
+        return null;
     }
 }
 ?>
