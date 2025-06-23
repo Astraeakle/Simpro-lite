@@ -20,6 +20,13 @@ table th {
     text-align: left;
 }
 
+/* Forzar texto oscuro en badges "neutros" si estás en tema claro */
+[data-bs-theme="light"] .badge.bg-light,
+[data-bs-theme="light"] .badge.bg-white,
+[data-bs-theme="light"] .badge.bg-warning {
+  color: #212529 !important;
+}
+
 table td {
     padding: .75rem;
     vertical-align: top;

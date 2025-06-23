@@ -413,13 +413,13 @@ async function cargarUsuarios() {
                     </td>
                     <td>${usuario.nombre_completo}</td>
                     <td>
-                        <span class="badge badge-${getRolColor(usuario.rol)} text-white">
+                        <span class="badge badge-${getRolColor(usuario.rol)} text-dark">
                             ${capitalizar(usuario.rol)}
                         </span>
                     </td>
                     <td>${usuario.area || '<span class="text-muted">No asignado</span>'}</td>
                     <td>
-                        <span class="badge badge-${getEstadoColor(usuario.estado)} text-white">
+                        <span class="badge badge-${getEstadoColor(usuario.estado)} text-dark">
                             ${capitalizar(usuario.estado)}
                         </span>
                     </td>

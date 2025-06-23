@@ -5,10 +5,10 @@ $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '
 $tema = isset($userData['preferencias']['tema']) ? $userData['preferencias']['tema'] : 'light';
 ?>
 <!DOCTYPE html>
-<html lang="es" data-bs-theme="<?php echo $tema; ?>">
+<html lang="es" data-bs-theme="<?php echo htmlspecialchars($tema); ?>">
 
 <head>
-    <meta charset="UTF-8">
+    <meta charset=" UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SimPro Lite - Sistema de Monitoreo de Productividad</title>
 
@@ -25,6 +25,23 @@ $tema = isset($userData['preferencias']['tema']) ? $userData['preferencias']['te
 
     <!-- jQuery (necesario para algunos componentes) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style>
+    table,
+    table th,
+    table td {
+        color: #212529 !important;
+        background-color: #fff !important;
+    }
+
+    body,
+    .card,
+    .card-body,
+    .table-responsive {
+        background-color: #fff !important;
+        color: #212529 !important;
+    }
+    </style>
+
 </head>
 
 <body>

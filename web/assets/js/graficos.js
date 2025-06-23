@@ -37,7 +37,7 @@ function crearContenedoresGraficos(rol) {
             graficoRow.innerHTML = `
                 <div class="col-md-6 mb-4">
                     <div class="card">
-                        <div class="card-header bg-primary text-white">
+                        <div class="card-header bg-primary text-dark">
                             <h5 class="card-title mb-0">
                                 <i class="fas fa-chart-line me-2"></i>Productividad General
                             </h5>
@@ -49,7 +49,7 @@ function crearContenedoresGraficos(rol) {
                 </div>
                 <div class="col-md-6 mb-4">
                     <div class="card">
-                        <div class="card-header bg-info text-white">
+                        <div class="card-header bg-info text-dark">
                             <h5 class="card-title mb-0">
                                 <i class="fas fa-chart-pie me-2"></i>Distribución de Aplicaciones
                             </h5>
@@ -64,7 +64,7 @@ function crearContenedoresGraficos(rol) {
             graficoRow.innerHTML = `
                 <div class="col-md-12 mb-4">
                     <div class="card">
-                        <div class="card-header bg-primary text-white">
+                        <div class="card-header bg-primary text-dark">
                             <h5 class="card-title mb-0">
                                 <i class="fas fa-chart-line me-2"></i>Mi Productividad
                             </h5>

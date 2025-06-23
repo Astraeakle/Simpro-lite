@@ -391,7 +391,7 @@ async function cargarTopApps() {
                     <small class="text-muted">${app.porcentaje}% del tiempo</small>
                 </td>
                 <td>
-                    <span class="badge badge-${getColorCategoria(app.categoria)} text-white">
+                    <span class="badge badge-${getColorCategoria(app.categoria)} text-dark">
                         ${capitalizar(app.categoria)}
                     </span>
                 </td>

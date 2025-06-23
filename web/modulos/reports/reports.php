@@ -414,7 +414,7 @@ $titulo_pagina = 'Reportes y Estadísticas'
 <div id="loading_overlay" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50"
     style="z-index: 9999;">
     <div class="d-flex justify-content-center align-items-center h-100">
-        <div class="text-center text-white">
+        <div class="text-center text-dark">
             <div class="spinner-border" role="status">
                 <span class="visually-hidden">Cargando...</span>
             </div>

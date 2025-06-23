@@ -17,7 +17,7 @@ $proyectos = DB::select(
 ?>
 
 <div class="card widget-card">
-    <div class="card-header bg-info text-white">
+    <div class="card-header bg-info text-dark">
         <h5 class="mb-0">Mis Proyectos</h5>
     </div>
     <div class="card-body">
