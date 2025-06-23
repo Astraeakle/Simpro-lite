@@ -865,3 +865,157 @@ BEGIN
 END ;;
 
 DELIMITER ;
+
+-- 22/06/2025
+
+DELIMITER //
+-- Procedimiento corregido para obtener empleados asignados a un supervisor
+-- Versión simplificada sin referencias a tablas que no existen
+DROP PROCEDURE IF EXISTS sp_obtener_empleados_supervisor;
+CREATE PROCEDURE sp_obtener_empleados_supervisor(
+    IN p_supervisor_id INT
+)
+BEGIN
+    SELECT 
+        u.id_usuario,
+        u.nombre_usuario,
+        u.nombre_completo,
+        u.area,
+        u.telefono,
+        u.fecha_creacion,
+        u.ultimo_acceso,
+        u.estado,
+        '00:00:00' AS tiempo_total_mes,  -- Placeholder hasta tener la tabla correcta
+        0 AS dias_activos_mes           -- Placeholder hasta tener la tabla correcta
+    FROM usuarios u
+    WHERE u.supervisor_id = p_supervisor_id
+    AND u.rol = 'empleado'
+    AND u.estado = 'activo'
+    ORDER BY u.nombre_completo;
+END;
+//
+
+-- Procedimiento para obtener empleados disponibles
+-- Para excluir el rol 'admin' y 'supervisor'
+DROP PROCEDURE IF EXISTS sp_obtener_empleados_disponibles;
+CREATE PROCEDURE sp_obtener_empleados_disponibles(
+    IN p_supervisor_id INT,
+    IN p_area VARCHAR(50)
+)
+BEGIN
+    SELECT 
+        id_usuario,
+        nombre_usuario,
+        nombre_completo,
+        area,
+        telefono,
+        fecha_creacion,
+        ultimo_acceso,
+        estado
+    FROM usuarios
+    WHERE rol = 'empleado'
+    AND estado = 'activo'
+    AND (supervisor_id IS NULL OR supervisor_id = p_supervisor_id)
+    AND (p_area IS NULL OR area = p_area)
+    ORDER BY nombre_completo;
+END;
+//
+
+-- Procedimiento para obtener estadísticas del equipo del supervisor
+DELIMITER //
+CREATE PROCEDURE sp_estadisticas_equipo_supervisor(
+    IN p_supervisor_id INT,
+    IN p_fecha_inicio DATE,
+    IN p_fecha_fin DATE
+)
+BEGIN
+    SELECT 
+        COUNT(u.id_usuario) AS total_empleados,
+        COUNT(u.id_usuario) AS empleados_activos,  -- Igual al total por ahora
+        '00:00:00' AS tiempo_total_equipo,         -- Placeholder
+        0 AS porcentaje_productivo_equipo          -- Placeholder
+    FROM usuarios u
+    WHERE u.supervisor_id = p_supervisor_id
+    AND u.rol = 'empleado'
+    AND u.estado = 'activo';
+END;
+//
+
+DELIMITER ;
+
+DELIMITER ;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Procedimiento corregido para obtener empleados asignados a un supervisor
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS sp_obtener_empleados_supervisor;
+
+CREATE PROCEDURE sp_obtener_empleados_supervisor(
+    IN p_supervisor_id INT
+)
+BEGIN
+    SELECT 
+        u.id_usuario,
+        u.nombre_usuario,
+        u.nombre_completo,
+        u.area,
+        u.telefono,
+        u.fecha_creacion,
+        u.ultimo_acceso,
+        u.estado,
+        '00:00:00' AS tiempo_total_mes,  -- Placeholder hasta tener la tabla correcta
+        0 AS dias_activos_mes           -- Placeholder hasta tener la tabla correcta
+    FROM usuarios u
+    WHERE u.supervisor_id = p_supervisor_id
+    AND u.rol = 'empleado'
+    AND u.estado = 'activo'
+    ORDER BY u.nombre_completo;
+END;
+//
+
+-- Procedimiento corregido para obtener empleados disponibles
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS sp_obtener_empleados_disponibles;
+
+CREATE PROCEDURE sp_obtener_empleados_disponibles(
+    IN p_supervisor_id INT,
+    IN p_area VARCHAR(50)
+)
+BEGIN
+    SELECT 
+        id_usuario,
+        nombre_usuario,
+        nombre_completo,
+        area,
+        telefono,
+        fecha_creacion,
+        ultimo_acceso,
+        estado
+    FROM usuarios
+    WHERE rol = 'empleado'
+    AND estado = 'activo'
+    AND (supervisor_id IS NULL OR supervisor_id = p_supervisor_id)
+    AND (p_area IS NULL OR area = p_area)
+    ORDER BY nombre_completo;
+END;
+//
+
+DELIMITER ;
