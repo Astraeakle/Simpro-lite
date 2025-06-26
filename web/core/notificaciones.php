@@ -1,70 +1,12 @@
 <?php
-// core/notificaciones.php
-
+// web/core/notificaciones.php
 class NotificacionesManager {
     private $db;
     
     public function __construct($database) {
         $this->db = $database;
     }
-    
-    public function crearNotificacionEmpleado($id_usuario, $tipo, $titulo, $mensaje, $id_referencia = null) {
-        $tipos_empleado = [
-            'asignacion_tarea' => 'Te han asignado una nueva tarea',
-            'cambio_proyecto' => 'Cambios en tu proyecto',
-            'recordatorio_asistencia' => 'Recordatorio de registro de entrada/salida',
-            'limite_tarea' => 'Tarea próxima a vencer',
-            'aprobacion' => 'Tu solicitud ha sido aprobada/rechazada'
-        ];
         
-        return $this->insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia);
-    }
-    
-    public function crearNotificacionSupervisor($id_usuario, $tipo, $titulo, $mensaje, $id_referencia = null) {
-        $tipos_supervisor = [
-            'solicitud_asignacion' => 'Solicitud de asignación inter-departamental',
-            'empleado_ausente' => 'Empleado sin registro de entrada',
-            'proyecto_retrasado' => 'Proyecto con retraso',
-            'tarea_completada' => 'Empleado completó tarea',
-            'bajo_rendimiento' => 'Alerta de productividad'
-        ];
-        
-        return $this->insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia);
-    }
-    
-    public function crearNotificacionAdmin($id_usuario, $tipo, $titulo, $mensaje, $id_referencia = null) {
-        $tipos_admin = [
-            'nuevo_usuario' => 'Nuevo usuario registrado',
-            'error_sistema' => 'Error crítico del sistema',
-            'backup_fallido' => 'Fallo en respaldo automático',
-            'acceso_no_autorizado' => 'Intento de acceso sospechoso',
-            'reporte_semanal' => 'Reporte semanal del sistema'
-        ];
-        
-        return $this->insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia);
-    }
-    
-    public function notificarAsignacionTarea($id_empleado, $id_actividad, $nombre_tarea, $supervisor_nombre) {
-        $titulo = "Nueva tarea asignada";
-        $mensaje = "El supervisor {$supervisor_nombre} te ha asignado la tarea: {$nombre_tarea}";
-        
-        return $this->crearNotificacionEmpleado($id_empleado, 'tarea', $titulo, $mensaje, $id_actividad);
-    }
-    
-    public function notificarAusenciaEmpleado($id_supervisor, $nombre_empleado, $fecha) {
-        $titulo = "Empleado sin registro de entrada";
-        $mensaje = "El empleado {$nombre_empleado} no ha registrado su entrada el {$fecha}";
-        
-        return $this->crearNotificacionSupervisor($id_supervisor, 'asistencia', $titulo, $mensaje);
-    }
-    
-    public function notificarSolicitudInterDepartamental($id_supervisor_destino, $supervisor_origen, $departamento_origen, $detalle) {
-        $titulo = "Solicitud de Asignación Inter-departamental";
-        $mensaje = "El supervisor {$supervisor_origen} ({$departamento_origen}) solicita: {$detalle}";
-        
-        return $this->crearNotificacionSupervisor($id_supervisor_destino, 'sistema', $titulo, $mensaje);
-    }
-    
     public function notificarErrorSistema($mensaje_error, $modulo) {
         $admins = $this->obtenerAdministradores();
         
@@ -77,27 +19,37 @@ class NotificacionesManager {
     public function obtenerNotificaciones($id_usuario, $solo_no_leidas = false, $limite = 20) {
         $where_leido = $solo_no_leidas ? "AND leido = 0" : "";
         
-        $sql = "SELECT n.*, u.nombre_completo as remitente
+        $sql = "SELECT n.*, 
+                       DATE_FORMAT(n.fecha_envio, '%Y-%m-%d %H:%i:%s') as fecha_envio
                 FROM notificaciones n
-                LEFT JOIN usuarios u ON n.id_referencia = u.id_usuario
                 WHERE n.id_usuario = ? {$where_leido}
                 ORDER BY n.fecha_envio DESC
                 LIMIT ?";
                 
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Error preparando consulta: " . $this->db->error);
+        }
+        
         $stmt->bind_param("ii", $id_usuario, $limite);
         $stmt->execute();
+        $result = $stmt->get_result();
         
-        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        return $result->fetch_all(MYSQLI_ASSOC);
     }
     
     public function contarNoLeidas($id_usuario) {
         $sql = "SELECT COUNT(*) as no_leidas FROM notificaciones WHERE id_usuario = ? AND leido = 0";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Error preparando consulta: " . $this->db->error);
+        }
+        
         $stmt->bind_param("i", $id_usuario);
         $stmt->execute();
+        $result = $stmt->get_result();
         
-        return $stmt->get_result()->fetch_assoc()['no_leidas'];
+        return $result->fetch_assoc()['no_leidas'];
     }
     
     public function marcarComoLeida($id_notificacion, $id_usuario) {
@@ -106,9 +58,13 @@ class NotificacionesManager {
                 WHERE id_notificacion = ? AND id_usuario = ?";
                 
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Error preparando consulta: " . $this->db->error);
+        }
+        
         $stmt->bind_param("ii", $id_notificacion, $id_usuario);
         
-        return $stmt->execute();
+        return $stmt->execute() && $stmt->affected_rows > 0;
     }
     
     public function marcarTodasComoLeidas($id_usuario) {
@@ -117,17 +73,24 @@ class NotificacionesManager {
                 WHERE id_usuario = ? AND leido = 0";
                 
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Error preparando consulta: " . $this->db->error);
+        }
+        
         $stmt->bind_param("i", $id_usuario);
         
         return $stmt->execute();
     }
     
-    // CORRECCIÓN: Cambiar de private a public para poder usarlo desde la API
     public function insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia = null) {
-        $sql = "INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo, id_referencia) 
-                VALUES (?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo, id_referencia, fecha_envio) 
+                VALUES (?, ?, ?, ?, ?, NOW())";
                 
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Error preparando consulta: " . $this->db->error);
+        }
+        
         $stmt->bind_param("isssi", $id_usuario, $titulo, $mensaje, $tipo, $id_referencia);
         
         return $stmt->execute();
@@ -135,7 +98,13 @@ class NotificacionesManager {
     
     private function obtenerAdministradores() {
         $sql = "SELECT id_usuario, nombre_completo FROM usuarios WHERE rol = 'admin' AND estado = 'activo'";
-        return $this->db->query($sql)->fetch_all(MYSQLI_ASSOC);
+        $result = $this->db->query($sql);
+        
+        if (!$result) {
+            throw new Exception("Error obteniendo administradores: " . $this->db->error);
+        }
+        
+        return $result->fetch_all(MYSQLI_ASSOC);
     }
     
     public function procesarAusencias() {
@@ -152,9 +121,14 @@ class NotificacionesManager {
                     AND TIME(NOW()) > '09:30:00'";
         
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Error preparando consulta: " . $this->db->error);
+        }
+        
         $stmt->bind_param("s", $hoy);
         $stmt->execute();
-        $ausentes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $result = $stmt->get_result();
+        $ausentes = $result->fetch_all(MYSQLI_ASSOC);
         
         foreach ($ausentes as $ausente) {
             if ($ausente['supervisor_id']) {
@@ -176,6 +150,9 @@ class NotificacionesManager {
                     AND DATEDIFF(a.fecha_limite, NOW()) <= 2";
         
         $resultado = $this->db->query($sql);
+        if (!$resultado) {
+            throw new Exception("Error obteniendo tareas próximas a vencer: " . $this->db->error);
+        }
         
         while ($tarea = $resultado->fetch_assoc()) {
             $dias_restantes = max(0, ceil((strtotime($tarea['fecha_limite']) - time()) / 86400));

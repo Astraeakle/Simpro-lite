@@ -35,7 +35,7 @@ function obtener_conexion() {
             $host = defined('DB_HOST') ? DB_HOST : 'localhost';
             $dbname = defined('DB_NAME') ? DB_NAME : 'simpro_lite';
             $username = defined('DB_USER') ? DB_USER : 'root';
-            $password = defined('DB_PASSWORD') ? DB_PASSWORD : '';
+            $password = defined('DB_PASSWORD') ? DB_PASSWORD : '0000';
             
             $pdo = new PDO(
                 "mysql:host=$host;dbname=$dbname;charset=utf8mb4",

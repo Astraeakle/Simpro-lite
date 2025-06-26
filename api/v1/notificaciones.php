@@ -1,65 +1,91 @@
 <?php
 // api/v1/notificaciones.php
+require_once '../../web/config/database.php';
+require_once '../../web/core/notificaciones.php';
 
-require_once '../../bootstrap.php';
-require_once 'middleware.php';
-require_once '../../core/notificaciones.php';
-
-// Headers
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-// Manejar OPTIONS para CORS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Debug: Log de la petición
-error_log("=== INICIO DEBUG NOTIFICACIONES ===");
-error_log("DEBUG: Método: " . $_SERVER['REQUEST_METHOD']);
-error_log("DEBUG: URL: " . $_SERVER['REQUEST_URI']);
-error_log("DEBUG: Query params: " . print_r($_GET, true));
-error_log("DEBUG: Cookies recibidas: " . print_r(array_keys($_COOKIE), true));
-
-// Verificar autenticación
-$usuario = verificarAutenticacion();
-if (!$usuario) {
-    error_log("DEBUG: Autenticación fallida");
-    http_response_code(401);
-    echo json_encode([
-        'success' => false,
-        'error' => 'No autorizado',
-        'message' => 'Debe iniciar sesión para acceder a las notificaciones',
-        'debug' => [
-            'cookies_disponibles' => array_keys($_COOKIE),
-            'user_data_exists' => isset($_COOKIE['user_data']),
-            'user_data_content' => isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : null,
-            'timestamp' => date('Y-m-d H:i:s'),
-            'request_method' => $_SERVER['REQUEST_METHOD']
-        ]
-    ]);
-    exit;
+// Función para verificar autenticación desde cookies
+function verificarAutenticacionCookie() {
+    $userData = null;
+    
+    // Intentar obtener datos del usuario desde cookies
+    if (isset($_COOKIE['user_data'])) {
+        $userData = json_decode($_COOKIE['user_data'], true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("Error decodificando JSON de cookie: " . json_last_error_msg());
+            return null;
+        }
+    }
+    
+    // Obtener ID de usuario - verificar ambos campos posibles como en nav.php
+    $id_usuario = 0;
+    if (!empty($userData)) {
+        if (isset($userData['id_usuario'])) {
+            $id_usuario = $userData['id_usuario'];
+        } elseif (isset($userData['id'])) {
+            $id_usuario = $userData['id'];
+        }
+    }
+    
+    // Debug info para logging
+    $debug_info = [
+        'cookies' => array_keys($_COOKIE),
+        'user_data_exists' => isset($_COOKIE['user_data']),
+        'user_data_valid' => !empty($userData),
+        'id_usuario_found' => $id_usuario > 0,
+        'id_usuario_value' => $id_usuario,
+        'userData_keys' => !empty($userData) ? array_keys($userData) : [],
+        'timestamp' => date('Y-m-d H:i:s')
+    ];
+    
+    error_log("Debug autenticación: " . json_encode($debug_info));
+    
+    if (empty($userData) || $id_usuario == 0) {
+        http_response_code(401);
+        echo json_encode([
+            'success' => false,
+            'error' => 'No autorizado',
+            'message' => 'Debe iniciar sesión para acceder a las notificaciones',
+            'debug' => $debug_info
+        ]);
+        exit;
+    }
+    
+    // Asegurar que el array tenga el campo id_usuario
+    $userData['id_usuario'] = $id_usuario;
+    
+    return $userData;
 }
 
-error_log("DEBUG: Usuario autenticado exitosamente: " . print_r($usuario, true));
-
+$usuario = verificarAutenticacionCookie();
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
-// Crear conexión a la base de datos
 try {
-    $conexion = obtenerConexionBD();
-    if (!$conexion) {
-        throw new Exception("No se pudo conectar a la base de datos");
+    // Usar la configuración de database.php
+    $config = DatabaseConfig::getConfig();
+    $conexion = new mysqli($config['host'], $config['username'], $config['password'], $config['database']);
+    
+    if ($conexion->connect_error) {
+        throw new Exception("Error de conexión: " . $conexion->connect_error);
     }
     
-    error_log("DEBUG: Conexión a BD establecida");
+    $conexion->set_charset("utf8mb4");
+    
+    // Crear instancia del manager de notificaciones
+    $notificacionesManager = new NotificacionesManager($conexion);
     
 } catch (Exception $e) {
-    error_log("ERROR: No se pudo conectar a la base de datos - " . $e->getMessage());
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -72,15 +98,15 @@ try {
 try {
     switch ($method) {
         case 'GET':
-            handleGetNotifications($conexion, $usuario);
+            handleGetNotifications($notificacionesManager, $usuario);
             break;
             
         case 'POST':
-            handlePostNotifications($conexion, $usuario, $input);
+            handlePostNotifications($notificacionesManager, $usuario, $input);
             break;
             
         case 'PUT':
-            handlePutNotifications($conexion, $usuario, $input);
+            handlePutNotifications($notificacionesManager, $usuario, $input);
             break;
             
         default:
@@ -92,8 +118,6 @@ try {
             break;
     }
 } catch (Exception $e) {
-    error_log("ERROR: " . $e->getMessage());
-    error_log("ERROR stack trace: " . $e->getTraceAsString());
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -102,51 +126,23 @@ try {
     ]);
 }
 
-function handleGetNotifications($conexion, $usuario) {
+function handleGetNotifications($notificacionesManager, $usuario) {
     $action = $_GET['action'] ?? 'list';
-    error_log("DEBUG: Acción solicitada: " . $action);
     
     switch ($action) {
         case 'list':
             $solo_no_leidas = isset($_GET['unread_only']) && $_GET['unread_only'] == '1';
             $limite = intval($_GET['limit'] ?? 20);
             
-            error_log("DEBUG: Parámetros - Usuario ID: {$usuario['id_usuario']}, Solo no leídas: $solo_no_leidas, Límite: $limite");
+            // Obtener notificaciones usando el manager
+            $notificaciones = $notificacionesManager->obtenerNotificaciones(
+                $usuario['id_usuario'], 
+                $solo_no_leidas, 
+                $limite
+            );
             
-            // Si no hay notificaciones en la tabla, crear algunas de prueba
-            $countSql = "SELECT COUNT(*) as total FROM notificaciones WHERE id_usuario = ?";
-            $countStmt = $conexion->prepare($countSql);
-            $countStmt->execute([$usuario['id_usuario']]);
-            $count = $countStmt->fetch(PDO::FETCH_ASSOC);
-            
-            error_log("DEBUG: Notificaciones existentes para usuario: " . $count['total']);
-            
-            // Si no hay notificaciones, crear algunas de prueba
-            if ($count['total'] == 0) {
-                error_log("DEBUG: Creando notificaciones de prueba...");
-                crearNotificacionesPrueba($conexion, $usuario['id_usuario']);
-            }
-            
-            // Consulta para obtener notificaciones
-            $whereLeido = $solo_no_leidas ? "AND leido = 0" : "";
-            $sql = "SELECT n.*, 
-                           DATE_FORMAT(n.fecha_envio, '%Y-%m-%d %H:%i:%s') as fecha_envio_formatted
-                    FROM notificaciones n
-                    WHERE n.id_usuario = ? {$whereLeido}
-                    ORDER BY n.fecha_envio DESC
-                    LIMIT ?";
-            
-            error_log("DEBUG: SQL Query: " . $sql);
-            
-            $stmt = $conexion->prepare($sql);
-            $stmt->execute([$usuario['id_usuario'], $limite]);
-            $lista = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            error_log("DEBUG: Notificaciones encontradas: " . count($lista));
-            error_log("DEBUG: Datos de notificaciones: " . print_r($lista, true));
-            
-            // Agregar información adicional a cada notificación
-            foreach ($lista as &$notif) {
+            // Formatear los datos de las notificaciones
+            foreach ($notificaciones as &$notif) {
                 $notif['fecha_formateada'] = formatearFecha($notif['fecha_envio']);
                 $notif['icono'] = obtenerIconoNotificacion($notif['tipo']);
                 $notif['color'] = obtenerColorNotificacion($notif['tipo']);
@@ -154,34 +150,18 @@ function handleGetNotifications($conexion, $usuario) {
             
             echo json_encode([
                 'success' => true,
-                'data' => $lista,
-                'total' => count($lista),
-                'debug' => [
-                    'usuario_id' => $usuario['id_usuario'],
-                    'solo_no_leidas' => $solo_no_leidas,
-                    'limite' => $limite,
-                    'sql_ejecutado' => $sql,
-                    'total_en_bd' => $count['total'],
-                    'timestamp' => date('Y-m-d H:i:s')
-                ]
+                'data' => $notificaciones,
+                'total' => count($notificaciones),
+                'user_id' => $usuario['id_usuario'] // Para debug
             ]);
             break;
             
         case 'count':
-            $sql = "SELECT COUNT(*) as total_no_leidas FROM notificaciones WHERE id_usuario = ? AND leido = 0";
-            $stmt = $conexion->prepare($sql);
-            $stmt->execute([$usuario['id_usuario']]);
-            $count = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            error_log("DEBUG: Contador no leídas: " . $count['total_no_leidas']);
+            $count = $notificacionesManager->contarNoLeidas($usuario['id_usuario']);
             
             echo json_encode([
                 'success' => true,
-                'count' => intval($count['total_no_leidas']),
-                'debug' => [
-                    'usuario_id' => $usuario['id_usuario'],
-                    'sql' => $sql
-                ]
+                'count' => intval($count)
             ]);
             break;
             
@@ -194,49 +174,9 @@ function handleGetNotifications($conexion, $usuario) {
             ]);
             break;
     }
-    
-    error_log("=== FIN DEBUG NOTIFICACIONES ===");
 }
 
-function crearNotificacionesPrueba($conexion, $idUsuario) {
-    $notificacionesPrueba = [
-        [
-            'titulo' => 'Nueva tarea asignada',
-            'mensaje' => 'Se te ha asignado la tarea: Revisar documentos del proyecto Alpha',
-            'tipo' => 'tarea',
-            'leido' => 0
-        ],
-        [
-            'titulo' => 'Recordatorio de asistencia',
-            'mensaje' => 'No olvides registrar tu hora de salida',
-            'tipo' => 'asistencia',
-            'leido' => 0
-        ],
-        [
-            'titulo' => 'Actualización del sistema',
-            'mensaje' => 'El sistema se actualizará esta noche a las 22:00',
-            'tipo' => 'sistema',
-            'leido' => 1
-        ]
-    ];
-    
-    foreach ($notificacionesPrueba as $notif) {
-        $sql = "INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo, leido, fecha_envio) 
-                VALUES (?, ?, ?, ?, ?, NOW())";
-        $stmt = $conexion->prepare($sql);
-        $stmt->execute([
-            $idUsuario,
-            $notif['titulo'],
-            $notif['mensaje'],
-            $notif['tipo'],
-            $notif['leido']
-        ]);
-    }
-    
-    error_log("DEBUG: Notificaciones de prueba creadas");
-}
-
-function handlePostNotifications($conexion, $usuario, $input) {
+function handlePostNotifications($notificacionesManager, $usuario, $input) {
     $action = $input['action'] ?? '';
     
     switch ($action) {
@@ -262,25 +202,26 @@ function handlePostNotifications($conexion, $usuario, $input) {
                 }
             }
             
-            $sql = "INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo, id_referencia, fecha_envio) 
-                    VALUES (?, ?, ?, ?, ?, NOW())";
-            
-            $stmt = $conexion->prepare($sql);
-            $stmt->execute([
+            $result = $notificacionesManager->insertarNotificacion(
                 $input['id_usuario_destino'],
                 $input['titulo'],
                 $input['mensaje'],
                 $input['tipo'],
                 $input['id_referencia'] ?? null
-            ]);
+            );
             
-            $newId = $conexion->lastInsertId();
-            
-            echo json_encode([
-                'success' => true,
-                'message' => 'Notificación creada exitosamente',
-                'id_notificacion' => $newId
-            ]);
+            if ($result) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Notificación creada exitosamente'
+                ]);
+            } else {
+                http_response_code(500);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Error al crear la notificación'
+                ]);
+            }
             break;
             
         default:
@@ -293,7 +234,7 @@ function handlePostNotifications($conexion, $usuario, $input) {
     }
 }
 
-function handlePutNotifications($conexion, $usuario, $input) {
+function handlePutNotifications($notificacionesManager, $usuario, $input) {
     $action = $input['action'] ?? '';
     
     switch ($action) {
@@ -307,14 +248,12 @@ function handlePutNotifications($conexion, $usuario, $input) {
                 return;
             }
             
-            $sql = "UPDATE notificaciones 
-                    SET leido = 1, fecha_leido = NOW() 
-                    WHERE id_notificacion = ? AND id_usuario = ?";
+            $result = $notificacionesManager->marcarComoLeida(
+                $input['id_notificacion'], 
+                $usuario['id_usuario']
+            );
             
-            $stmt = $conexion->prepare($sql);
-            $stmt->execute([$input['id_notificacion'], $usuario['id_usuario']]);
-            
-            if ($stmt->rowCount() > 0) {
+            if ($result) {
                 echo json_encode([
                     'success' => true,
                     'message' => 'Notificación marcada como leída'
@@ -329,17 +268,11 @@ function handlePutNotifications($conexion, $usuario, $input) {
             break;
             
         case 'mark_all_read':
-            $sql = "UPDATE notificaciones 
-                    SET leido = 1, fecha_leido = NOW() 
-                    WHERE id_usuario = ? AND leido = 0";
-            
-            $stmt = $conexion->prepare($sql);
-            $stmt->execute([$usuario['id_usuario']]);
+            $result = $notificacionesManager->marcarTodasComoLeidas($usuario['id_usuario']);
             
             echo json_encode([
                 'success' => true,
-                'message' => 'Todas las notificaciones marcadas como leídas',
-                'count' => $stmt->rowCount()
+                'message' => 'Todas las notificaciones marcadas como leídas'
             ]);
             break;
             

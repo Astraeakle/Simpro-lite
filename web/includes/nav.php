@@ -1,4 +1,5 @@
 <?php
+// web/includes/nav.php
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
 
 if (empty($userData)) {
@@ -9,13 +10,19 @@ if (empty($userData)) {
     }
 }
 
-$id_usuario = isset($userData['id']) ? $userData['id'] : (isset($userData['id_usuario']) ? $userData['id_usuario'] : 0);
+// Corregir la obtención del ID de usuario - verificar ambos campos posibles
+$id_usuario = 0;
+if (isset($userData['id_usuario'])) {
+    $id_usuario = $userData['id_usuario'];
+} elseif (isset($userData['id'])) {
+    $id_usuario = $userData['id'];
+}
+
 $nombreUsuario = isset($userData['nombre_completo']) ? $userData['nombre_completo'] : 'Usuario';
 $rolUsuario = isset($userData['rol']) ? $userData['rol'] : '';
 
 $isAuthenticated = !empty($userData) && $id_usuario > 0;
 ?>
-<link rel="stylesheet" href="/simpro-lite/web/assets/css/notificaciones.css">
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
         <a class="navbar-brand"
@@ -123,7 +130,7 @@ window.notificationConfig = {
     apiUrl: '/simpro-lite/api/v1/notificaciones.php',
     pollFrequency: 30000,
     userRole: '<?php echo $rolUsuario; ?>',
-    userId: <?php echo $userData['id_usuario'] ?? 0; ?>
+    userId: <?php echo $id_usuario; ?>
 };
 </script>
 

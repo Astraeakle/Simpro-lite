@@ -1,8 +1,5 @@
 <?php
 // File: api/v1/supervisor.php
-// Enhanced version with better error handling and debugging
-
-// Enable error reporting for debugging (remove in production)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 

@@ -1,4 +1,4 @@
-
+// web/assets/js/notifications.js
 class NotificationsManager {
     constructor() {
         this.apiUrl = window.notificationConfig?.apiUrl || '/simpro-lite/api/v1/notificaciones.php';
@@ -51,14 +51,12 @@ class NotificationsManager {
             
             console.log('Respuesta recibida:', {
                 status: response.status,
-                statusText: response.statusText,
-                headers: Object.fromEntries(response.headers.entries())
+                statusText: response.statusText
             });
             
             if (!response.ok) {
                 if (response.status === 401) {
                     console.log('Error 401 - No autorizado');
-                    // Intentar obtener más información del error
                     try {
                         const errorData = await response.json();
                         console.log('Detalles del error 401:', errorData);
@@ -69,6 +67,8 @@ class NotificationsManager {
                     }
                     return;
                 }
+                const errorText = await response.text();
+                console.error('Error en respuesta:', errorText);
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
@@ -144,11 +144,13 @@ class NotificationsManager {
             return;
         }
         
+        // Si no hay notificaciones, mostrar mensaje informativo
         if (this.notifications.length === 0) {
             container.innerHTML = `
                 <div class="text-center p-3 text-muted">
                     <i class="fas fa-inbox mb-2" style="font-size: 2rem; opacity: 0.5;"></i><br>
-                    <span>No hay notificaciones</span>
+                    <span>No tienes notificaciones</span><br>
+                    <small class="text-muted">Las notificaciones aparecerán aquí cuando las recibas</small>
                 </div>
             `;
             return;
@@ -165,7 +167,7 @@ class NotificationsManager {
             let debugInfo = '';
             if (errorData && errorData.debug) {
                 debugInfo = `
-                    <div class="mt-2" style="font-size: 0.8em;">
+                    <div class="mt-2" style="font-size: 0.8em; color: #6c757d;">
                         <strong>Debug:</strong><br>
                         Cookies: ${errorData.debug.cookies ? errorData.debug.cookies.join(', ') : 'ninguna'}<br>
                         user_data existe: ${errorData.debug.user_data_exists ? 'sí' : 'no'}<br>
