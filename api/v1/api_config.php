@@ -1,6 +1,5 @@
 <?php
 //File: api/v1/api_config.php
-
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
@@ -164,7 +163,6 @@ function validar_configuracion($config) {
     
     return true;
 }
-
 // Función para obtener toda la configuración desde la BD
 function obtener_configuracion_completa() {
     try {

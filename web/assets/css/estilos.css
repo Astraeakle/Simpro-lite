@@ -29,12 +29,13 @@ body {
 .widget-card {
     transition: all 0.3s;
 }
+
 .widget-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
-badge-categoria {
+.badge-categoria {
     font-weight: 600;
     padding: 4px 8px;
     font-size: 12px;
@@ -60,4 +61,50 @@ badge-categoria {
     background-color: #e2e3e5;
     color: #383d41;
     border: 1px solid #d6d8db;
+}
+
+.text-green {
+    color: #28a745 !important;
+}
+
+.text-red {
+    color: #dc3545 !important;
+}
+
+.text-yellow {
+    color: #ffc107 !important;
+}
+
+.badge-productiva {
+    background-color: #d4edda;
+    color: #155724; /* Verde oscuro para contraste */
+    border: 1px solid #c3e6cb;
+}
+
+.badge-distractora {
+    background-color: #f8d7da;
+    color: #721c24; /* Rojo oscuro para contraste */
+    border: 1px solid #f5c6cb;
+}
+
+.badge-neutral {
+    background-color: #e2e3e5;
+    color: #383d41; /* Gris oscuro para contraste */
+    border: 1px solid #d6d8db;
+}
+
+.custom-footer {
+    background-color: var(--footer-bg);
+    color: var(--footer-text);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+:root {
+    --footer-bg: #f8f9fa;
+    --footer-text: #6c757d;
+}
+
+[data-theme="dark"] {
+    --footer-bg: #121212;
+    --footer-text: #cccccc;
 }

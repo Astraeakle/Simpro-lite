@@ -129,13 +129,13 @@
                 <canvas id="graficoProductividad"></canvas>
             </div>
             <div class="mt-4 text-center">
-                <span class="badge badge-success text-white mr-3 px-3 py-2" id="productivaPercent">
+                <span class="badge badge-productiva mr-3 px-3 py-2" id="productivaPercent">
                     <i class="fas fa-spinner fa-spin"></i> Cargando...
                 </span>
-                <span class="badge badge-danger text-white mr-3 px-3 py-2" id="distractoraPercent">
+                <span class="badge badge-distractora mr-3 px-3 py-2" id="distractoraPercent">
                     <i class="fas fa-spinner fa-spin"></i> Cargando...
                 </span>
-                <span class="badge badge-secondary text-white px-3 py-2" id="neutralPercent">
+                <span class="badge badge-neutral px-3 py-2" id="neutralPercent">
                     <i class="fas fa-spinner fa-spin"></i> Cargando...
                 </span>
             </div>
@@ -391,7 +391,7 @@ async function cargarTopApps() {
                     <small class="text-muted">${app.porcentaje}% del tiempo</small>
                 </td>
                 <td>
-                    <span class="badge badge-${getColorCategoria(app.categoria)} text-dark">
+                    <span class="badge badge-${app.categoria} px-3 py-2">
                         ${capitalizar(app.categoria)}
                     </span>
                 </td>

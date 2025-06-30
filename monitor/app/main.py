@@ -21,6 +21,7 @@ except ImportError:
     import win32gui
     import win32process
 
+
 class ProductivityMonitor:
     def __init__(self):
         self.config = {}
@@ -158,7 +159,7 @@ class ProductivityMonitor:
         self.tree.heading('category', text='Categoría')
         self.tree.heading('synced', text='Sincronizado')
 
-        self.tree.column('fecha', width=150)  # Aumentado el ancho para fecha
+        self.tree.column('fecha', width=150)
         self.tree.column('app', width=120)
         self.tree.column('title', width=200)
         self.tree.column('duration', width=80)
@@ -206,16 +207,10 @@ class ProductivityMonitor:
 
         for attempt in range(1, max_retries + 1):
             try:
-                print(
-                    f"\n🔧 Intento {attempt} de cargar configuración desde {self.config_url}")
-                print(
-                    f"🔑 Token usado (primeros 50 chars): {self.token[:50]}...")
-
                 headers = {
                     'Authorization': f'Bearer {self.token}',
                     'Accept': 'application/json'
                 }
-                print(f"📨 Headers enviados: {headers}")
 
                 response = requests.get(
                     self.config_url,
@@ -223,15 +218,10 @@ class ProductivityMonitor:
                     timeout=10
                 )
 
-                print(
-                    f"📡 Respuesta del servidor - Código: {response.status_code}")
-                print(f"📄 Contenido de respuesta: {response.text[:200]}...")
-
                 if response.status_code == 401:
                     error_msg = "Token inválido o expirado"
                     if attempt == max_retries:
                         raise Exception(error_msg)
-                    print(f"⚠️ {error_msg} - Reintentando...")
                     time.sleep(retry_delay)
                     continue
 
@@ -260,22 +250,15 @@ class ProductivityMonitor:
                     raise Exception(
                         "Configuración recibida no es válida o está incompleta")
 
-                print("✅ Configuración cargada exitosamente desde el servidor")
-                print(
-                    f"📊 Apps productivas: {len(self.config.get('apps_productivas', []))}")
-                print(
-                    f"📊 Apps distractoras: {len(self.config.get('apps_distractoras', []))}")
                 return True
 
             except requests.exceptions.RequestException as e:
                 last_error = f"Error de conexión: {str(e)}"
-                print(f"⚠️ {last_error} - Reintentando...")
                 if attempt == max_retries:
                     break
                 time.sleep(retry_delay)
             except Exception as e:
                 last_error = str(e)
-                print(f"⚠️ {last_error} - Reintentando...")
                 if attempt == max_retries:
                     break
                 time.sleep(retry_delay)
@@ -286,51 +269,37 @@ class ProductivityMonitor:
     def categorize_app(self, app_info):
         """Categorizar aplicación con mejor manejo de errores"""
         if not self.has_valid_config():
-            print("⚠️ No hay configuración válida disponible - Usando categoría neutral")
             return 'neutral'
 
         app_name = app_info['app'].lower()
         window_title = app_info['title'].lower()
 
-        print(
-            f"\n🔍 Categorizando aplicación: {app_name} - Título: {window_title}")
-
         try:
-            # Obtener listas desde configuración
             apps_productivas = [app.lower()
                                 for app in self.config.get('apps_productivas', [])]
             apps_distractoras = [app.lower()
                                  for app in self.config.get('apps_distractoras', [])]
 
-            # Buscar coincidencias en nombre de aplicación
             for app_pattern in apps_productivas:
                 if app_pattern in app_name or app_name in app_pattern:
-                    print(f"  ✅ Coincidencia productiva (app): {app_pattern}")
                     return 'productiva'
 
             for app_pattern in apps_distractoras:
                 if app_pattern in app_name or app_name in app_pattern:
-                    print(f"  ❌ Coincidencia distractora (app): {app_pattern}")
                     return 'distractora'
 
-            # Buscar coincidencias en título de ventana
             for app_pattern in apps_productivas:
                 if app_pattern in window_title:
-                    print(
-                        f"  ✅ Coincidencia productiva (título): {app_pattern}")
                     return 'productiva'
 
             for app_pattern in apps_distractoras:
                 if app_pattern in window_title:
-                    print(
-                        f"  ❌ Coincidencia distractora (título): {app_pattern}")
                     return 'distractora'
 
-            print("  🔄 Sin coincidencias, categoría neutral")
             return 'neutral'
 
         except Exception as e:
-            print(f"⚠️ Error al categorizar aplicación: {e}")
+            print(f"Error categorizando aplicación: {e}")
             return 'neutral'
 
     def get_category_color(self, category):
@@ -362,7 +331,6 @@ class ProductivityMonitor:
                 self.login_success()
                 self.status_var.set("Sesión restaurada automáticamente")
                 self.start_work_status_monitor()
-                print(f"Auto-login exitoso para usuario: {result[0]}")
 
         except Exception as e:
             print(f"Error en auto_login: {e}")
@@ -377,16 +345,11 @@ class ProductivityMonitor:
             return
 
         try:
-            print(f"Intentando login en: {self.login_url}")
-
             response = requests.post(
                 self.login_url,
                 json={'usuario': username, 'password': password},
                 timeout=10
             )
-
-            print(f"Login response status: {response.status_code}")
-            print(f"Login response: {response.text}")
 
             if response.status_code == 200:
                 data = response.json()
@@ -397,9 +360,6 @@ class ProductivityMonitor:
                     if not self.user_data:
                         raise Exception(
                             "Datos de usuario no recibidos del servidor")
-
-                    print(f"🔍 Token completo: {self.token}")
-                    print(f"🔍 Datos usuario: {self.user_data}")
 
                     self.save_credentials()
                     self.login_success()
@@ -446,7 +406,6 @@ class ProductivityMonitor:
     def login_success(self):
         """Manejar inicio de sesión exitoso con mejor manejo de errores"""
         try:
-            # Intentar cargar configuración
             try:
                 if not self.load_config_from_server():
                     raise Exception(
@@ -458,10 +417,8 @@ class ProductivityMonitor:
                     f"Inicio de sesión exitoso, pero no se pudo cargar configuración: {str(e)}\n"
                     "Algunas funciones pueden no estar disponibles."
                 )
-                # No hacemos logout aquí, permitimos continuar con sesión pero sin configuración
                 self.config = {}
 
-            # Actualizar UI
             nombre = self.user_data.get(
                 'nombre') if self.user_data else self.username_entry.get()
             self.status_label.config(text=f"Conectado: {nombre}")
@@ -473,14 +430,12 @@ class ProductivityMonitor:
             self.password_entry.config(state=tk.DISABLED)
             self.status_var.set("Conectado - Listo para monitorear")
 
-            # Iniciar temporizador para refrescar configuración
             self.start_config_refresh_timer()
 
         except Exception as e:
             print(f"Error crítico en login_success: {e}")
             messagebox.showerror(
                 "Error", f"No se pudo completar el inicio de sesión: {str(e)}")
-            # No hacemos logout automático aquí, dejamos que el usuario decida
 
     def start_config_refresh_timer(self):
         """Recargar configuración periódicamente con manejo de errores"""
@@ -488,14 +443,11 @@ class ProductivityMonitor:
             retry_count = 0
             while self.token:
                 try:
-                    time.sleep(300)  # Cada 5 minutos
+                    time.sleep(300)
                     if not self.load_config_from_server():
                         retry_count += 1
                         if retry_count > 3:
-                            print(
-                                "ADVERTENCIA: No se puede cargar configuración después de 3 intentos")
                             retry_count = 0
-                            # Esperar 10 minutos antes de reintentar
                             time.sleep(600)
                 except Exception as e:
                     print(f"Error al refrescar configuración: {e}")
@@ -514,7 +466,6 @@ class ProductivityMonitor:
             cursor.execute('DELETE FROM saved_credentials')
             conn.commit()
             conn.close()
-            print("Credenciales eliminadas del almacenamiento local")
         except Exception as e:
             print(f"Error eliminando credenciales: {e}")
 
@@ -579,7 +530,7 @@ class ProductivityMonitor:
                             self.stop_monitoring()
                             self.status_var.set("Monitoreo pausado - En break")
 
-                    else:  # sin_iniciar, finalizada
+                    else:
                         self.work_status_label.config(
                             text="🔴 JORNADA NO ACTIVA", foreground="red")
                         if self.monitoring_active:
@@ -620,14 +571,12 @@ class ProductivityMonitor:
 
     def format_datetime(self, timestamp):
         try:
-            # Intentar parsear formato ISO
             try:
                 dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
                 return dt.strftime('%d/%m/%Y %H:%M')
             except ValueError:
                 pass
 
-            # Intentar otros formatos comunes
             formats = [
                 '%Y-%m-%d %H:%M:%S',
                 '%Y-%m-%dT%H:%M:%S',
@@ -641,11 +590,10 @@ class ProductivityMonitor:
                 except ValueError:
                     continue
 
-            # Fallback: usar los primeros 16 caracteres
             return timestamp[:16]
         except Exception as e:
             print(f"Error formateando fecha {timestamp}: {e}")
-            return timestamp[:16]  # Fallback para formato no reconocido
+            return timestamp[:16]
 
     def record_activity(self, app_info):
         now = datetime.now()
@@ -673,7 +621,7 @@ class ProductivityMonitor:
                 'app': app_info["app"],
                 'title': app_info["title"],
                 'timestamp': now.isoformat(),
-                'duration': self.config.get('intervalo_monitor', 10) if self.has_valid_config() else 10,
+                'duration': self.config.get('intervalo', 10) if self.has_valid_config() else 10,
                 'category': category
             }
             self.save_activity_to_db(self.current_activity)
@@ -727,7 +675,7 @@ class ProductivityMonitor:
         min_duration = self.config.get(
             'duracion_minima_actividad', 5) if self.has_valid_config() else 5
         if self.current_activity["duration"] < min_duration:
-            return  # No registrar actividades muy cortas
+            return
 
         category_color = self.get_category_color(
             self.current_activity["category"])
@@ -803,8 +751,6 @@ class ProductivityMonitor:
             return
 
         try:
-            print(f"Iniciando sincronización con token: {self.token[:50]}...")
-
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
@@ -822,8 +768,6 @@ class ProductivityMonitor:
                 messagebox.showinfo(
                     "Información", "No hay datos pendientes de sincronización")
                 return
-
-            print(f"URL para sincronización: {self.activity_url}")
 
             synced_count = 0
             failed_count = 0
@@ -941,7 +885,6 @@ class ProductivityMonitor:
                             failed_count += 1
 
                     elif response.status_code == 401:
-                        print("Token inválido o expirado")
                         messagebox.showwarning(
                             "Advertencia", "Sesión expirada. Por favor, inicie sesión nuevamente.")
                         self.logout()
@@ -1004,7 +947,6 @@ class ProductivityMonitor:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            # Eliminar registros sincronizados más antiguos que 30 días
             cutoff_date = (datetime.now() - timedelta(days=30)).isoformat()
             cursor.execute('''
                 DELETE FROM activities 
@@ -1093,9 +1035,11 @@ class ProductivityMonitor:
 
         self.root.destroy()
 
+
 def main():
     monitor = ProductivityMonitor()
     monitor.root.mainloop()
+
 
 if __name__ == "__main__":
     main()

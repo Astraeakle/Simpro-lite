@@ -2,11 +2,13 @@
 // File: web/includes/footer.php
 ?>
 <!-- Footer -->
-<footer class="footer mt-auto py-3 bg-light">
+<footer class="footer mt-auto py-3 custom-footer">
     <div class="container">
         <div class="row">
             <div class="col-md-6">
-                <span class="text-muted">SimPro Lite &copy; <?php echo date('Y'); ?> - Sistema de Monitoreo de Productividad</span>
+                <span class="text-muted">SimPro Lite &copy;
+                    <?php echo htmlspecialchars(date('Y'), ENT_QUOTES, 'UTF-8'); ?> - Sistema de Monitoreo de
+                    Productividad</span>
             </div>
             <div class="col-md-6 text-end">
                 <span class="text-muted">Versión 1.0.0</span>
@@ -23,7 +25,6 @@
 
 <!-- Scripts propios -->
 <script src="/simpro-lite/web/assets/js/auth.js"></script>
-
-</script>
 </body>
+
 </html>
