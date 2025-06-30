@@ -169,7 +169,6 @@ INSERT INTO configuracion(clave, valor, descripcion) VALUES
 DELIMITER ;;
 
 -- Procedimiento para actualizar un usuario
--- Procedimiento para actualizar un usuario
 CREATE PROCEDURE `sp_actualizar_usuario`(
     IN p_id_usuario INT,
     IN p_campos JSON,
@@ -601,10 +600,14 @@ BEGIN
 END ;;
 
 -- Procedimiento para obtener empleados asignados a un supervisor
-CREATE PROCEDURE `sp_obtener_empleados_supervisor`(
+CREATE PROCEDURE sp_obtener_empleados_supervisor(
     IN p_supervisor_id INT
 )
 BEGIN
+    -- Calculamos el rango del mes actual
+    DECLARE fecha_inicio_mes DATE DEFAULT DATE_FORMAT(NOW(), '%Y-%m-01');
+    DECLARE fecha_fin_mes DATE DEFAULT LAST_DAY(NOW());
+    
     SELECT 
         u.id_usuario,
         u.nombre_usuario,
@@ -614,26 +617,32 @@ BEGIN
         u.fecha_creacion,
         u.ultimo_acceso,
         u.estado,
-        -- Estadísticas básicas de actividad (últimos 30 días)
+        
+        -- Tiempo total del mes actual
         COALESCE(
-            (SELECT SEC_TO_TIME(SUM(tiempo_segundos))
+            (SELECT SEC_TO_TIME(SUM(aa.tiempo_segundos))
              FROM actividad_apps aa
              WHERE aa.id_usuario = u.id_usuario
-             AND aa.fecha_hora_inicio >= DATE_SUB(NOW(), INTERVAL 30 DAY)), 
+             AND DATE(aa.fecha_hora_inicio) BETWEEN fecha_inicio_mes AND fecha_fin_mes), 
             '00:00:00'
         ) AS tiempo_total_mes,
+        
+        -- Días activos del mes actual
         COALESCE(
-            (SELECT COUNT(DISTINCT DATE(fecha_hora_inicio))
+            (SELECT COUNT(DISTINCT DATE(aa.fecha_hora_inicio))
              FROM actividad_apps aa
              WHERE aa.id_usuario = u.id_usuario
-             AND aa.fecha_hora_inicio >= DATE_SUB(NOW(), INTERVAL 30 DAY)),
+             AND DATE(aa.fecha_hora_inicio) BETWEEN fecha_inicio_mes AND fecha_fin_mes),
             0
         ) AS dias_activos_mes
+        
     FROM usuarios u
     WHERE u.supervisor_id = p_supervisor_id
     AND u.rol = 'empleado'
+    AND u.estado = 'activo'
     ORDER BY u.nombre_completo;
-END ;;
+END;
+//
 
 -- Procedimiento para asignar empleado a supervisor
 CREATE PROCEDURE `sp_asignar_empleado_supervisor`(
@@ -752,7 +761,7 @@ BEGIN
 END ;;
 
 -- Procedimiento para obtener estadísticas del equipo de un supervisor
-CREATE PROCEDURE `sp_estadisticas_equipo_supervisor`(
+CREATE PROCEDURE sp_estadisticas_equipo_supervisor(
     IN p_supervisor_id INT,
     IN p_fecha_inicio DATE,
     IN p_fecha_fin DATE
@@ -760,40 +769,43 @@ CREATE PROCEDURE `sp_estadisticas_equipo_supervisor`(
 BEGIN
     SELECT 
         -- Datos básicos del equipo
-        COUNT(u.id_usuario) as total_empleados,
-        SUM(CASE WHEN u.estado = 'activo' THEN 1 ELSE 0 END) as empleados_activos,
+        COUNT(u.id_usuario) AS total_empleados,
+        COUNT(u.id_usuario) AS empleados_activos,
         
-        -- Estadísticas de actividad
-        SEC_TO_TIME(COALESCE(SUM(aa.tiempo_total), 0)) as tiempo_total_equipo,
-        ROUND(COALESCE(AVG(aa.tiempo_total), 0) / 3600, 2) as promedio_horas_empleado,
+        -- Tiempo total del equipo en el período
+        COALESCE(
+            (SELECT SEC_TO_TIME(SUM(aa.tiempo_segundos))
+             FROM actividad_apps aa
+             INNER JOIN usuarios emp ON aa.id_usuario = emp.id_usuario
+             WHERE emp.supervisor_id = p_supervisor_id
+             AND emp.rol = 'empleado'
+             AND emp.estado = 'activo'
+             AND DATE(aa.fecha_hora_inicio) BETWEEN p_fecha_inicio AND p_fecha_fin),
+            '00:00:00'
+        ) AS tiempo_total_equipo,
         
-        -- Productividad
-        ROUND(
-            COALESCE(
-                SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_total ELSE 0 END) / 
-                GREATEST(SUM(aa.tiempo_total), 1) * 100,
-                0
-            ), 2
-        ) as porcentaje_productivo_equipo,
-        
-        -- Días trabajados
-        COALESCE(MAX(aa.dias_trabajados), 0) as max_dias_trabajados,
-        ROUND(COALESCE(AVG(aa.dias_trabajados), 0), 1) as promedio_dias_trabajados
+        -- Porcentaje de productividad del equipo
+        COALESCE(
+            (SELECT ROUND(
+                SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END) * 100.0 / 
+                GREATEST(SUM(aa.tiempo_segundos), 1), 2
+            )
+             FROM actividad_apps aa
+             INNER JOIN usuarios emp ON aa.id_usuario = emp.id_usuario
+             WHERE emp.supervisor_id = p_supervisor_id
+             AND emp.rol = 'empleado'
+             AND emp.estado = 'activo'
+             AND DATE(aa.fecha_hora_inicio) BETWEEN p_fecha_inicio AND p_fecha_fin),
+            0
+        ) AS porcentaje_productivo_equipo
         
     FROM usuarios u
-    LEFT JOIN (
-        SELECT 
-            id_usuario,
-            SUM(tiempo_segundos) as tiempo_total,
-            COUNT(DISTINCT DATE(fecha_hora_inicio)) as dias_trabajados,
-            categoria
-        FROM actividad_apps
-        WHERE DATE(fecha_hora_inicio) BETWEEN p_fecha_inicio AND p_fecha_fin
-        GROUP BY id_usuario, categoria
-    ) aa ON u.id_usuario = aa.id_usuario
     WHERE u.supervisor_id = p_supervisor_id
-    AND u.rol = 'empleado';
-END ;;
+    AND u.rol = 'empleado'
+    AND u.estado = 'activo';
+END;
+
+//
 
 -- Procedimiento para crear solicitud de cambio (para empleados de otro area)
 CREATE PROCEDURE `sp_crear_solicitud_cambio`(
