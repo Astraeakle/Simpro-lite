@@ -29,6 +29,7 @@ class SecurityMiddleware {
         } else {
             error_log("No se encontró Authorization header válido");
         }
+        
         if (isset($_COOKIE['user_data'])) {
             $userData = json_decode($_COOKIE['user_data'], true);
             if (isset($userData['id']) && !empty($userData['id'])) {
@@ -42,6 +43,7 @@ class SecurityMiddleware {
                         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
                     );
                     
+                    // CORREGIDO: usar nombres de columnas correctos
                     $stmt = $pdo->prepare("SELECT id_usuario, nombre_completo, rol FROM usuarios WHERE id_usuario = ? AND estado = 'activo'");
                     $stmt->execute([$userData['id']]);
                     $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -60,6 +62,7 @@ class SecurityMiddleware {
         }        
         return null;
     }
+    
     private function getAuthorizationHeader() {
         $headers = null;
         
@@ -94,6 +97,7 @@ class SecurityMiddleware {
         return null;
     }
 }
+
 function verificarAutenticacion() {
     try {
         if (class_exists('JWT')) {
@@ -117,6 +121,7 @@ function verificarAutenticacion() {
                 // Verificar usuario en base de datos
                 $pdo = obtenerConexionBD();
                 if ($pdo) {
+                    // CORREGIDO: usar nombres de columnas correctos y columna 'estado'
                     $stmt = $pdo->prepare("SELECT id_usuario, nombre_completo, rol, area FROM usuarios WHERE id_usuario = ? AND estado = 'activo'");
                     $stmt->execute([$userData['id']]);
                     $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -173,6 +178,7 @@ function sendJsonResponse($data, $statusCode = 200) {
     echo json_encode($data, JSON_PRETTY_PRINT);
     exit();
 }
+
 function sendError($message, $code = 400) {
     sendJsonResponse([
         'success' => false,
@@ -180,6 +186,7 @@ function sendError($message, $code = 400) {
         'code' => $code
     ], $code);
 }
+
 function sendSuccess($data, $message = 'Operación exitosa') {
     sendJsonResponse([
         'success' => true,

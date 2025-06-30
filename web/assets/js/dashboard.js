@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Hay registros hoy - usar el estado actual
             switch (data.estado) {
                 case 'entrada':
-                    estadoTexto = '✅ En jornada laboral';
+                    estadoTexto = 'En jornada laboral';
                     mostrarBotones(['break', 'salida']);
                     break;
                 case 'break':
@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     mostrarBotones(['finBreak']);
                     break;
                 case 'fin_break':
-                    estadoTexto = '✅ En jornada laboral (break finalizado)';
+                    estadoTexto = 'En jornada laboral (break finalizado)';
                     mostrarBotones(['break', 'salida']);
                     break;
                 case 'salida':

@@ -48,16 +48,16 @@ class ProductivityMonitor:
             "apps_productivas": [],
             "apps_distractoras": []
         }
-    
+
     def load_server_config(self):
         if not self.token:
-            print("❌ No hay token para obtener configuración del servidor")
+            print("No hay token para obtener configuración del servidor")
             return False
 
         try:
             config_url = self.config.get('config_url')
             if not config_url:
-                print("❌ URL de configuración no definida")
+                print("URL de configuración no definida")
                 return False
             print(f"🔧 Obteniendo configuración desde: {config_url}")
             response = requests.get(
@@ -109,7 +109,7 @@ class ProductivityMonitor:
 
                         self.config_loaded_from_server = True
 
-                        print(f"✅ Configuración COMPLETA cargada desde servidor:")
+                        print(f"Configuración COMPLETA cargada desde servidor:")
                         print(f"   - Intervalo: {self.config['intervalo']}s")
                         print(
                             f"   - Duración mínima: {self.config['duracion_minima_actividad']}s")
@@ -124,12 +124,12 @@ class ProductivityMonitor:
 
                         return True
                     else:
-                        print(f"❌ Error en respuesta de configuración: {data}")
+                        print(f"Error en respuesta de configuración: {data}")
                         return False
 
                 except json.JSONDecodeError as e:
-                    print(f"❌ Error parseando JSON de configuración: {e}")
-                    print(f"❌ Respuesta recibida: {response.text}")
+                    print(f"Error parseando JSON de configuración: {e}")
+                    print(f"Respuesta recibida: {response.text}")
                     return False
 
             elif response.status_code == 404:
@@ -140,15 +140,15 @@ class ProductivityMonitor:
                 return False
             else:
                 print(
-                    f"❌ Error HTTP obteniendo configuración: {response.status_code}")
-                print(f"❌ Respuesta: {response.text}")
+                    f"Error HTTP obteniendo configuración: {response.status_code}")
+                print(f"Respuesta: {response.text}")
                 return False
 
         except requests.exceptions.RequestException as e:
             print(f"⚠️ Error de conexión obteniendo configuración: {e}")
             return False
         except Exception as e:
-            print(f"❌ Error inesperado obteniendo configuración: {e}")
+            print(f"Error inesperado obteniendo configuración: {e}")
             return False
         """Obtener configuración desde el servidor - FIXED"""
         if not self.token:
@@ -195,7 +195,7 @@ class ProductivityMonitor:
                         'apps_distractoras': server_config.get('apps_distractoras', self.config.get('apps_distractoras', []))
                     })
 
-                    print(f"✅ Configuración actualizada desde servidor:")
+                    print(f"Configuración actualizada desde servidor:")
                     print(f"   - Intervalo: {self.config['intervalo']}s")
                     print(
                         f"   - Duración mínima: {self.config['duracion_minima_actividad']}s")
@@ -206,7 +206,7 @@ class ProductivityMonitor:
 
                     return True
                 else:
-                    print(f"❌ Error en respuesta de configuración: {data}")
+                    print(f"Error en respuesta de configuración: {data}")
                     return False
             elif response.status_code == 404:
                 print(
@@ -214,14 +214,14 @@ class ProductivityMonitor:
                 return False
             else:
                 print(
-                    f"❌ Error HTTP obteniendo configuración: {response.status_code}")
+                    f"Error HTTP obteniendo configuración: {response.status_code}")
                 return False
 
         except requests.exceptions.RequestException as e:
             print(f"⚠️ Error de conexión obteniendo configuración: {e}")
             return False
         except Exception as e:
-            print(f"❌ Error inesperado obteniendo configuración: {e}")
+            print(f"Error inesperado obteniendo configuración: {e}")
             return False
 
     def setup_db(self):
@@ -954,8 +954,8 @@ class ProductivityMonitor:
                         timeout=15
                     )
 
-                    print(f"📥 Status: {response.status_code}")
-                    print(f"📥 Response: {response.text}")
+                    print(f"Status: {response.status_code}")
+                    print(f"Response: {response.text}")
 
                     if response.status_code == 200:
                         try:
@@ -967,18 +967,18 @@ class ProductivityMonitor:
                                 )
                                 synced_count += 1
                                 print(
-                                    f"✅ Actividad {activity[0]} sincronizada exitosamente")
+                                    f"Actividad {activity[0]} sincronizada exitosamente")
                             else:
                                 failed_count += 1
                                 error_msg = data.get(
                                     'error', 'Error desconocido')
                                 print(
-                                    f"❌ Error en respuesta para actividad {activity[0]}: {error_msg}")
+                                    f"Error en respuesta para actividad {activity[0]}: {error_msg}")
 
                         except json.JSONDecodeError:
                             failed_count += 1
                             print(
-                                f"❌ Respuesta no JSON para actividad {activity[0]}: {response.text}")
+                                f"Respuesta no JSON para actividad {activity[0]}: {response.text}")
 
                     elif response.status_code == 401:
                         print("🔒 Token inválido o expirado")
@@ -994,7 +994,7 @@ class ProductivityMonitor:
                             error_data = response.json()
                             error_detail = error_data.get('error', '')
                             print(
-                                f"❌ Error 400 para actividad {activity[0]}: {error_detail}")
+                                f"Error 400 para actividad {activity[0]}: {error_detail}")
 
                             # Si es error de validación, marcar como problemática para no reintentar
                             if 'requerido' in error_detail.lower() or 'inválido' in error_detail.lower():
@@ -1006,12 +1006,12 @@ class ProductivityMonitor:
                                 )
                         except:
                             print(
-                                f"❌ Error 400 para actividad {activity[0]}: {response.text}")
+                                f"Error 400 para actividad {activity[0]}: {response.text}")
 
                     elif response.status_code == 500:
                         failed_count += 1
                         print(
-                            f"❌ Error 500 del servidor para actividad {activity[0]}")
+                            f"Error 500 del servidor para actividad {activity[0]}")
                         try:
                             error_data = response.json()
                             error_detail = error_data.get('error', '')
@@ -1030,11 +1030,11 @@ class ProductivityMonitor:
                     else:
                         failed_count += 1
                         print(
-                            f"❌ Error HTTP {response.status_code} para actividad {activity[0]}: {response.text}")
+                            f"Error HTTP {response.status_code} para actividad {activity[0]}: {response.text}")
 
                 except Exception as e:
                     failed_count += 1
-                    print(f"❌ Error procesando actividad {activity[0]}: {e}")
+                    print(f"Error procesando actividad {activity[0]}: {e}")
                     import traceback
                     print(f"   Stack trace: {traceback.format_exc()}")
                     continue
@@ -1050,14 +1050,14 @@ class ProductivityMonitor:
             # Mensaje final
             total_activities = len(activities)
             if synced_count > 0:
-                message = f"✅ Sincronización completada:\n"
+                message = f"Sincronización completada:\n"
                 message += f"   • Exitosas: {synced_count}/{total_activities}\n"
                 if failed_count > 0:
                     message += f"   • Fallidas: {failed_count}\n"
                     message += f"\n💡 Revise los logs de la consola para detalles"
                 messagebox.showinfo("Sincronización Exitosa", message)
             else:
-                message = f"❌ Sincronización fallida:\n"
+                message = f"Sincronización fallida:\n"
                 message += f"   • Total intentadas: {total_activities}\n"
                 message += f"   • Exitosas: 0\n"
                 message += f"   • Fallidas: {failed_count}\n\n"
@@ -1111,13 +1111,13 @@ class ProductivityMonitor:
             print(f"🧪 Respuesta - Texto: {response.text}")
 
             if response.status_code == 200:
-                print("✅ Prueba exitosa - La API funciona correctamente")
+                print("Prueba exitosa - La API funciona correctamente")
                 messagebox.showinfo(
-                    "Prueba API", "✅ Prueba exitosa\nLa API funciona correctamente")
+                    "Prueba API", "Prueba exitosa\nLa API funciona correctamente")
             else:
-                print("❌ Prueba fallida - Hay problemas con la API")
+                print("Prueba fallida - Hay problemas con la API")
                 messagebox.showerror(
-                    "Prueba API", f"❌ Prueba fallida\nStatus: {response.status_code}\nError: {response.text}")
+                    "Prueba API", f"Prueba fallida\nStatus: {response.status_code}\nError: {response.text}")
 
         except Exception as e:
             print(f"💥 Error en prueba: {e}")
