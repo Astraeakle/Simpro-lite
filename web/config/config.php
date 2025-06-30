@@ -18,7 +18,6 @@ define('TIMEZONE', 'America/Lima');
 // Configuración CORS
 $config['cors_allowed_origins'] = [
     'http://localhost',
-    'https://tudominio.com'
 ];
 
 // Configuración de logs
