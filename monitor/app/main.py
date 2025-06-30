@@ -9,7 +9,7 @@ import tkinter as tk
 import requests
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from tkinter import ttk, messagebox
 
 try:
@@ -21,208 +21,23 @@ except ImportError:
     import win32gui
     import win32process
 
-
 class ProductivityMonitor:
     def __init__(self):
-        self.config = self.get_minimal_config()
+        self.config = {}
+        self.base_url = "http://localhost/simpro-lite/api/v1"
+        self.login_url = f"{self.base_url}/autenticar.php"
+        self.config_url = f"{self.base_url}/api_config.php"
+        self.activity_url = f"{self.base_url}/actividad.php"
+        self.estado_url = f"{self.base_url}/estado_jornada.php"
         self.running = False
         self.monitoring_active = False
         self.current_activity = None
         self.session_id = str(uuid.uuid4())
         self.token = None
         self.user_data = None
-        self.activity_start_time = None
-        self.config_loaded_from_server = False
         self.setup_db()
         self.create_ui()
         self.auto_login()
-
-    def get_minimal_config(self):
-        return {
-            "api_url": "http://localhost/simpro-lite/api/v1",
-            "login_url": "http://localhost/simpro-lite/api/v1/autenticar.php",
-            "config_url": "http://localhost/simpro-lite/api/v1/api_config.php",
-            # Valores por defecto temporales hasta cargar desde servidor
-            "intervalo": 10,
-            "duracion_minima_actividad": 1,
-            "apps_productivas": [],
-            "apps_distractoras": []
-        }
-
-    def load_server_config(self):
-        if not self.token:
-            print("No hay token para obtener configuración del servidor")
-            return False
-
-        try:
-            config_url = self.config.get('config_url')
-            if not config_url:
-                print("URL de configuración no definida")
-                return False
-            print(f"🔧 Obteniendo configuración desde: {config_url}")
-            response = requests.get(
-                config_url,
-                headers={'Authorization': f'Bearer {self.token}'},
-                timeout=15
-            )
-
-            print(f"🔧 Status de configuración: {response.status_code}")
-
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    print(
-                        f"🔧 Respuesta configuración: {json.dumps(data, indent=2)}")
-
-                    if data.get('success'):
-                        server_config = data.get('config', {})
-
-                        if not server_config:
-                            print("⚠️ Configuración del servidor está vacía")
-                            return False
-
-                        # 🆕 REEMPLAZAR TODA la configuración con la del servidor
-                        self.config = {
-                            # URLs base
-                            'api_url': server_config.get('api_url', self.config.get('api_url')),
-                            'login_url': server_config.get('login_url', self.config.get('login_url')),
-                            'activity_url': server_config.get('activity_url', f"{self.config.get('api_url')}/actividad.php"),
-                            'config_url': server_config.get('config_url', self.config.get('config_url')),
-                            'estado_jornada_url': server_config.get('estado_jornada_url', f"{self.config.get('api_url')}/estado_jornada.php"),
-                            'verificar_tabla_url': server_config.get('verificar_tabla_url', f"{self.config.get('api_url')}/verificar_tabla.php"),
-
-                            # Configuración numérica
-                            'intervalo': server_config.get('intervalo', 10),
-                            'duracion_minima_actividad': server_config.get('duracion_minima_actividad', 5),
-                            'token_expiration_hours': server_config.get('token_expiration_hours', 12),
-                            'max_actividades_pendientes': server_config.get('max_actividades_pendientes', 100),
-                            'auto_sync_interval': server_config.get('auto_sync_interval', 300),
-                            'max_title_length': server_config.get('max_title_length', 255),
-                            'max_appname_length': server_config.get('max_appname_length', 100),
-                            'min_sync_duration': server_config.get('min_sync_duration', 5),
-                            'sync_retry_attempts': server_config.get('sync_retry_attempts', 3),
-
-                            # Arrays de aplicaciones
-                            'apps_productivas': server_config.get('apps_productivas', []),
-                            'apps_distractoras': server_config.get('apps_distractoras', [])
-                        }
-
-                        self.config_loaded_from_server = True
-
-                        print(f"Configuración COMPLETA cargada desde servidor:")
-                        print(f"   - Intervalo: {self.config['intervalo']}s")
-                        print(
-                            f"   - Duración mínima: {self.config['duracion_minima_actividad']}s")
-                        print(
-                            f"   - Apps productivas: {len(self.config['apps_productivas'])}")
-                        print(
-                            f"   - Apps distractoras: {len(self.config['apps_distractoras'])}")
-                        print(
-                            f"   - Token expiration: {self.config['token_expiration_hours']}h")
-                        print(
-                            f"   - Auto sync: {self.config['auto_sync_interval']}s")
-
-                        return True
-                    else:
-                        print(f"Error en respuesta de configuración: {data}")
-                        return False
-
-                except json.JSONDecodeError as e:
-                    print(f"Error parseando JSON de configuración: {e}")
-                    print(f"Respuesta recibida: {response.text}")
-                    return False
-
-            elif response.status_code == 404:
-                print("⚠️ Endpoint de configuración no encontrado")
-                return False
-            elif response.status_code == 401:
-                print("🔒 Token inválido para obtener configuración")
-                return False
-            else:
-                print(
-                    f"Error HTTP obteniendo configuración: {response.status_code}")
-                print(f"Respuesta: {response.text}")
-                return False
-
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ Error de conexión obteniendo configuración: {e}")
-            return False
-        except Exception as e:
-            print(f"Error inesperado obteniendo configuración: {e}")
-            return False
-        """Obtener configuración desde el servidor - FIXED"""
-        if not self.token:
-            print("No hay token para obtener configuración del servidor")
-            return False
-
-        try:
-            config_url = self.config.get(
-                'config_url', f"{self.config['api_url']}/api_config.php")
-
-            print(f"🔧 Obteniendo configuración desde: {config_url}")
-
-            response = requests.get(
-                config_url,
-                headers={'Authorization': f'Bearer {self.token}'},
-                timeout=10
-            )
-
-            print(f"🔧 Status de configuración: {response.status_code}")
-            print(f"🔧 Respuesta configuración: {response.text}")
-
-            if response.status_code == 200:
-                # Verificar si la respuesta es JSON válido
-                response_text = response.text.strip()
-                if not response_text:
-                    print("⚠️ Respuesta vacía del servidor de configuración")
-                    return False
-
-                try:
-                    data = response.json()
-                except json.JSONDecodeError as e:
-                    print(f"⚠️ Error parseando JSON de configuración: {e}")
-                    print(f"⚠️ Respuesta recibida: {response_text}")
-                    return False
-
-                if data.get('success'):
-                    server_config = data.get('config', {})
-
-                    # Actualizar configuración local con la del servidor
-                    self.config.update({
-                        'intervalo': server_config.get('intervalo', self.config.get('intervalo', 10)),
-                        'duracion_minima_actividad': server_config.get('duracion_minima_actividad', 5),
-                        'apps_productivas': server_config.get('apps_productivas', self.config.get('apps_productivas', [])),
-                        'apps_distractoras': server_config.get('apps_distractoras', self.config.get('apps_distractoras', []))
-                    })
-
-                    print(f"Configuración actualizada desde servidor:")
-                    print(f"   - Intervalo: {self.config['intervalo']}s")
-                    print(
-                        f"   - Duración mínima: {self.config['duracion_minima_actividad']}s")
-                    print(
-                        f"   - Apps productivas: {len(self.config['apps_productivas'])}")
-                    print(
-                        f"   - Apps distractoras: {len(self.config['apps_distractoras'])}")
-
-                    return True
-                else:
-                    print(f"Error en respuesta de configuración: {data}")
-                    return False
-            elif response.status_code == 404:
-                print(
-                    "⚠️ Endpoint de configuración no encontrado, usando configuración local")
-                return False
-            else:
-                print(
-                    f"Error HTTP obteniendo configuración: {response.status_code}")
-                return False
-
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ Error de conexión obteniendo configuración: {e}")
-            return False
-        except Exception as e:
-            print(f"Error inesperado obteniendo configuración: {e}")
-            return False
 
     def setup_db(self):
         db_dir = os.path.join(os.path.dirname(
@@ -235,7 +50,6 @@ class ProductivityMonitor:
 
         cursor.execute("PRAGMA table_info(activities)")
         columns = [row[1] for row in cursor.fetchall()]
-
         if not columns:
             cursor.execute('''
             CREATE TABLE activities (
@@ -274,7 +88,7 @@ class ProductivityMonitor:
     def create_ui(self):
         self.root = tk.Tk()
         self.root.title("SIMPRO Monitor Lite")
-        self.root.geometry("800x500")
+        self.root.geometry("900x500")
         self.root.resizable(True, True)
 
         main_frame = ttk.Frame(self.root, padding="10")
@@ -329,26 +143,24 @@ class ProductivityMonitor:
             control_frame, text="Finalizar Sesión", command=self.finalize_session, state=tk.DISABLED)
         self.finalize_button.pack(side=tk.LEFT, padx=5)
 
-        self.test_button = ttk.Button(
-            control_frame, text="Probar API", command=self.test_single_activity, state=tk.DISABLED)
-        self.test_button.pack(side=tk.LEFT, padx=5)
-
         table_frame = ttk.LabelFrame(
             main_frame, text="Actividades Recientes", padding="5")
         table_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        columns = ('app', 'title', 'duration', 'category', 'synced')
+        columns = ('fecha', 'app', 'title', 'duration', 'category', 'synced')
         self.tree = ttk.Treeview(
             table_frame, columns=columns, show='headings', height=10)
 
+        self.tree.heading('fecha', text='Fecha')
         self.tree.heading('app', text='Aplicación')
         self.tree.heading('title', text='Título')
         self.tree.heading('duration', text='Duración')
         self.tree.heading('category', text='Categoría')
         self.tree.heading('synced', text='Sincronizado')
 
+        self.tree.column('fecha', width=150)  # Aumentado el ancho para fecha
         self.tree.column('app', width=120)
-        self.tree.column('title', width=250)
+        self.tree.column('title', width=200)
         self.tree.column('duration', width=80)
         self.tree.column('category', width=100)
         self.tree.column('synced', width=80)
@@ -369,13 +181,174 @@ class ProductivityMonitor:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.load_recent_activities()
 
+    def has_valid_config(self):
+        """Verifica si la configuración es válida"""
+        if not self.config:
+            return False
+
+        required_keys = required_keys = [
+            'apps_productivas', 'apps_distractoras', 'intervalo']
+        for key in required_keys:
+            if key not in self.config:
+                return False
+
+        return True
+
+    def load_config_from_server(self):
+        """Cargar configuración desde el servidor con mejor manejo de errores"""
+        if not self.token:
+            raise Exception(
+                "No hay token disponible para cargar configuración")
+
+        max_retries = 3
+        retry_delay = 5  # segundos
+        last_error = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                print(
+                    f"\n🔧 Intento {attempt} de cargar configuración desde {self.config_url}")
+                print(
+                    f"🔑 Token usado (primeros 50 chars): {self.token[:50]}...")
+
+                headers = {
+                    'Authorization': f'Bearer {self.token}',
+                    'Accept': 'application/json'
+                }
+                print(f"📨 Headers enviados: {headers}")
+
+                response = requests.get(
+                    self.config_url,
+                    headers=headers,
+                    timeout=10
+                )
+
+                print(
+                    f"📡 Respuesta del servidor - Código: {response.status_code}")
+                print(f"📄 Contenido de respuesta: {response.text[:200]}...")
+
+                if response.status_code == 401:
+                    error_msg = "Token inválido o expirado"
+                    if attempt == max_retries:
+                        raise Exception(error_msg)
+                    print(f"⚠️ {error_msg} - Reintentando...")
+                    time.sleep(retry_delay)
+                    continue
+
+                if response.status_code != 200:
+                    raise Exception(
+                        f"Error HTTP {response.status_code} al cargar configuración")
+
+                data = response.json()
+                if not isinstance(data, dict):
+                    raise Exception(
+                        "Respuesta del servidor no es un JSON válido")
+
+                if not data.get('success'):
+                    error_msg = data.get(
+                        'error', 'Error desconocido del servidor')
+                    raise Exception(
+                        f"Error en respuesta del servidor: {error_msg}")
+
+                if 'config' not in data:
+                    raise Exception(
+                        "No se encontró configuración en la respuesta")
+
+                self.config = data['config']
+
+                if not self.has_valid_config():
+                    raise Exception(
+                        "Configuración recibida no es válida o está incompleta")
+
+                print("✅ Configuración cargada exitosamente desde el servidor")
+                print(
+                    f"📊 Apps productivas: {len(self.config.get('apps_productivas', []))}")
+                print(
+                    f"📊 Apps distractoras: {len(self.config.get('apps_distractoras', []))}")
+                return True
+
+            except requests.exceptions.RequestException as e:
+                last_error = f"Error de conexión: {str(e)}"
+                print(f"⚠️ {last_error} - Reintentando...")
+                if attempt == max_retries:
+                    break
+                time.sleep(retry_delay)
+            except Exception as e:
+                last_error = str(e)
+                print(f"⚠️ {last_error} - Reintentando...")
+                if attempt == max_retries:
+                    break
+                time.sleep(retry_delay)
+
+        raise Exception(
+            f"No se pudo cargar la configuración después de {max_retries} intentos. Último error: {last_error}")
+
+    def categorize_app(self, app_info):
+        """Categorizar aplicación con mejor manejo de errores"""
+        if not self.has_valid_config():
+            print("⚠️ No hay configuración válida disponible - Usando categoría neutral")
+            return 'neutral'
+
+        app_name = app_info['app'].lower()
+        window_title = app_info['title'].lower()
+
+        print(
+            f"\n🔍 Categorizando aplicación: {app_name} - Título: {window_title}")
+
+        try:
+            # Obtener listas desde configuración
+            apps_productivas = [app.lower()
+                                for app in self.config.get('apps_productivas', [])]
+            apps_distractoras = [app.lower()
+                                 for app in self.config.get('apps_distractoras', [])]
+
+            # Buscar coincidencias en nombre de aplicación
+            for app_pattern in apps_productivas:
+                if app_pattern in app_name or app_name in app_pattern:
+                    print(f"  ✅ Coincidencia productiva (app): {app_pattern}")
+                    return 'productiva'
+
+            for app_pattern in apps_distractoras:
+                if app_pattern in app_name or app_name in app_pattern:
+                    print(f"  ❌ Coincidencia distractora (app): {app_pattern}")
+                    return 'distractora'
+
+            # Buscar coincidencias en título de ventana
+            for app_pattern in apps_productivas:
+                if app_pattern in window_title:
+                    print(
+                        f"  ✅ Coincidencia productiva (título): {app_pattern}")
+                    return 'productiva'
+
+            for app_pattern in apps_distractoras:
+                if app_pattern in window_title:
+                    print(
+                        f"  ❌ Coincidencia distractora (título): {app_pattern}")
+                    return 'distractora'
+
+            print("  🔄 Sin coincidencias, categoría neutral")
+            return 'neutral'
+
+        except Exception as e:
+            print(f"⚠️ Error al categorizar aplicación: {e}")
+            return 'neutral'
+
+    def get_category_color(self, category):
+        """Obtener color según categoría"""
+        colors = {
+            'productiva': 'green',
+            'distractora': 'red',
+            'neutral': 'blue'
+        }
+        return colors.get(category.lower(), 'black')
+
     def auto_login(self):
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT username, token, user_data, expires_at 
-                FROM saved_credentials 
+                SELECT username, token, user_data, expires_at
+                FROM saved_credentials
                 WHERE expires_at > ?
             ''', (int(time.time()),))
 
@@ -394,29 +367,6 @@ class ProductivityMonitor:
         except Exception as e:
             print(f"Error en auto_login: {e}")
 
-    def verify_server_setup(self):
-        """Verificar que el servidor tenga las tablas necesarias"""
-        if not self.token:
-            return False
-
-        try:
-            base_url = self.config.get(
-                'api_url', 'http://localhost/simpro-lite/api/v1')
-            verify_url = f"{base_url}/verificar_tabla.php"
-
-            response = requests.get(
-                verify_url,
-                headers={'Authorization': f'Bearer {self.token}'},
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                return data.get('tabla_existe', False)
-            return False
-        except:
-            return False
-
     def login(self):
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
@@ -427,12 +377,10 @@ class ProductivityMonitor:
             return
 
         try:
-            login_url = self.config.get(
-                'login_url', f"{self.config['api_url']}/autenticar.php")
-            print(f"Intentando login en: {login_url}")
+            print(f"Intentando login en: {self.login_url}")
 
             response = requests.post(
-                login_url,
+                self.login_url,
                 json={'usuario': username, 'password': password},
                 timeout=10
             )
@@ -445,15 +393,23 @@ class ProductivityMonitor:
                 if data.get('success'):
                     self.token = data.get('token')
                     self.user_data = data.get('usuario')
-                    print(f"Token recibido: {self.token[:50]}...")
+
+                    if not self.user_data:
+                        raise Exception(
+                            "Datos de usuario no recibidos del servidor")
+
+                    print(f"🔍 Token completo: {self.token}")
+                    print(f"🔍 Datos usuario: {self.user_data}")
+
                     self.save_credentials()
                     self.login_success()
                     self.start_work_status_monitor()
-                    messagebox.showinfo(
-                        "Éxito", f"Conectado como {self.user_data.get('nombre_completo', username)}")
+
+                    nombre = self.user_data.get('nombre_completo') or username
+                    messagebox.showinfo("Éxito", f"Conectado como {nombre}")
                 else:
-                    messagebox.showerror("Error", data.get(
-                        'error', 'Error de autenticación'))
+                    error_msg = data.get('error', 'Error de autenticación')
+                    messagebox.showerror("Error", error_msg)
             else:
                 messagebox.showerror(
                     "Error", f"Error de conexión: {response.status_code}")
@@ -461,47 +417,92 @@ class ProductivityMonitor:
         except requests.exceptions.RequestException as e:
             print(f"Error de conexión en login: {e}")
             messagebox.showerror("Error", f"Error de conexión: {str(e)}")
+        except Exception as e:
+            print(f"Error inesperado en login: {e}")
+            messagebox.showerror("Error", f"Error inesperado: {str(e)}")
 
     def save_credentials(self):
+        """Guardar credenciales con manejo de errores"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('DELETE FROM saved_credentials')
 
-            expires_at = int(time.time()) + (7 * 24 * 3600)
+            expires_at = int(time.time()) + (12 * 3600)  # 12 horas por defecto
+            if self.has_valid_config():
+                expires_at = int(time.time()) + \
+                    (self.config.get('token_expiration_hours', 12) * 3600)
+
             cursor.execute('''
                 INSERT INTO saved_credentials (username, token, user_data, expires_at)
                 VALUES (?, ?, ?, ?)
-            ''', (
-                self.username_entry.get(),
-                self.token,
-                json.dumps(self.user_data),
-                expires_at
-            ))
+            ''', (self.username_entry.get(), self.token, json.dumps(self.user_data), expires_at))
+
             conn.commit()
             conn.close()
-            print("Credenciales guardadas exitosamente")
         except Exception as e:
             print(f"Error guardando credenciales: {e}")
 
     def login_success(self):
-        """Método actualizado que incluye carga de configuración del servidor"""
-        self.status_label.config(
-            text=f"Conectado: {self.user_data.get('nombre')}")
-        self.login_button.config(state=tk.DISABLED)
-        self.logout_button.config(state=tk.NORMAL)
-        self.sync_button.config(state=tk.NORMAL)
-        self.finalize_button.config(state=tk.NORMAL)
-        self.test_button.config(state=tk.NORMAL)
+        """Manejar inicio de sesión exitoso con mejor manejo de errores"""
+        try:
+            # Intentar cargar configuración
+            try:
+                if not self.load_config_from_server():
+                    raise Exception(
+                        "No se pudo cargar la configuración inicial")
+            except Exception as e:
+                print(f"⚠️ Error cargando configuración: {e}")
+                messagebox.showwarning(
+                    "Advertencia",
+                    f"Inicio de sesión exitoso, pero no se pudo cargar configuración: {str(e)}\n"
+                    "Algunas funciones pueden no estar disponibles."
+                )
+                # No hacemos logout aquí, permitimos continuar con sesión pero sin configuración
+                self.config = {}
 
-        self.username_entry.config(state=tk.DISABLED)
-        self.password_entry.config(state=tk.DISABLED)
+            # Actualizar UI
+            nombre = self.user_data.get(
+                'nombre') if self.user_data else self.username_entry.get()
+            self.status_label.config(text=f"Conectado: {nombre}")
+            self.login_button.config(state=tk.DISABLED)
+            self.logout_button.config(state=tk.NORMAL)
+            self.sync_button.config(state=tk.NORMAL)
+            self.finalize_button.config(state=tk.NORMAL)
+            self.username_entry.config(state=tk.DISABLED)
+            self.password_entry.config(state=tk.DISABLED)
+            self.status_var.set("Conectado - Listo para monitorear")
 
-        # 🆕 NUEVO: Cargar configuración del servidor después del login
-        if self.load_server_config():
-            self.status_var.set("Conectado - Configuración sincronizada")
-        else:
-            self.status_var.set("Conectado - Usando configuración local")
+            # Iniciar temporizador para refrescar configuración
+            self.start_config_refresh_timer()
+
+        except Exception as e:
+            print(f"Error crítico en login_success: {e}")
+            messagebox.showerror(
+                "Error", f"No se pudo completar el inicio de sesión: {str(e)}")
+            # No hacemos logout automático aquí, dejamos que el usuario decida
+
+    def start_config_refresh_timer(self):
+        """Recargar configuración periódicamente con manejo de errores"""
+        def refresh_config():
+            retry_count = 0
+            while self.token:
+                try:
+                    time.sleep(300)  # Cada 5 minutos
+                    if not self.load_config_from_server():
+                        retry_count += 1
+                        if retry_count > 3:
+                            print(
+                                "ADVERTENCIA: No se puede cargar configuración después de 3 intentos")
+                            retry_count = 0
+                            # Esperar 10 minutos antes de reintentar
+                            time.sleep(600)
+                except Exception as e:
+                    print(f"Error al refrescar configuración: {e}")
+                    self.status_var.set(
+                        f"Error al actualizar configuración: {str(e)}")
+
+        threading.Thread(target=refresh_config, daemon=True).start()
 
     def logout(self):
         if self.monitoring_active:
@@ -519,6 +520,7 @@ class ProductivityMonitor:
 
         self.token = None
         self.user_data = None
+        self.config = {}
 
         self.status_label.config(text="Estado: Desconectado")
         self.work_status_label.config(
@@ -527,7 +529,6 @@ class ProductivityMonitor:
         self.logout_button.config(state=tk.DISABLED)
         self.sync_button.config(state=tk.DISABLED)
         self.finalize_button.config(state=tk.DISABLED)
-        self.test_button.config(state=tk.DISABLED)
 
         self.username_entry.config(state=tk.NORMAL)
         self.password_entry.config(state=tk.NORMAL)
@@ -548,64 +549,46 @@ class ProductivityMonitor:
         threading.Thread(target=monitor_work_status, daemon=True).start()
 
     def check_work_status(self):
-        """FIXED - Leer correctamente el estado desde diagnostico.estado_actual.calculado"""
         if not self.token:
             return
-
         try:
-            base_url = self.config.get(
-                'api_url', 'http://localhost/simpro-lite/api/v1')
-            if base_url.endswith('/actividad.php'):
-                base_url = base_url.replace('/actividad.php', '')
-
-            estado_url = f"{base_url}/estado_jornada.php"
-            # print(f"Verificando estado de jornada en: {estado_url}")
-
             response = requests.get(
-                estado_url,
+                self.estado_url,
                 headers={'Authorization': f'Bearer {self.token}'},
                 timeout=10
             )
 
-            # print(f"Estado jornada response: {response.status_code} - {response.text}")
-
             if response.status_code == 200:
                 data = response.json()
                 if data.get('success'):
-                    # 🔧 FIX: Leer el estado desde diagnostico.estado_actual.calculado
-                    diagnostico = data.get('diagnostico', {})
-                    estado_actual = diagnostico.get('estado_actual', {})
-                    estado = estado_actual.get('calculado', 'sin_iniciar')
-
-                    print(f"Estado actual de jornada: {estado}")
+                    estado = data.get('diagnostico', {}).get(
+                        'estado_actual', {}).get('calculado', 'sin_iniciar')
 
                     if estado == 'trabajando':
                         self.work_status_label.config(
-                            text="🟢 JORNADA ACTIVA", foreground="green")
+                            text="🟢 TRABAJANDO", foreground="green")
                         if not self.monitoring_active:
                             self.start_monitoring()
                             self.status_var.set(
-                                "¡Jornada iniciada! - Monitoreando actividad...")
+                                "Monitoreando actividad - Jornada activa")
+
                     elif estado == 'break':
                         self.work_status_label.config(
                             text="🟡 EN BREAK", foreground="orange")
                         if self.monitoring_active:
                             self.stop_monitoring()
-                            self.status_var.set("En break - Monitoreo pausado")
-                    else:
+                            self.status_var.set("Monitoreo pausado - En break")
+
+                    else:  # sin_iniciar, finalizada
                         self.work_status_label.config(
-                            text="🔴 JORNADA FINALIZADA", foreground="red")
+                            text="🔴 JORNADA NO ACTIVA", foreground="red")
                         if self.monitoring_active:
                             self.stop_monitoring()
                             self.status_var.set(
-                                "Jornada finalizada - Monitoreo detenido")
-                else:
-                    print(f"Error en respuesta estado_jornada: {data}")
-            else:
-                print(f"Error HTTP en estado_jornada: {response.status_code}")
+                                "Monitoreo detenido - Jornada no iniciada")
 
         except Exception as e:
-            print(f"Error verificando estado de jornada: {e}")
+            print(f"Error verificando estado: {e}")
 
     def get_active_window_info(self):
         try:
@@ -623,22 +606,6 @@ class ProductivityMonitor:
         except:
             return {"app": "error.exe", "title": ""}
 
-    def classify_app(self, app_name):
-        if not app_name:
-            return 'neutral'
-
-        app_lower = app_name.lower()
-
-        for prod_app in self.config.get('apps_productivas', []):
-            if prod_app.lower() in app_lower or app_lower in prod_app.lower():
-                return 'productiva'
-
-        for dist_app in self.config.get('apps_distractoras', []):
-            if dist_app.lower() in app_lower or app_lower in dist_app.lower():
-                return 'distractora'
-
-        return 'neutral'
-
     def format_duration(self, seconds):
         if seconds < 60:
             return f"{seconds}s"
@@ -651,21 +618,54 @@ class ProductivityMonitor:
             minutes = (seconds % 3600) // 60
             return f"{hours}h {minutes}m"
 
+    def format_datetime(self, timestamp):
+        try:
+            # Intentar parsear formato ISO
+            try:
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                return dt.strftime('%d/%m/%Y %H:%M')
+            except ValueError:
+                pass
+
+            # Intentar otros formatos comunes
+            formats = [
+                '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%dT%H:%M:%S',
+                '%d/%m/%Y %H:%M:%S'
+            ]
+
+            for fmt in formats:
+                try:
+                    dt = datetime.strptime(timestamp, fmt)
+                    return dt.strftime('%d/%m/%Y %H:%M')
+                except ValueError:
+                    continue
+
+            # Fallback: usar los primeros 16 caracteres
+            return timestamp[:16]
+        except Exception as e:
+            print(f"Error formateando fecha {timestamp}: {e}")
+            return timestamp[:16]  # Fallback para formato no reconocido
+
     def record_activity(self, app_info):
-        """Método actualizado que usa duracion_minima_actividad del servidor"""
         now = datetime.now()
         current_key = f"{app_info['app']}|{app_info['title']}"
 
         if (self.current_activity and self.current_activity['key'] == current_key):
-            self.current_activity['duration'] += self.config.get(
-                "intervalo", 10)
+            interval = self.config.get(
+                'intervalo_monitor', 10) if self.has_valid_config() else 10
+            self.current_activity['duration'] += interval
             self.update_current_activity_in_db()
         else:
             if self.current_activity:
                 self.finalize_current_activity()
 
             activity_id = str(uuid.uuid4())
-            category = self.classify_app(app_info["app"])
+            try:
+                category = self.categorize_app(app_info)
+            except Exception as e:
+                print(f"Error categorizando aplicación: {e}")
+                category = 'neutral'
 
             self.current_activity = {
                 'key': current_key,
@@ -673,7 +673,7 @@ class ProductivityMonitor:
                 'app': app_info["app"],
                 'title': app_info["title"],
                 'timestamp': now.isoformat(),
-                'duration': self.config.get("intervalo", 10),
+                'duration': self.config.get('intervalo_monitor', 10) if self.has_valid_config() else 10,
                 'category': category
             }
             self.save_activity_to_db(self.current_activity)
@@ -708,8 +708,8 @@ class ProductivityMonitor:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-            UPDATE activities 
-            SET duration = ? 
+            UPDATE activities
+            SET duration = ?
             WHERE activity_id = ?
             ''', (
                 self.current_activity['duration'],
@@ -721,24 +721,30 @@ class ProductivityMonitor:
             print(f"Error actualizando actividad: {e}")
 
     def finalize_current_activity(self):
-        """Método actualizado que usa duracion_minima_actividad del servidor"""
         if not self.current_activity:
             return
 
-        # 🆕 Usar duracion_minima_actividad del servidor
-        duracion_minima = self.config.get('duracion_minima_actividad', 5)
+        min_duration = self.config.get(
+            'duracion_minima_actividad', 5) if self.has_valid_config() else 5
+        if self.current_activity["duration"] < min_duration:
+            return  # No registrar actividades muy cortas
 
-        if self.current_activity['duration'] < duracion_minima:
-            return
+        category_color = self.get_category_color(
+            self.current_activity["category"])
 
         self.tree.insert('', 0, values=(
+            self.format_datetime(self.current_activity["timestamp"]),
             self.current_activity["app"],
             self.current_activity["title"][:40] +
             ('...' if len(self.current_activity["title"]) > 40 else ''),
             self.format_duration(self.current_activity["duration"]),
             self.current_activity["category"],
             "No"
-        ))
+        ), tags=(category_color,))
+
+        self.tree.tag_configure('green', foreground='green')
+        self.tree.tag_configure('red', foreground='red')
+        self.tree.tag_configure('blue', foreground='blue')
 
         items = self.tree.get_children()
         if len(items) > 50:
@@ -750,9 +756,9 @@ class ProductivityMonitor:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT app, title, duration, category, synced 
-                FROM activities 
-                ORDER BY id DESC 
+                SELECT timestamp, app, title, duration, category, synced
+                FROM activities
+                ORDER BY id DESC
                 LIMIT 30
             ''')
 
@@ -760,30 +766,40 @@ class ProductivityMonitor:
             conn.close()
 
             for activity in activities:
+                category_color = self.get_category_color(activity[4])
                 self.tree.insert('', tk.END, values=(
-                    activity[0],
-                    activity[1][:40] +
-                    ('...' if len(activity[1]) > 40 else ''),
-                    self.format_duration(activity[2]),
-                    activity[3],
-                    "Sí" if activity[4] else "No"
-                ))
+                    self.format_datetime(activity[0]),
+                    activity[1],
+                    activity[2][:40] +
+                    ('...' if len(activity[2]) > 40 else ''),
+                    self.format_duration(activity[3]),
+                    activity[4],
+                    "Sí" if activity[5] else "No"
+                ), tags=(category_color,))
+
+            self.tree.tag_configure('green', foreground='green')
+            self.tree.tag_configure('red', foreground='red')
+            self.tree.tag_configure('blue', foreground='blue')
 
         except Exception as e:
             print(f"Error cargando actividades: {e}")
 
+    def validate_activity_data(self, activity):
+        """Validar datos antes de sincronizar"""
+        required_fields = ['app', 'title', 'timestamp', 'duration']
+
+        for field_idx, field_name in enumerate([4, 5, 2, 3], 0):
+            if not activity[field_idx] or str(activity[field_idx]).strip() == '':
+                return False, f"Campo {field_name} vacío"
+
+        if int(activity[3]) <= 0:
+            return False, "Duración inválida"
+
+        return True, "OK"
+
     def sync_data(self):
-        """Método actualizado que usa duracion_minima_actividad del servidor"""
         if not self.token:
             messagebox.showerror("Error", "No hay sesión activa")
-            return
-
-        # Verificar estructura del servidor
-        if not self.verify_server_setup():
-            messagebox.showerror(
-                "Error de Servidor",
-                "El servidor no tiene la tabla 'actividad_apps'.\n"
-            )
             return
 
         try:
@@ -792,17 +808,13 @@ class ProductivityMonitor:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            # 🆕 USAR duracion_minima_actividad del servidor
-            duracion_minima = self.config.get('duracion_minima_actividad', 5)
-
             cursor.execute('''
-                SELECT * FROM activities 
-                WHERE synced = 0 
-                AND duration >= ? 
-                AND app IS NOT NULL 
+                SELECT * FROM activities
+                WHERE synced = 0
+                AND app IS NOT NULL
                 AND app != ''
                 AND timestamp IS NOT NULL
-            ''', (duracion_minima,))
+            ''')
 
             activities = cursor.fetchall()
 
@@ -810,26 +822,20 @@ class ProductivityMonitor:
                 messagebox.showinfo(
                     "Información", "No hay datos pendientes de sincronización")
                 return
-            # URL correcta para actividades
-            base_url = self.config.get(
-                'api_url', 'http://localhost/simpro-lite/api/v1')
-            if base_url.endswith('/actividad.php'):
-                activity_url = base_url
-            else:
-                activity_url = f"{base_url}/actividad.php"
 
-            print(f"URL para sincronización: {activity_url}")
+            print(f"URL para sincronización: {self.activity_url}")
 
             synced_count = 0
             failed_count = 0
 
             for activity in activities:
                 try:
-                    # VALIDACIÓN EXHAUSTIVA DE DATOS
-                    # Estructura: id, activity_id, timestamp, duration, app, title, session_id, category, synced
+                    valid, reason = self.validate_activity_data(activity)
+                    if not valid:
+                        failed_count += 1
+                        continue
+
                     if len(activity) < 8:
-                        print(
-                            f"✗ Actividad {activity[0]} tiene estructura incompleta")
                         failed_count += 1
                         continue
 
@@ -841,21 +847,14 @@ class ProductivityMonitor:
                     categoria_raw = activity[7] if len(
                         activity) > 7 else 'neutral'
 
-                    # Validar app_name no esté vacío
                     if not app_name:
-                        print(
-                            f"✗ Actividad {activity[0]} tiene nombre de app vacío")
                         failed_count += 1
                         continue
 
-                    # Validar duración
                     if duracion <= 0:
-                        print(
-                            f"✗ Actividad {activity[0]} tiene duración inválida: {duracion}")
                         failed_count += 1
                         continue
 
-                    # Convertir y validar categoría
                     if isinstance(categoria_raw, (int, float)):
                         category_map = {0: 'neutral',
                                         1: 'productiva', 2: 'distractora'}
@@ -866,20 +865,15 @@ class ProductivityMonitor:
                         if categoria not in ['neutral', 'productiva', 'distractora']:
                             categoria = 'neutral'
 
-                    # VALIDACIÓN Y CONVERSIÓN DE FECHA
                     try:
                         if timestamp:
-                            # Intentar parsear diferentes formatos de fecha
                             dt = None
-
-                            # Formato ISO con microsegundos
                             try:
                                 dt = datetime.fromisoformat(
                                     timestamp.replace('Z', '+00:00'))
                             except:
                                 pass
 
-                            # Formato ISO básico
                             if not dt:
                                 try:
                                     dt = datetime.strptime(
@@ -887,7 +881,6 @@ class ProductivityMonitor:
                                 except:
                                     pass
 
-                            # Formato con microsegundos
                             if not dt:
                                 try:
                                     dt = datetime.strptime(
@@ -895,29 +888,20 @@ class ProductivityMonitor:
                                 except:
                                     pass
 
-                            # Si no se pudo parsear, usar fecha actual
                             if not dt:
-                                print(
-                                    f"⚠️ Fecha inválida para actividad {activity[0]}: {timestamp}, usando fecha actual")
                                 dt = datetime.now()
 
                             fecha_formatted = dt.strftime('%Y-%m-%d %H:%M:%S')
                         else:
-                            print(
-                                f"⚠️ Timestamp vacío para actividad {activity[0]}, usando fecha actual")
                             fecha_formatted = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
                     except Exception as date_error:
-                        print(
-                            f"⚠️ Error procesando fecha para actividad {activity[0]}: {date_error}")
                         fecha_formatted = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-                    # Limpiar y truncar datos
                     app_name_clean = app_name.replace('\x00', '').strip()[:100]
                     titulo_clean = titulo_ventana.replace(
                         '\x00', '').strip()[:255]
 
-                    # Crear payload final - formato corregido
                     payload = {
                         'nombre_app': app_name_clean,
                         'titulo_ventana': titulo_clean,
@@ -926,10 +910,7 @@ class ProductivityMonitor:
                         'categoria': categoria
                     }
 
-                    # Validación final del payload
                     if not payload['nombre_app']:
-                        print(
-                            f"✗ Actividad {activity[0]} - nombre_app está vacío después de limpieza")
                         failed_count += 1
                         continue
 
@@ -939,23 +920,12 @@ class ProductivityMonitor:
                         'Accept': 'application/json'
                     }
 
-                    print(f"\n📤 Enviando actividad ID {activity[0]}:")
-                    print(f"  App: '{payload['nombre_app']}'")
-                    print(f"  Título: '{payload['titulo_ventana']}'")
-                    print(f"  Duración: {payload['tiempo_segundos']}s")
-                    print(f"  Categoría: {payload['categoria']}")
-                    print(f"  Fecha: {payload['fecha_hora_inicio']}")
-
-                    # Enviar request
                     response = requests.post(
-                        activity_url,
+                        self.activity_url,
                         json=payload,
                         headers=headers,
                         timeout=15
                     )
-
-                    print(f"Status: {response.status_code}")
-                    print(f"Response: {response.text}")
 
                     if response.status_code == 200:
                         try:
@@ -963,28 +933,17 @@ class ProductivityMonitor:
                             if data.get('success') or data.get('status') == 'success':
                                 cursor.execute(
                                     'UPDATE activities SET synced = 1 WHERE id = ?',
-                                    (activity[0],)
-                                )
+                                    (activity[0],))
                                 synced_count += 1
-                                print(
-                                    f"Actividad {activity[0]} sincronizada exitosamente")
                             else:
                                 failed_count += 1
-                                error_msg = data.get(
-                                    'error', 'Error desconocido')
-                                print(
-                                    f"Error en respuesta para actividad {activity[0]}: {error_msg}")
-
                         except json.JSONDecodeError:
                             failed_count += 1
-                            print(
-                                f"Respuesta no JSON para actividad {activity[0]}: {response.text}")
 
                     elif response.status_code == 401:
-                        print("🔒 Token inválido o expirado")
-                        messagebox.showerror(
-                            "Error", "Sesión expirada. Por favor, inicie sesión nuevamente."
-                        )
+                        print("Token inválido o expirado")
+                        messagebox.showwarning(
+                            "Advertencia", "Sesión expirada. Por favor, inicie sesión nuevamente.")
                         self.logout()
                         break
 
@@ -992,137 +951,75 @@ class ProductivityMonitor:
                         failed_count += 1
                         try:
                             error_data = response.json()
-                            error_detail = error_data.get('error', '')
-                            print(
-                                f"Error 400 para actividad {activity[0]}: {error_detail}")
-
-                            # Si es error de validación, marcar como problemática para no reintentar
-                            if 'requerido' in error_detail.lower() or 'inválido' in error_detail.lower():
-                                print(
-                                    f"  → Marcando actividad {activity[0]} como problemática")
+                            if 'requerido' in error_data.get('error', '').lower() or 'inválido' in error_data.get('error', '').lower():
                                 cursor.execute(
                                     'UPDATE activities SET synced = -1 WHERE id = ?',
-                                    (activity[0],)
-                                )
+                                    (activity[0],))
                         except:
-                            print(
-                                f"Error 400 para actividad {activity[0]}: {response.text}")
+                            pass
 
                     elif response.status_code == 500:
                         failed_count += 1
-                        print(
-                            f"Error 500 del servidor para actividad {activity[0]}")
-                        try:
-                            error_data = response.json()
-                            error_detail = error_data.get('error', '')
-                            print(f"  → Detalle: {error_detail}")
-
-                            # Si es error específico de BD, intentar diagnóstico
-                            if 'base de datos' in error_detail.lower():
-                                print(f"  → Posible problema en servidor con:")
-                                print(f"     - Conexión a BD")
-                                print(f"     - Estructura de tabla actividad_apps")
-                                print(f"     - Permisos de usuario BD")
-                                print(f"     - Tipos de datos")
-                        except:
-                            print(f"  → Respuesta: {response.text}")
-
                     else:
                         failed_count += 1
-                        print(
-                            f"Error HTTP {response.status_code} para actividad {activity[0]}: {response.text}")
 
                 except Exception as e:
                     failed_count += 1
-                    print(f"Error procesando actividad {activity[0]}: {e}")
-                    import traceback
-                    print(f"   Stack trace: {traceback.format_exc()}")
                     continue
 
-            # Commit cambios
             conn.commit()
             conn.close()
 
-            # Recargar la tabla
             self.tree.delete(*self.tree.get_children())
             self.load_recent_activities()
 
-            # Mensaje final
             total_activities = len(activities)
             if synced_count > 0:
                 message = f"Sincronización completada:\n"
                 message += f"   • Exitosas: {synced_count}/{total_activities}\n"
                 if failed_count > 0:
                     message += f"   • Fallidas: {failed_count}\n"
-                    message += f"\n💡 Revise los logs de la consola para detalles"
+                    message += f"\nRevise los logs de la consola para detalles"
                 messagebox.showinfo("Sincronización Exitosa", message)
             else:
                 message = f"Sincronización fallida:\n"
                 message += f"   • Total intentadas: {total_activities}\n"
                 message += f"   • Exitosas: 0\n"
                 message += f"   • Fallidas: {failed_count}\n\n"
-                message += f"🔍 Posibles causas:\n"
+                message += f"Posibles causas:\n"
                 message += f"   • Error 500: Problema en servidor PHP/BD\n"
                 message += f"   • Error 400: Datos inválidos\n"
                 message += f"   • Error 401: Token expirado\n\n"
-                message += f"📋 Revisar logs de servidor PHP para más detalles"
+                message += f"Revisar logs de servidor PHP para más detalles"
                 messagebox.showwarning("Error de Sincronización", message)
 
         except Exception as e:
-            print(f"💥 Error general en sincronización: {e}")
-            import traceback
-            print(f"Stack trace completo: {traceback.format_exc()}")
+            print(f"Error general en sincronización: {e}")
             messagebox.showerror(
                 "Error", f"Error crítico en sincronización: {str(e)}")
 
-    def test_single_activity(self):
-        """Función para probar el envío de una sola actividad de prueba"""
-        if not self.token:
-            print("No hay token para prueba")
-            return
-
+    def cleanup_old_activities(self):
+        """Eliminar actividades antiguas ya sincronizadas"""
         try:
-            base_url = self.config.get(
-                'api_url', 'http://localhost/simpro-lite/api/v1')
-            activity_url = f"{base_url}/actividad.php" if not base_url.endswith(
-                '/actividad.php') else base_url
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
 
-            # Actividad de prueba simple
-            test_payload = {
-                'nombre_app': 'TestApp.exe',
-                'titulo_ventana': 'Ventana de Prueba',
-                'fecha_hora_inicio': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'tiempo_segundos': 10,
-                'categoria': 'neutral'
-            }
+            # Eliminar registros sincronizados más antiguos que 30 días
+            cutoff_date = (datetime.now() - timedelta(days=30)).isoformat()
+            cursor.execute('''
+                DELETE FROM activities 
+                WHERE synced = 1 AND timestamp < ?
+            ''', (cutoff_date,))
 
-            headers = {
-                'Authorization': f'Bearer {self.token}',
-                'Content-Type': 'application/json'
-            }
+            deleted = cursor.rowcount
+            conn.commit()
+            conn.close()
 
-            print(f"🧪 Enviando actividad de prueba a: {activity_url}")
-            print(f"🧪 Payload: {json.dumps(test_payload, indent=2)}")
-
-            response = requests.post(
-                activity_url, json=test_payload, headers=headers, timeout=10)
-
-            print(f"🧪 Respuesta - Status: {response.status_code}")
-            print(f"🧪 Respuesta - Texto: {response.text}")
-
-            if response.status_code == 200:
-                print("Prueba exitosa - La API funciona correctamente")
-                messagebox.showinfo(
-                    "Prueba API", "Prueba exitosa\nLa API funciona correctamente")
-            else:
-                print("Prueba fallida - Hay problemas con la API")
-                messagebox.showerror(
-                    "Prueba API", f"Prueba fallida\nStatus: {response.status_code}\nError: {response.text}")
+            if deleted > 0:
+                print(f"Limpieza: {deleted} registros antiguos eliminados")
 
         except Exception as e:
-            print(f"💥 Error en prueba: {e}")
-            messagebox.showerror(
-                "Error en Prueba", f"Error al probar API: {str(e)}")
+            print(f"Error en limpieza: {e}")
 
     def finalize_session(self):
         if self.current_activity:
@@ -1147,12 +1044,20 @@ class ProductivityMonitor:
                 try:
                     app_info = self.get_active_window_info()
                     if app_info:
-                        category = self.classify_app(app_info['app'])
-                        self.root.after(0, lambda: self.current_app_label.config(
-                            text=f"App: {app_info['app']} [{category}]"))
-                        self.root.after(
-                            0, lambda: self.record_activity(app_info))
-                    time.sleep(self.config.get("intervalo", 10))
+                        try:
+                            category = self.categorize_app(app_info)
+                            self.root.after(0, lambda: self.current_app_label.config(
+                                text=f"App: {app_info['app']} [{category}]"))
+                            self.root.after(
+                                0, lambda: self.record_activity(app_info))
+                        except Exception as e:
+                            print(f"Error categorizando aplicación: {e}")
+                            self.root.after(0, lambda: self.current_app_label.config(
+                                text=f"App: {app_info['app']} [error]"))
+
+                    interval = self.config.get(
+                        'intervalo_monitor', 10) if self.has_valid_config() else 10
+                    time.sleep(interval)
                 except Exception as e:
                     print(f"Error en monitoreo: {e}")
                     time.sleep(5)
@@ -1188,11 +1093,9 @@ class ProductivityMonitor:
 
         self.root.destroy()
 
-
 def main():
     monitor = ProductivityMonitor()
     monitor.root.mainloop()
-
 
 if __name__ == "__main__":
     main()
