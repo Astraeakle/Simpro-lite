@@ -790,17 +790,28 @@ async function exportarPDF() {
 
         const datos = await recopilarDatosExportacion();
 
-        // Verificar librerías
-        if (typeof window.jsPDF === 'undefined') {
-            throw new Error('jsPDF no está cargado. Verifica que la librería esté incluida.');
+        // VERIFICACIÓN MEJORADA DE jsPDF
+        let jsPDFClass;
+
+        // Intenta diferentes formas de acceder a jsPDF
+        if (typeof window.jsPDF !== 'undefined') {
+            jsPDFClass = window.jsPDF;
+        } else if (typeof jsPDF !== 'undefined') {
+            jsPDFClass = jsPDF;
+        } else if (typeof window.jspdf !== 'undefined') {
+            jsPDFClass = window.jspdf.jsPDF;
+        } else {
+            // Verificar si está disponible globalmente
+            console.log('Objetos disponibles:', Object.keys(window).filter(key => key.toLowerCase().includes(
+                'pdf')));
+            throw new Error('jsPDF no está disponible. Objetos PDF encontrados: ' + Object.keys(window).filter(
+                key => key.toLowerCase().includes('pdf')).join(', '));
         }
 
         mostrarModal(true);
 
-        const {
-            jsPDF
-        } = window.jsPDF;
-        const pdf = new jsPDF();
+        // Crear instancia de PDF
+        const pdf = new jsPDFClass();
 
         // Configuración
         const margen = 20;
@@ -835,25 +846,19 @@ async function exportarPDF() {
         pdf.text(`Productividad: ${datos.resumen.porcentaje_productivo}%`, margen, y);
         y += 20;
 
-        // Gráfico de distribución de tiempo
+        // Distribución de tiempo (solo texto por ahora)
         pdf.setFontSize(14);
         pdf.setFont(undefined, 'bold');
         pdf.text('Distribución de Tiempo', margen, y);
         y += 10;
 
-        try {
-            const graficoPie = await crearGraficoTemporal(datos, 'doughnut');
-            pdf.addImage(graficoPie, 'PNG', margen, y, 80, 80);
-            y += 90;
-        } catch (error) {
-            console.error('Error creando gráfico circular:', error);
-            // Fallback: mostrar datos en texto
-            datos.distribucion.forEach(item => {
-                pdf.text(`${capitalizar(item.categoria)}: ${item.porcentaje}%`, margen, y);
-                y += 8;
-            });
-            y += 10;
-        }
+        pdf.setFontSize(12);
+        pdf.setFont(undefined, 'normal');
+        datos.distribucion.forEach(item => {
+            pdf.text(`${capitalizar(item.categoria)}: ${item.porcentaje}%`, margen, y);
+            y += 8;
+        });
+        y += 10;
 
         // Nueva página para el top de aplicaciones
         pdf.addPage();
@@ -864,15 +869,6 @@ async function exportarPDF() {
         pdf.text('Top 10 Aplicaciones Más Usadas', margen, y);
         y += 15;
 
-        // Gráfico de barras
-        try {
-            const graficoBar = await crearGraficoTemporal(datos, 'bar');
-            pdf.addImage(graficoBar, 'PNG', margen, y, 170, 100);
-            y += 110;
-        } catch (error) {
-            console.error('Error creando gráfico de barras:', error);
-        }
-
         // Tabla de aplicaciones
         pdf.setFontSize(12);
         pdf.setFont(undefined, 'bold');
@@ -882,15 +878,30 @@ async function exportarPDF() {
         pdf.setFontSize(10);
         pdf.setFont(undefined, 'normal');
 
+        // Encabezados de tabla
+        pdf.text('Pos.', margen, y);
+        pdf.text('Aplicación', margen + 20, y);
+        pdf.text('Tiempo', margen + 80, y);
+        pdf.text('Porcentaje', margen + 120, y);
+        pdf.text('Categoría', margen + 160, y);
+        y += 8;
+
+        // Línea separadora
+        pdf.setDrawColor(200, 200, 200);
+        pdf.line(margen, y, 190, y);
+        y += 5;
+
         datos.topApps.forEach((app, index) => {
-            if (y > 250) {
+            if (y > 260) {
                 pdf.addPage();
                 y = margen;
             }
 
-            pdf.text(`${index + 1}. ${app.aplicacion}`, margen, y);
-            pdf.text(`${formatearTiempo(app.tiempo_total)} (${app.porcentaje}%)`, margen + 80, y);
-            pdf.text(`${capitalizar(app.categoria)}`, margen + 140, y);
+            pdf.text(`${index + 1}`, margen, y);
+            pdf.text(app.aplicacion.substring(0, 25), margen + 20, y);
+            pdf.text(formatearTiempo(app.tiempo_total), margen + 80, y);
+            pdf.text(`${app.porcentaje}%`, margen + 120, y);
+            pdf.text(capitalizar(app.categoria), margen + 160, y);
             y += 8;
         });
 
@@ -899,7 +910,7 @@ async function exportarPDF() {
         pdf.save(nombreArchivo);
 
         mostrarModal(false);
-        mostrarAlerta('Reporte PDF con gráficos generado exitosamente', 'success');
+        mostrarAlerta('Reporte PDF generado exitosamente', 'success');
 
     } catch (error) {
         mostrarModal(false);
@@ -907,6 +918,7 @@ async function exportarPDF() {
         mostrarAlerta('Error al generar el PDF: ' + error.message, 'error');
     }
 }
+
 
 // Función para exportar a Excel
 async function exportarExcel() {
@@ -1084,6 +1096,30 @@ async function exportarExcel() {
         console.error('Error exportando Excel:', error);
         mostrarAlerta('Error al generar el Excel: ' + error.message, 'error');
     }
+}
+
+function verificarLibrerias() {
+    console.log('=== VERIFICACIÓN DE LIBRERÍAS ===');
+
+    // Verificar jsPDF
+    console.log('window.jsPDF:', typeof window.jsPDF);
+    console.log('jsPDF:', typeof jsPDF);
+    console.log('window.jspdf:', typeof window.jspdf);
+
+    // Verificar Chart.js
+    console.log('Chart:', typeof Chart);
+
+    // Verificar XLSX
+    console.log('XLSX:', typeof XLSX);
+
+    // Verificar html2canvas
+    console.log('html2canvas:', typeof html2canvas);
+
+    // Listar todos los objetos que contengan 'pdf'
+    const pdfObjects = Object.keys(window).filter(key => key.toLowerCase().includes('pdf'));
+    console.log('Objetos PDF encontrados:', pdfObjects);
+
+    console.log('=== FIN VERIFICACIÓN ===');
 }
 
 // Funciones auxiliares para exportación
