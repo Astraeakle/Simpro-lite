@@ -354,11 +354,6 @@ class SupervisorManager {
                 }
     
                 tbody.innerHTML = empleadosFiltered.map(empleado => {
-                    const esOtraArea = empleado.area !== this.getAreaSupervisor();
-                    const btnClass = esOtraArea ? 'btn-warning' : 'btn-success';
-                    const btnText = esOtraArea ? 'Solicitar' : 'Asignar';
-                    const btnIcon = esOtraArea ? 'fa-paper-plane' : 'fa-user-plus';
-                    
                     return `
                         <tr>
                             <td>
@@ -374,10 +369,10 @@ class SupervisorManager {
                                 </span>
                             </td>
                             <td>
-                                <button class="btn btn-sm ${btnClass}" 
-                                        onclick="supervisor.${esOtraArea ? 'solicitarAsignacion' : 'asignarEmpleado'}(${empleado.id_usuario}, '${empleado.nombre_completo}')"
-                                        title="${esOtraArea ? 'Solicitar asignación' : 'Asignar a mi equipo'}">
-                                    <i class="fas ${btnIcon}"></i> ${btnText}
+                                <button class="btn btn-sm btn-success" 
+                                        onclick="supervisor.asignarEmpleado(${empleado.id_usuario}, '${empleado.nombre_completo}')"
+                                        title="Asignar a mi equipo">
+                                    <i class="fas fa-user-plus"></i> Asignar
                                 </button>
                             </td>
                         </tr>
@@ -414,7 +409,7 @@ class SupervisorManager {
                     method: 'POST',
                     body: JSON.stringify({ empleado_id: empleadoId })
                 });
-    
+        
                 if (result.success) {
                     this.mostrarExito(result.message || 'Empleado asignado correctamente');
                     this.cargarMiEquipo();

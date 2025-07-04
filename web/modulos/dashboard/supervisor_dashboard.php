@@ -194,28 +194,4 @@ if ($rol !== 'supervisor') {
     </div>
 </div>
 
-<!-- Modal para solicitud de cambio -->
-<div class="modal fade" id="modalSolicitudCambio" tabindex="-1" aria-labelledby="modalSolicitudCambioLabel"
-    aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalSolicitudCambioLabel">Solicitar Asignación</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="motivoSolicitud" class="form-label">Motivo de la solicitud:</label>
-                    <textarea class="form-control" id="motivoSolicitud" rows="3"
-                        placeholder="Explica por qué necesitas este empleado en tu equipo..."></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-warning" id="btnEnviarSolicitud">Enviar Solicitud</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script src="/simpro-lite/web/assets/js/supervisor.js"></script>

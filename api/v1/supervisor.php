@@ -210,16 +210,36 @@ function handlePost($pdo, $user, $action) {
                     throw new Exception('ID de empleado requerido');
                 }
                 
-                $stmt = $pdo->prepare("CALL sp_asignar_empleado_supervisor(?, ?, @resultado)");
-                $stmt->execute([$user['id_usuario'], $empleadoId]);
-                $result = $pdo->query("SELECT @resultado as resultado")->fetch(PDO::FETCH_ASSOC);
-                $response = json_decode($result['resultado'], true);
+                // Check if employee is already assigned to this supervisor
+                $stmt = $pdo->prepare("SELECT supervisor_id FROM usuarios WHERE id_usuario = ?");
+                $stmt->execute([$empleadoId]);
+                $currentSupervisor = $stmt->fetchColumn();
                 
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    throw new Exception('Error al decodificar respuesta del procedimiento');
+                if ($currentSupervisor == $user['id_usuario']) {
+                    echo json_encode(['success' => false, 'error' => 'El empleado ya está asignado a tu equipo'], JSON_PRETTY_PRINT);
+                    break;
                 }
                 
-                echo json_encode($response, JSON_PRETTY_PRINT);
+                // Directly assign the employee
+                $stmt = $pdo->prepare("UPDATE usuarios SET supervisor_id = ? WHERE id_usuario = ?");
+                $stmt->execute([$user['id_usuario'], $empleadoId]);
+                
+                // Get employee info for notification
+                $stmt = $pdo->prepare("SELECT nombre_completo FROM usuarios WHERE id_usuario = ?");
+                $stmt->execute([$empleadoId]);
+                $empleado = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                // Create notification
+                $titulo = "Nueva asignación de equipo";
+                $mensaje = "Has sido asignado al equipo del supervisor {$user['nombre_completo']}";
+                
+                $stmt = $pdo->prepare("INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo) VALUES (?, ?, ?, 'sistema')");
+                $stmt->execute([$empleadoId, $titulo, $mensaje]);
+                
+                $supervisorMsg = "Has asignado a {$empleado['nombre_completo']} a tu equipo";
+                $stmt->execute([$user['id_usuario'], $titulo, $supervisorMsg]);
+                
+                echo json_encode(['success' => true, 'message' => 'Empleado asignado correctamente'], JSON_PRETTY_PRINT);
                 break;
                 
             case 'solicitar_asignacion':
