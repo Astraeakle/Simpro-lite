@@ -57,7 +57,14 @@ class NotificationsManager {
             if (!response.ok) {
                 if (response.status === 401) {
                     console.log('Error 401 - No autorizado');
-                    this.renderAuthError();
+                    try {
+                        const errorData = await response.json();
+                        console.log('Detalles del error 401:', errorData);
+                        this.renderAuthError(errorData);
+                    } catch (e) {
+                        console.log('No se pudo parsear el error 401');
+                        this.renderAuthError();
+                    }
                     return;
                 }
                 const errorText = await response.text();
@@ -79,10 +86,6 @@ class NotificationsManager {
                 this.notifications = data.data || [];
                 console.log(`${this.notifications.length} notificaciones cargadas`);
                 this.renderNotifications();
-                
-                // Actualizar contador basado en las notificaciones cargadas
-                this.unreadCount = this.notifications.filter(n => n.leido == 0).length;
-                this.updateBadge();
             } else {
                 console.error('Error en la respuesta:', data);
                 this.renderErrorState();
@@ -141,8 +144,6 @@ class NotificationsManager {
             return;
         }
         
-        console.log('Renderizando notificaciones en contenedor:', container);
-        
         // Si no hay notificaciones, mostrar mensaje informativo
         if (this.notifications.length === 0) {
             container.innerHTML = `
@@ -163,11 +164,24 @@ class NotificationsManager {
     renderAuthError(errorData = null) {
         const container = document.getElementById('notificationsList');
         if (container) {
+            let debugInfo = '';
+            if (errorData && errorData.debug) {
+                debugInfo = `
+                    <div class="mt-2" style="font-size: 0.8em; color: #6c757d;">
+                        <strong>Debug:</strong><br>
+                        Cookies: ${errorData.debug.cookies ? errorData.debug.cookies.join(', ') : 'ninguna'}<br>
+                        user_data existe: ${errorData.debug.user_data_exists ? 'sí' : 'no'}<br>
+                        Timestamp: ${errorData.debug.timestamp || 'N/A'}
+                    </div>
+                `;
+            }
+            
             container.innerHTML = `
                 <div class="text-center p-3 text-warning">
                     <i class="fas fa-exclamation-triangle mb-2" style="font-size: 2rem;"></i><br>
                     <span><strong>Error de autenticación</strong></span><br>
                     <small>La sesión puede haber expirado</small>
+                    ${debugInfo}
                     <br>
                     <button class="btn btn-sm btn-outline-warning mt-2" onclick="window.location.reload()">
                         <i class="fas fa-refresh"></i> Recargar página
@@ -280,6 +294,66 @@ class NotificationsManager {
         // Ejecutar acción específica
         this.navigateToNotification(actionType, notification.id_referencia, notification.titulo);
     }
+
+    addNewNotification(notification) {
+        // Agregar al inicio de la lista
+        this.notifications.unshift(notification);
+        
+        // Incrementar contador
+        this.unreadCount++;
+        
+        // Actualizar UI
+        this.updateBadge();
+        this.animateBadge();
+        this.renderNotifications();
+        
+        // Mostrar notificación temporal si la página está activa
+        if (!document.hidden) {
+            this.showToastNotification(notification);
+        }
+    }
+
+    showToastNotification(notification) {
+        // Solo si Bootstrap está disponible
+        if (typeof bootstrap === 'undefined') return;
+        
+        const toastHtml = `
+            <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">
+                <div class="toast-header">
+                    <i class="${this.getNotificationIcon(notification.tipo)} text-${this.getNotificationColor(notification.tipo)} me-2"></i>
+                    <strong class="me-auto">${this.escapeHtml(notification.titulo)}</strong>
+                    <small>Ahora</small>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${this.escapeHtml(notification.mensaje)}
+                </div>
+            </div>
+        `;
+        
+        // Crear contenedor de toasts si no existe
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Agregar toast
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        
+        // Mostrar toast
+        const toastElement = toastContainer.lastElementChild;
+        const toast = new bootstrap.Toast(toastElement);
+        toast.show();
+        
+        // Limpiar después de que se oculte
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
     
     updateBadge() {
         const badge = document.getElementById('notificationBadge');
@@ -366,7 +440,6 @@ class NotificationsManager {
     }
     
     bindEvents() {
-        // Evento para clicks en notificaciones
         document.addEventListener('click', (e) => {
             const notificationItem = e.target.closest('.notification-item');
             if (notificationItem) {
@@ -386,27 +459,14 @@ class NotificationsManager {
             }
         });
         
-        // Evento para botones de acción directa
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('notification-action-btn')) {
-                const notificationId = e.target.dataset.notificationId;
-                const actionType = e.target.dataset.actionType;
-                this.handleDirectAction(notificationId, actionType);
-            }
-        });
-        
-        // Evento para abrir dropdown
         const dropdownElement = document.getElementById('notificationDropdown');
         if (dropdownElement) {
             dropdownElement.addEventListener('click', (e) => {
                 console.log('Click en dropdown de notificaciones');
-                setTimeout(() => {
-                    this.loadNotifications();
-                }, 100);
+                this.loadNotifications();
             });
         }
         
-        // Evento para visibilidad de página
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 this.stopPolling();
@@ -420,6 +480,16 @@ class NotificationsManager {
         const type = notificationElement.dataset.type;
         const reference = notificationElement.dataset.reference;
         const titulo = notificationElement.querySelector('h6').textContent;
+        const notificationId = notificationElement.dataset.id;
+        
+        // Si es una solicitud de asignación, mostrar modal de respuesta
+        if (titulo.includes('Solicitud de Asignación')) {
+            const notification = this.notifications.find(n => n.id_notificacion == notificationId);
+            if (notification) {
+                this.showResponseModal(notification);
+                return;
+            }
+        }
         
         console.log('Navegando desde notificación:', { type, reference, titulo });
         
@@ -435,6 +505,131 @@ class NotificationsManager {
         setTimeout(() => {
             this.navigateToNotification(type, reference, titulo);
         }, 100);
+    }
+
+    showResponseModal(notification) {
+        // Crear el modal si no existe
+        let modal = document.getElementById('notificationResponseModal');
+        
+        if (!modal) {
+            const modalHtml = `
+            <div class="modal fade" id="notificationResponseModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Responder Solicitud</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p id="notificationResponseText"></p>
+                            <div class="mb-3">
+                                <label for="responseComment" class="form-label">Comentario (opcional)</label>
+                                <textarea class="form-control" id="responseComment" rows="3"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-danger" id="rejectRequest">Rechazar</button>
+                            <button type="button" class="btn btn-success" id="acceptRequest">Aceptar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            modal = document.getElementById('notificationResponseModal');
+            
+            // Configurar eventos
+            document.getElementById('acceptRequest').addEventListener('click', () => {
+                this.sendResponse('aceptar');
+            });
+            
+            document.getElementById('rejectRequest').addEventListener('click', () => {
+                this.sendResponse('rechazar');
+            });
+        }
+        
+        // Configurar contenido
+        document.getElementById('notificationResponseText').textContent = notification.mensaje;
+        
+        // Mostrar modal
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        // Guardar ID de notificación para la respuesta
+        modal.dataset.notificationId = notification.id_notificacion;
+    }
+
+    async sendResponse(action) {
+        const modal = document.getElementById('notificationResponseModal');
+        const notificationId = modal.dataset.notificationId;
+        const comment = document.getElementById('responseComment').value;
+        
+        try {
+            const response = await fetch('/simpro-lite/web/modulos/notificaciones/ajax_responder.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id_notificacion: notificationId,
+                    respuesta: action,
+                    comentario: comment
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Error en la respuesta');
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Cerrar modal y recargar notificaciones
+                const bsModal = bootstrap.Modal.getInstance(modal);
+                bsModal.hide();
+                
+                // Mostrar feedback
+                this.showToast('Respuesta enviada', 'success');
+                
+                // Recargar notificaciones
+                this.loadNotifications();
+                this.loadUnreadCount();
+            }
+        } catch (error) {
+            console.error('Error al enviar respuesta:', error);
+            this.showToast('Error al enviar respuesta', 'danger');
+        }
+    }
+
+    showToast(message, type = 'success') {
+        const toastHtml = `
+            <div class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            </div>`;
+        
+        const toastContainer = document.getElementById('toast-container') || 
+            document.createElement('div');
+        
+        if (!toastContainer.id) {
+            toastContainer.id = 'toast-container';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = toastContainer.lastElementChild;
+        const toast = new bootstrap.Toast(toastElement);
+        toast.show();
+        
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
     }
 
     navigateToNotification(type, reference, titulo) {
@@ -569,29 +764,14 @@ class NotificationsManager {
         this.unreadCount = 0;
     }
 }
-
-// Inicializar cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM cargado, inicializando NotificationsManager...');
-    
-    // Verificar si existe la configuración
-    if (typeof window.notificationConfig === 'undefined') {
-        console.log('window.notificationConfig no está definido, usando configuración por defecto');
-        window.notificationConfig = {
-            apiUrl: '/simpro-lite/api/v1/notificaciones.php',
-            pollFrequency: 30000,
-            userRole: 'empleado',
-            userId: 0
-        };
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('notification-action-btn')) {
+        const notificationId = e.target.dataset.notificationId;
+        const actionType = e.target.dataset.actionType;
+        window.notificationsManager?.handleDirectAction(notificationId, actionType);
     }
-    
-    // Inicializar el manager
-    window.notificationsManager = new NotificationsManager();
-    
-    console.log('NotificationsManager inicializado y disponible globalmente');
 });
 
-// Compatibilidad con módulos
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = NotificationsManager;
 }

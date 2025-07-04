@@ -1,28 +1,20 @@
 <?php
 // web/modulos/notificaciones/index.php
-// Las acciones que requieren redirect ya fueron procesadas en index.php principal
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-
 require_once __DIR__ . '/../../core/autenticacion.php';
 require_once __DIR__ . '/../../core/notificaciones.php';
 require_once __DIR__ . '/../../config/database.php';
-
-// Obtener datos del usuario desde cookies (ya verificados en index.php)
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
-
 $id_usuario = 0;
 if (isset($userData['id_usuario'])) {
     $id_usuario = $userData['id_usuario'];
 } elseif (isset($userData['id'])) {
     $id_usuario = $userData['id'];
 }
-
 $usuario_rol = $userData['rol'] ?? 'empleado';
 $nombreUsuario = $userData['nombre_completo'] ?? 'Usuario';
-
-// Conectar a la base de datos
 $notificacionesManager = null;
 $error_conexion = null;
 
@@ -392,6 +384,36 @@ $rolUsuario = $usuario_rol;
         </div>
     </div>
 
+    <!-- Modal para responder solicitudes -->
+    <div class="modal fade" id="responseModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Responder Solicitud</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info" id="notificationDetails">
+                        <!-- Aquí se cargarán los detalles de la notificación -->
+                    </div>
+                    <div class="mb-3">
+                        <label for="responseComment" class="form-label">Comentario (opcional)</label>
+                        <textarea class="form-control" id="responseComment" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="rejectBtn">
+                        <i class="fas fa-times-circle me-1"></i> Rechazar
+                    </button>
+                    <button type="button" class="btn btn-success" id="acceptBtn">
+                        <i class="fas fa-check-circle me-1"></i> Aceptar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
     // Configuración específica para la página de notificaciones
@@ -399,7 +421,7 @@ $rolUsuario = $usuario_rol;
         apiUrl: '/simpro-lite/api/v1/notificaciones.php',
         pollFrequency: 30000,
         userRole: '<?php echo $usuario_rol; ?>',
-        userId: <?php echo $usuario_id; ?>
+        userId: <?php echo $id_usuario; ?>
     };
     </script>
     <script src="/simpro-lite/web/assets/js/notifications.js"></script>
@@ -469,6 +491,78 @@ $rolUsuario = $usuario_rol;
             }
         }
     }, 60000);
+
+    // Manejar clic en notificaciones
+    document.addEventListener('DOMContentLoaded', function() {
+        const responseModal = new bootstrap.Modal(document.getElementById('responseModal'));
+        let currentNotificationId = null;
+
+        // Delegación de eventos para las notificaciones
+        document.querySelector('.list-group').addEventListener('click', function(e) {
+            const item = e.target.closest('.notification-item');
+            if (!item) return;
+
+            const notificationId = item.dataset.id;
+            const notificationType = item.dataset.type;
+            const notificationTitle = item.querySelector('h6').textContent;
+
+            // Si es una solicitud de asignación, mostrar modal
+            if (notificationTitle.includes('Solicitud de Asignación')) {
+                e.preventDefault();
+                currentNotificationId = notificationId;
+
+                // Mostrar detalles en el modal
+                document.getElementById('notificationDetails').innerHTML = `
+                    <strong>${notificationTitle}</strong>
+                    <p>${item.querySelector('p').textContent}</p>
+                `;
+
+                responseModal.show();
+            }
+        });
+
+        // Manejar aceptar/rechazar
+        document.getElementById('acceptBtn').addEventListener('click', function() {
+            sendResponse('aceptar');
+            responseModal.hide();
+        });
+
+        document.getElementById('rejectBtn').addEventListener('click', function() {
+            sendResponse('rechazar');
+            responseModal.hide();
+        });
+
+        function sendResponse(action) {
+            if (!currentNotificationId) return;
+
+            const comment = document.getElementById('responseComment').value;
+
+            fetch('/simpro-lite/web/modulos/notificaciones/ajax_responder.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id_notificacion: currentNotificationId,
+                        respuesta: action,
+                        comentario: comment
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Recargar la página para actualizar las notificaciones
+                        window.location.reload();
+                    } else {
+                        alert('Error al procesar la respuesta');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error al enviar la respuesta');
+                });
+        }
+    });
     </script>
 </body>
 

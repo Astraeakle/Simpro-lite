@@ -1,5 +1,7 @@
 <?php
+ob_start();
 // web/includes/nav.php
+
 // Verificar si estamos en la página de notificaciones
 $en_pagina_notificaciones = isset($GLOBALS['en_pagina_notificaciones']) ? $GLOBALS['en_pagina_notificaciones'] : false;
 $modulo_actual = $_GET['modulo'] ?? '';
@@ -33,6 +35,9 @@ $nombreUsuario = isset($userData['nombre_completo']) ? $userData['nombre_complet
 $rolUsuario = isset($userData['rol']) ? $userData['rol'] : '';
 
 $isAuthenticated = !empty($userData) && $id_usuario > 0;
+
+// Limpiar cualquier output previo
+ob_end_clean();
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
@@ -89,9 +94,13 @@ $isAuthenticated = !empty($userData) && $id_usuario > 0;
                         </span>
                     </a>
                     <div class="dropdown-menu dropdown-menu-end notification-dropdown"
-                        aria-labelledby="notificationDropdown" style="width: 350px; max-height: 400px;">
+                        aria-labelledby="notificationDropdown" style="width: 380px; max-height: 400px;">
                         <div class="dropdown-header d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-bell me-2"></i>Notificaciones</span>
+                            <a href="/simpro-lite/web/index.php?modulo=notificaciones"
+                                class="btn btn-sm btn-outline-primary">
+                                Ver todas
+                            </a>
                         </div>
                         <div class="dropdown-divider"></div>
                         <div id="notificationsList" class="overflow-auto" style="max-height: 300px;">
