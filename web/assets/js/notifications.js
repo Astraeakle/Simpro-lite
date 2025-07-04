@@ -1,4 +1,9 @@
 // web/assets/js/notifications.js
+// Verificar si ya está cargado para evitar duplicaciones
+if (window.NotificationsManager) {
+    console.log('NotificationsManager ya está cargado');
+} else {
+    
 class NotificationsManager {
     constructor() {
         this.apiUrl = window.notificationConfig?.apiUrl || '/simpro-lite/api/v1/notificaciones.php';
@@ -9,6 +14,7 @@ class NotificationsManager {
         this.pollFrequency = window.notificationConfig?.pollFrequency || 30000;
         this.userRole = window.notificationConfig?.userRole || '';
         this.userId = window.notificationConfig?.userId || 0;
+        this.isInitialized = false;
         
         console.log('NotificationsManager inicializado:', {
             apiUrl: this.apiUrl,
@@ -16,10 +22,28 @@ class NotificationsManager {
             userId: this.userId
         });
         
+        // Verificar si estamos en roles que NO usan notificaciones
+        if (this.userRole === 'admin') {
+            console.log('Admin no usa notificaciones avanzadas');
+            return;
+        }
+        
+        // Solo inicializar para empleado y supervisor
+        if (!['empleado', 'supervisor'].includes(this.userRole)) {
+            console.log('Rol no requiere notificaciones:', this.userRole);
+            return;
+        }
+        
         this.init();
     }
     
     init() {
+        // Verificar si el usuario está autenticado y tiene rol apropiado
+        if (!this.userId || this.userId <= 0) {
+            console.log('Usuario no autenticado, no inicializar notificaciones');
+            return;
+        }
+        
         const notificationContainer = document.getElementById('notification-dropdown-container');
         if (!notificationContainer) {
             console.log('Contenedor de notificaciones no encontrado');
@@ -27,17 +51,31 @@ class NotificationsManager {
         }
         
         console.log('Inicializando sistema de notificaciones...');
+        this.isInitialized = true;
+        
+        // Configurar eventos primero
+        this.bindEvents();
+        
+        // Cargar datos iniciales
         this.loadNotifications();
         this.loadUnreadCount();
-        this.startPolling();
-        this.bindEvents();
+        
+        // Iniciar polling después de un pequeño delay
+        setTimeout(() => {
+            this.startPolling();
+        }, 1000);
     }
     
     async loadNotifications() {
+        if (!this.isInitialized) {
+            console.log('NotificationsManager no está inicializado');
+            return;
+        }
+        
         try {
             console.log('Cargando notificaciones...');
-            const url = `${this.apiUrl}?action=list&limit=10`;
             
+            const url = `${this.apiUrl}?action=list&limit=10`;
             console.log('URL de petición:', url);
             
             const response = await fetch(url, {
@@ -51,24 +89,23 @@ class NotificationsManager {
             
             console.log('Respuesta recibida:', {
                 status: response.status,
-                statusText: response.statusText
+                statusText: response.statusText,
+                url: response.url
             });
             
             if (!response.ok) {
                 if (response.status === 401) {
                     console.log('Error 401 - No autorizado');
-                    try {
-                        const errorData = await response.json();
-                        console.log('Detalles del error 401:', errorData);
-                        this.renderAuthError(errorData);
-                    } catch (e) {
-                        console.log('No se pudo parsear el error 401');
-                        this.renderAuthError();
-                    }
+                    this.renderAuthError();
                     return;
                 }
-                const errorText = await response.text();
-                console.error('Error en respuesta:', errorText);
+                
+                if (response.status === 404) {
+                    console.log('API no encontrada - usando modo fallback');
+                    this.renderApiNotFound();
+                    return;
+                }
+                
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
@@ -76,7 +113,8 @@ class NotificationsManager {
             if (!contentType || !contentType.includes('application/json')) {
                 const textResponse = await response.text();
                 console.error('Respuesta no es JSON:', textResponse);
-                throw new Error('Respuesta del servidor no es JSON válido');
+                this.renderErrorState('La respuesta del servidor no es válida');
+                return;
             }
             
             const data = await response.json();
@@ -88,15 +126,19 @@ class NotificationsManager {
                 this.renderNotifications();
             } else {
                 console.error('Error en la respuesta:', data);
-                this.renderErrorState();
+                this.renderErrorState(data.message || 'Error desconocido');
             }
         } catch (error) {
             console.error('Error al cargar notificaciones:', error);
-            this.renderErrorState();
+            this.renderErrorState('Error de conexión');
         }
     }
     
     async loadUnreadCount() {
+        if (!this.isInitialized) {
+            return;
+        }
+        
         try {
             const response = await fetch(`${this.apiUrl}?action=count`, {
                 method: 'GET',
@@ -150,7 +192,7 @@ class NotificationsManager {
                 <div class="text-center p-3 text-muted">
                     <i class="fas fa-inbox mb-2" style="font-size: 2rem; opacity: 0.5;"></i><br>
                     <span>No tienes notificaciones</span><br>
-                    <small class="text-muted">Las notificaciones aparecerán aquí cuando las recibas</small>
+                    <small class="text-muted">Las notificaciones de asignación aparecerán aquí</small>
                 </div>
             `;
             return;
@@ -161,30 +203,17 @@ class NotificationsManager {
         console.log('Notificaciones renderizadas exitosamente');
     }
     
-    renderAuthError(errorData = null) {
+    renderAuthError() {
         const container = document.getElementById('notificationsList');
         if (container) {
-            let debugInfo = '';
-            if (errorData && errorData.debug) {
-                debugInfo = `
-                    <div class="mt-2" style="font-size: 0.8em; color: #6c757d;">
-                        <strong>Debug:</strong><br>
-                        Cookies: ${errorData.debug.cookies ? errorData.debug.cookies.join(', ') : 'ninguna'}<br>
-                        user_data existe: ${errorData.debug.user_data_exists ? 'sí' : 'no'}<br>
-                        Timestamp: ${errorData.debug.timestamp || 'N/A'}
-                    </div>
-                `;
-            }
-            
             container.innerHTML = `
                 <div class="text-center p-3 text-warning">
                     <i class="fas fa-exclamation-triangle mb-2" style="font-size: 2rem;"></i><br>
-                    <span><strong>Error de autenticación</strong></span><br>
-                    <small>La sesión puede haber expirado</small>
-                    ${debugInfo}
+                    <span><strong>Sesión expirada</strong></span><br>
+                    <small>Por favor, inicia sesión nuevamente</small>
                     <br>
-                    <button class="btn btn-sm btn-outline-warning mt-2" onclick="window.location.reload()">
-                        <i class="fas fa-refresh"></i> Recargar página
+                    <button class="btn btn-sm btn-outline-warning mt-2" onclick="window.location.href='/simpro-lite/web/index.php?modulo=auth&vista=login'">
+                        <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
                     </button>
                 </div>
             `;
@@ -197,13 +226,30 @@ class NotificationsManager {
         }
     }
     
-    renderErrorState() {
+    renderApiNotFound() {
+        const container = document.getElementById('notificationsList');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center p-3 text-info">
+                    <i class="fas fa-info-circle mb-2" style="font-size: 2rem;"></i><br>
+                    <span><strong>API no disponible</strong></span><br>
+                    <small>El sistema de notificaciones está en desarrollo</small>
+                    <br>
+                    <button class="btn btn-sm btn-outline-info mt-2" onclick="window.location.href='/simpro-lite/web/index.php?modulo=notificaciones'">
+                        <i class="fas fa-external-link-alt"></i> Ver todas las notificaciones
+                    </button>
+                </div>
+            `;
+        }
+    }
+    
+    renderErrorState(message = 'Error al cargar notificaciones') {
         const container = document.getElementById('notificationsList');
         if (container) {
             container.innerHTML = `
                 <div class="text-center p-3 text-muted">
                     <i class="fas fa-exclamation-triangle mb-2 text-warning" style="font-size: 2rem;"></i><br>
-                    <span>Error al cargar notificaciones</span>
+                    <span>${message}</span>
                     <br>
                     <button class="btn btn-sm btn-outline-primary mt-2" onclick="window.notificationsManager?.loadNotifications()">
                         <i class="fas fa-refresh"></i> Reintentar
@@ -231,89 +277,22 @@ class NotificationsManager {
                     </div>
                     <div class="flex-grow-1">
                         <h6 class="mb-1 fw-bold">${this.escapeHtml(notification.titulo)}</h6>
-                        <p class="mb-1 text-muted">
+                        <p class="mb-1 text-muted" style="font-size: 0.9em;">
                             ${this.escapeHtml(notification.mensaje)}
                         </p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted">
-                                <i class="fas fa-clock me-1"></i>${timeAgo}
-                            </small>
-                            <button class="btn btn-sm btn-outline-primary notification-action-btn" 
-                                    data-notification-id="${notification.id_notificacion}"
-                                    onclick="event.stopPropagation();">
-                                Responder
-                            </button>
-                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-clock me-1"></i>${timeAgo}
+                        </small>
                     </div>
                     ${!isRead ? `
                         <div class="flex-shrink-0">
-                            <span class="badge bg-primary rounded-circle" 
+                            <span class="badge bg-primary rounded-pill" 
                                   style="width: 8px; height: 8px; padding: 0;"></span>
                         </div>
                     ` : ''}
                 </div>
             </div>
         `;
-    }
-    
-    addNewNotification(notification) {
-        // Agregar al inicio de la lista
-        this.notifications.unshift(notification);
-        
-        // Incrementar contador
-        this.unreadCount++;
-        
-        // Actualizar UI
-        this.updateBadge();
-        this.animateBadge();
-        this.renderNotifications();
-        
-        // Mostrar notificación temporal si la página está activa
-        if (!document.hidden) {
-            this.showToastNotification(notification);
-        }
-    }
-
-    showToastNotification(notification) {
-        // Solo si Bootstrap está disponible
-        if (typeof bootstrap === 'undefined') return;
-        
-        const toastHtml = `
-            <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">
-                <div class="toast-header">
-                    <i class="fas fa-user-plus text-primary me-2"></i>
-                    <strong class="me-auto">${this.escapeHtml(notification.titulo)}</strong>
-                    <small>Ahora</small>
-                    <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-                </div>
-                <div class="toast-body">
-                    ${this.escapeHtml(notification.mensaje)}
-                </div>
-            </div>
-        `;
-        
-        // Crear contenedor de toasts si no existe
-        let toastContainer = document.getElementById('toast-container');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.id = 'toast-container';
-            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-            toastContainer.style.zIndex = '9999';
-            document.body.appendChild(toastContainer);
-        }
-        
-        // Agregar toast
-        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-        
-        // Mostrar toast
-        const toastElement = toastContainer.lastElementChild;
-        const toast = new bootstrap.Toast(toastElement);
-        toast.show();
-        
-        // Limpiar después de que se oculte
-        toastElement.addEventListener('hidden.bs.toast', () => {
-            toastElement.remove();
-        });
     }
     
     updateBadge() {
@@ -338,96 +317,50 @@ class NotificationsManager {
     
     async markAsRead(notificationId) {
         try {
-            // Mostrar feedback visual inmediato
-            const notificationElement = document.querySelector(`[data-id="${notificationId}"]`);
-            if (notificationElement) {
-                notificationElement.style.opacity = '0.6';
-                notificationElement.style.transition = 'opacity 0.3s ease';
-            }
-            
-            const response = await fetch(this.apiUrl, {
-                method: 'PUT',
+            const response = await fetch(`/simpro-lite/web/modulos/notificaciones/ajax_mark_read.php?id=${notificationId}`, {
+                method: 'GET',
                 headers: {
-                    'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    action: 'mark_read',
-                    id_notificacion: notificationId
-                })
+                credentials: 'same-origin'
             });
             
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                // Actualizar el estado local de la notificación
+            if (response.ok) {
+                // Actualizar el estado local
                 const notification = this.notifications.find(n => n.id_notificacion == notificationId);
                 if (notification) {
                     notification.leido = 1;
-                    notification.fecha_leido = new Date().toISOString();
+                    this.unreadCount = Math.max(0, this.unreadCount - 1);
+                    this.updateBadge();
                 }
-                
-                // Actualizar contador y rerender
-                this.unreadCount = Math.max(0, this.unreadCount - 1);
-                this.updateBadge();
-                
-                // Actualizar visualmente el elemento
-                if (notificationElement) {
-                    notificationElement.classList.remove('bg-light');
-                    notificationElement.dataset.read = 'true';
-                    const badge = notificationElement.querySelector('.badge.bg-primary');
-                    if (badge) {
-                        badge.remove();
-                    }
-                    notificationElement.style.opacity = '1';
-                }
-                
-                console.log('Notificación marcada como leída:', notificationId);
             }
         } catch (error) {
             console.error('Error al marcar como leída:', error);
-            
-            // Restaurar estado visual en caso de error
-            const notificationElement = document.querySelector(`[data-id="${notificationId}"]`);
-            if (notificationElement) {
-                notificationElement.style.opacity = '1';
-            }
         }
     }
     
     bindEvents() {
-        document.addEventListener('click', (e) => {
-            const notificationItem = e.target.closest('.notification-item');
-            if (notificationItem) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const notificationId = notificationItem.dataset.id;
-                const isRead = notificationItem.dataset.read === 'true';
-                
-                console.log('Click en notificación:', { notificationId, isRead });
-                
-                if (!isRead) {
-                    this.markAsRead(notificationId);
-                }
-                
-                this.handleNotificationClick(notificationItem);
-            }
-        });
-        
+        // Evento para cuando se hace clic en el dropdown
         const dropdownElement = document.getElementById('notificationDropdown');
         if (dropdownElement) {
             dropdownElement.addEventListener('click', (e) => {
                 console.log('Click en dropdown de notificaciones');
-                this.loadNotifications();
+                // Recargar notificaciones cuando se abre el dropdown
+                setTimeout(() => {
+                    this.loadNotifications();
+                }, 100);
             });
         }
         
+        // Evento para clicks en notificaciones
+        document.addEventListener('click', (e) => {
+            const notificationItem = e.target.closest('.notification-item');
+            if (notificationItem) {
+                this.handleNotificationClick(notificationItem);
+            }
+        });
+        
+        // Pausar polling cuando la página está oculta
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 this.stopPolling();
@@ -438,185 +371,55 @@ class NotificationsManager {
     }
     
     handleNotificationClick(notificationElement) {
+        const notificationId = notificationElement.dataset.id;
+        const isRead = notificationElement.dataset.read === 'true';
         const type = notificationElement.dataset.type;
         const reference = notificationElement.dataset.reference;
-        const titulo = notificationElement.querySelector('h6').textContent;
-        const notificationId = notificationElement.dataset.id;
         
-        // Si es una solicitud de asignación, mostrar modal de respuesta
-        if (titulo.includes('Solicitud de Asignación')) {
-            const notification = this.notifications.find(n => n.id_notificacion == notificationId);
-            if (notification) {
-                this.showResponseModal(notification);
-                return;
-            }
+        console.log('Click en notificación:', { notificationId, isRead, type, reference });
+        
+        // Marcar como leída si no lo está
+        if (!isRead) {
+            this.markAsRead(notificationId);
         }
-        
-        console.log('Navegando desde notificación:', { type, reference, titulo });
         
         // Cerrar el dropdown
-        if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
-            const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('notificationDropdown'));
-            if (dropdown) {
-                dropdown.hide();
+        const dropdown = document.getElementById('notificationDropdown');
+        if (dropdown && typeof bootstrap !== 'undefined') {
+            const bsDropdown = bootstrap.Dropdown.getInstance(dropdown);
+            if (bsDropdown) {
+                bsDropdown.hide();
             }
         }
         
-        // Pequeña pausa para que se cierre el dropdown
-        setTimeout(() => {
-            this.navigateToNotification(type, reference, titulo);
-        }, 100);
-    }
-
-    showResponseModal(notification) {
-        // Crear el modal si no existe
-        let modal = document.getElementById('notificationResponseModal');
-        
-        if (!modal) {
-            const modalHtml = `
-            <div class="modal fade" id="notificationResponseModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Responder Solicitud</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p id="notificationResponseText"></p>
-                            <div class="mb-3">
-                                <label for="responseComment" class="form-label">Comentario (opcional)</label>
-                                <textarea class="form-control" id="responseComment" rows="3"></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-danger" id="rejectRequest">Rechazar</button>
-                            <button type="button" class="btn btn-success" id="acceptRequest">Aceptar</button>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-            
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
-            modal = document.getElementById('notificationResponseModal');
-            
-            // Configurar eventos
-            document.getElementById('acceptRequest').addEventListener('click', () => {
-                this.sendResponse('aceptar');
-            });
-            
-            document.getElementById('rejectRequest').addEventListener('click', () => {
-                this.sendResponse('rechazar');
-            });
+        // Para notificaciones de asignación, ir al módulo de notificaciones
+        if (type === 'asignacion') {
+            setTimeout(() => {
+                window.location.href = `/simpro-lite/web/index.php?modulo=notificaciones&highlight=${notificationId}`;
+            }, 100);
+        } else {
+            // Ir a la página de notificaciones
+            setTimeout(() => {
+                window.location.href = '/simpro-lite/web/index.php?modulo=notificaciones';
+            }, 100);
         }
-        
-        // Configurar contenido
-        document.getElementById('notificationResponseText').textContent = notification.mensaje;
-        
-        // Mostrar modal
-        const bsModal = new bootstrap.Modal(modal);
-        bsModal.show();
-        
-        // Guardar ID de notificación para la respuesta
-        modal.dataset.notificationId = notification.id_notificacion;
-    }
-
-    async sendResponse(action) {
-        const modal = document.getElementById('notificationResponseModal');
-        const notificationId = modal.dataset.notificationId;
-        const comment = document.getElementById('responseComment').value;
-        
-        try {
-            const response = await fetch('/simpro-lite/web/modulos/notificaciones/ajax_responder.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    id_notificacion: notificationId,
-                    respuesta: action,
-                    comentario: comment
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error('Error en la respuesta');
-            }
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                // Cerrar modal y recargar notificaciones
-                const bsModal = bootstrap.Modal.getInstance(modal);
-                bsModal.hide();
-                
-                // Mostrar feedback
-                this.showToast('Respuesta enviada', 'success');
-                
-                // Recargar notificaciones
-                this.loadNotifications();
-                this.loadUnreadCount();
-            }
-        } catch (error) {
-            console.error('Error al enviar respuesta:', error);
-            this.showToast('Error al enviar respuesta', 'danger');
-        }
-    }
-
-    showToast(message, type = 'success') {
-        const toastHtml = `
-            <div class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="d-flex">
-                    <div class="toast-body">
-                        ${message}
-                    </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                </div>
-            </div>`;
-        
-        const toastContainer = document.getElementById('toast-container') || 
-            document.createElement('div');
-        
-        if (!toastContainer.id) {
-            toastContainer.id = 'toast-container';
-            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-            toastContainer.style.zIndex = '9999';
-            document.body.appendChild(toastContainer);
-        }
-        
-        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-        const toastElement = toastContainer.lastElementChild;
-        const toast = new bootstrap.Toast(toastElement);
-        toast.show();
-        
-        toastElement.addEventListener('hidden.bs.toast', () => {
-            toastElement.remove();
-        });
-    }
-
-    navigateToNotification(type, reference, titulo) {
-        if (titulo.includes('Solicitud de Asignación')) {
-            // Mostrar modal de respuesta en lugar de navegar
-            this.showResponseModal({
-                id_notificacion: reference, // Usamos reference como ID temporal
-                mensaje: titulo,
-                tipo: 'asignacion'
-            });
-            return;
-        }
-        
-        // Por defecto ir al dashboard
-        window.location.href = '/simpro-lite/web/index.php?modulo=dashboard';
     }
     
     startPolling() {
-        if (this.isPolling) {
+        if (this.isPolling || !this.isInitialized) {
             return;
         }
         
         this.isPolling = true;
         this.pollInterval = setInterval(() => {
             this.loadUnreadCount();
+            // Recargar notificaciones cada 5 minutos
+            if (Date.now() % 300000 < this.pollFrequency) {
+                this.loadNotifications();
+            }
         }, this.pollFrequency);
+        
+        console.log('Polling iniciado');
     }
     
     stopPolling() {
@@ -625,6 +428,7 @@ class NotificationsManager {
             this.pollInterval = null;
         }
         this.isPolling = false;
+        console.log('Polling detenido');
     }
     
     formatTimeAgo(fechaEnvio) {
@@ -665,21 +469,27 @@ class NotificationsManager {
         this.stopPolling();
         this.notifications = [];
         this.unreadCount = 0;
+        this.isInitialized = false;
     }
 }
 
-document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('notification-action-btn')) {
-        const notificationId = e.target.dataset.notificationId;
-        const notificationElement = e.target.closest('.notification-item');
-        const type = notificationElement.dataset.type;
-        const reference = notificationElement.dataset.reference;
-        const titulo = notificationElement.querySelector('h6').textContent;
-        
-        window.notificationsManager?.navigateToNotification(type, reference, titulo);
+// Exponer la clase globalmente
+window.NotificationsManager = NotificationsManager;
+
+// Inicialización automática cuando el DOM está listo
+document.addEventListener('DOMContentLoaded', function() {
+    // Solo inicializar si hay configuración de notificaciones y no es admin
+    if (window.notificationConfig && window.notificationConfig.userRole !== 'admin') {
+        console.log('Inicializando NotificationsManager automáticamente');
+        window.notificationsManager = new NotificationsManager();
+    } else {
+        console.log('No hay configuración de notificaciones disponible o es admin');
     }
 });
 
+// Exportar para uso en módulos si es necesario
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = NotificationsManager;
 }
+
+} // Fin del if para evitar duplicaciones
