@@ -62,18 +62,31 @@ function tienePermiso($rol_requerido) {
 }
 
 // Función para formatear fechas al español
-function formatearFecha($fecha, $formato = 'd/m/Y H:i') {
-    $timestamp = strtotime($fecha);
-    $meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    $dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    
-    $dia = $dias[date('w', $timestamp)];
-    $dia_num = date('j', $timestamp);
-    $mes = $meses[date('n', $timestamp) - 1];
-    $anio = date('Y', $timestamp);
-    $hora = date('H:i', $timestamp);
-    
-    return "$dia, $dia_num de $mes de $anio, $hora";
+if (!function_exists('formatearFecha')) {
+    function formatearFecha($fecha, $formato = 'd/m/Y H:i') {
+        if (empty($fecha)) return '';
+        
+        $timestamp = strtotime($fecha);
+        if ($timestamp === false) return $fecha;
+        
+        $meses = [
+            'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+        ];
+        
+        $dias = [
+            'Domingo', 'Lunes', 'Martes', 'Miércoles', 
+            'Jueves', 'Viernes', 'Sábado'
+        ];
+
+        $dia = $dias[date('w', $timestamp)];
+        $dia_num = date('j', $timestamp);
+        $mes = $meses[date('n', $timestamp) - 1];
+        $anio = date('Y', $timestamp);
+        $hora = date('H:i', $timestamp);
+
+        return "$dia, $dia_num de $mes de $anio, $hora";
+    }
 }
 
 // Función para registrar actividad en log

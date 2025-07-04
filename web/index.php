@@ -1,5 +1,5 @@
 <?php
-// Archivo: web/index.php
+// Archivo: web/index.php - VERSIÓN CORREGIDA
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -8,6 +8,82 @@ require_once __DIR__ . '/config/config.php';
 // Obtener el módulo y vista desde la URL
 $modulo = isset($_GET['modulo']) ? $_GET['modulo'] : 'auth';
 $vista = isset($_GET['vista']) ? $_GET['vista'] : 'login';
+
+// CRÍTICO: Procesar acciones que requieren redirect ANTES de cualquier output
+// Esto debe hacerse antes de incluir nav.php
+if ($modulo === 'notificaciones') {
+    // Verificar autenticación específica para notificaciones
+    $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
+    if (empty($userData)) {
+        header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
+        exit;
+    }
+    
+    // Procesar acciones que requieren redirect
+    $accion = $_GET['action'] ?? 'list';
+    
+    if (in_array($accion, ['mark_read', 'mark_all_read', 'clean_old'])) {
+        // Cargar dependencias necesarias
+        require_once __DIR__ . '/core/autenticacion.php';
+        require_once __DIR__ . '/core/notificaciones.php';
+        require_once __DIR__ . '/config/database.php';
+        
+        $usuario_id = $userData['id'] ?? $userData['id_usuario'] ?? 0;
+        $usuario_rol = $userData['rol'] ?? 'empleado';
+        
+        // Conectar a la base de datos
+        try {
+            $config = DatabaseConfig::getConfig();
+            $conexion = new mysqli($config['host'], $config['username'], $config['password'], $config['database']);
+            
+            if ($conexion->connect_error) {
+                throw new Exception("Error de conexión: " . $conexion->connect_error);
+            }
+            
+            $conexion->set_charset("utf8mb4");
+            $notificacionesManager = new NotificacionesManager($conexion);
+            
+            // Procesar las acciones
+            switch ($accion) {
+                case 'mark_read':
+                    if (isset($_GET['id'])) {
+                        $id_notificacion = intval($_GET['id']);
+                        if ($notificacionesManager->marcarComoLeida($id_notificacion, $usuario_id)) {
+                            header('Location: /simpro-lite/web/index.php?modulo=notificaciones&msg=read_success');
+                        } else {
+                            header('Location: /simpro-lite/web/index.php?modulo=notificaciones&error=read_error');
+                        }
+                    } else {
+                        header('Location: /simpro-lite/web/index.php?modulo=notificaciones');
+                    }
+                    exit;
+                    
+                case 'mark_all_read':
+                    if ($notificacionesManager->marcarTodasComoLeidas($usuario_id)) {
+                        header('Location: /simpro-lite/web/index.php?modulo=notificaciones&msg=all_read_success');
+                    } else {
+                        header('Location: /simpro-lite/web/index.php?modulo=notificaciones&error=all_read_error');
+                    }
+                    exit;
+                    
+                case 'clean_old':
+                    if (in_array($usuario_rol, ['admin', 'supervisor'])) {
+                        $dias = intval($_GET['days'] ?? 30);
+                        $eliminadas = $notificacionesManager->limpiarNotificacionesAntiguas($dias);
+                        header('Location: /simpro-lite/web/index.php?modulo=notificaciones&msg=clean_success&count=' . $eliminadas);
+                    } else {
+                        header('Location: /simpro-lite/web/index.php?modulo=notificaciones&error=no_permission');
+                    }
+                    exit;
+            }
+            
+        } catch (Exception $e) {
+            error_log("Error procesando acción de notificaciones: " . $e->getMessage());
+            header('Location: /simpro-lite/web/index.php?modulo=notificaciones&error=db_error');
+            exit;
+        }
+    }
+}
 
 // Construir la ruta al archivo del módulo
 $archivoModulo = __DIR__ . "/modulos/{$modulo}/{$vista}.php";
@@ -59,6 +135,11 @@ $incluirHeaderFooter = true;
 
 // Algunos módulos pueden manejar su propio header/footer
 if ($modulo == 'auth' && ($vista == 'logout' || $vista == 'login')) {
+    $incluirHeaderFooter = false;
+}
+
+// El módulo de notificaciones maneja su propio header/nav
+if ($modulo == 'notificaciones') {
     $incluirHeaderFooter = false;
 }
 

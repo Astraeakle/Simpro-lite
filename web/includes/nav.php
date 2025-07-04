@@ -1,16 +1,27 @@
 <?php
 // web/includes/nav.php
-$userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
-
-if (empty($userData)) {
-    if (!in_array(basename($_SERVER['PHP_SELF']), ['index.php']) || 
-        !in_array($_GET['modulo'] ?? '', ['auth', ''])) {
-        header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
-        exit;
-    }
+// Verificar si estamos en la página de notificaciones
+$en_pagina_notificaciones = isset($GLOBALS['en_pagina_notificaciones']) ? $GLOBALS['en_pagina_notificaciones'] : false;
+$modulo_actual = $_GET['modulo'] ?? '';
+if ($modulo_actual === 'notificaciones') {
+    $en_pagina_notificaciones = true;
 }
 
-// Corregir la obtención del ID de usuario - verificar ambos campos posibles
+// Solo verificar headers si no estamos en la página de notificaciones
+if (!$en_pagina_notificaciones && !headers_sent()) {
+    $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
+
+    if (empty($userData)) {
+        if (!in_array(basename($_SERVER['PHP_SELF']), ['index.php']) || 
+            !in_array($_GET['modulo'] ?? '', ['auth', ''])) {
+            header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
+            exit;
+        }
+    }
+} else {
+    $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
+}
+
 $id_usuario = 0;
 if (isset($userData['id_usuario'])) {
     $id_usuario = $userData['id_usuario'];

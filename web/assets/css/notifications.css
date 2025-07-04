@@ -145,3 +145,36 @@
 #notificationsList::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+/* Estilos para notificaciones mejoradas */
+.notification-item {
+  transition: all 0.3s ease;
+  border-radius: 8px;
+  margin-bottom: 2px;
+}
+
+.notification-item:hover {
+  background-color: #f8f9fa !important;
+  transform: translateX(2px);
+}
+
+.notification-action-btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.toast-container {
+  max-width: 350px;
+}
+
+.pulse {
+  animation: pulse 1s ease-in-out;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}

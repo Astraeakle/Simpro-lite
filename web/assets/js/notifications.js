@@ -220,6 +220,10 @@ class NotificationsManager {
         const colorClass = this.getNotificationColor(notification.tipo);
         const timeAgo = this.formatTimeAgo(notification.fecha_envio);
         
+        // Determinar si mostrar botón de acción
+        const showActionButton = this.shouldShowActionButton(notification);
+        const actionButtonText = this.getActionButtonText(notification);
+        
         return `
             <div class="dropdown-item notification-item ${bgClass}" 
                  data-id="${notification.id_notificacion}" 
@@ -236,9 +240,19 @@ class NotificationsManager {
                         <p class="mb-1 text-muted">
                             ${this.escapeHtml(notification.mensaje)}
                         </p>
-                        <small class="text-muted">
-                            <i class="fas fa-clock me-1"></i>${timeAgo}
-                        </small>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>${timeAgo}
+                            </small>
+                            ${showActionButton ? `
+                                <button class="btn btn-sm btn-outline-${colorClass} notification-action-btn" 
+                                        data-notification-id="${notification.id_notificacion}"
+                                        data-action-type="${notification.tipo}"
+                                        onclick="event.stopPropagation();">
+                                    ${actionButtonText}
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
                     ${!isRead ? `
                         <div class="flex-shrink-0">
@@ -249,6 +263,96 @@ class NotificationsManager {
                 </div>
             </div>
         `;
+    }
+
+    shouldShowActionButton(notification) {
+        // Mostrar botón de acción solo para ciertos tipos de notificaciones
+        const actionTypes = ['sistema', 'tarea', 'proyecto'];
+        return actionTypes.includes(notification.tipo) && notification.id_referencia;
+    }
+    
+    getActionButtonText(notification) {
+        const actionTexts = {
+            'sistema': 'Ver detalles',
+            'tarea': 'Ir a tarea',
+            'proyecto': 'Ver proyecto',
+            'asistencia': 'Ver asistencia'
+        };
+        
+        return actionTexts[notification.tipo] || 'Ver';
+    }
+
+    handleDirectAction(notificationId, actionType) {
+        const notification = this.notifications.find(n => n.id_notificacion == notificationId);
+        if (!notification) return;
+        
+        // Marcar como leída si no está leída
+        if (!notification.leido) {
+            this.markAsRead(notificationId);
+        }
+        
+        // Ejecutar acción específica
+        this.navigateToNotification(actionType, notification.id_referencia, notification.titulo);
+    }
+
+    addNewNotification(notification) {
+        // Agregar al inicio de la lista
+        this.notifications.unshift(notification);
+        
+        // Incrementar contador
+        this.unreadCount++;
+        
+        // Actualizar UI
+        this.updateBadge();
+        this.animateBadge();
+        this.renderNotifications();
+        
+        // Mostrar notificación temporal si la página está activa
+        if (!document.hidden) {
+            this.showToastNotification(notification);
+        }
+    }
+
+    showToastNotification(notification) {
+        // Solo si Bootstrap está disponible
+        if (typeof bootstrap === 'undefined') return;
+        
+        const toastHtml = `
+            <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">
+                <div class="toast-header">
+                    <i class="${this.getNotificationIcon(notification.tipo)} text-${this.getNotificationColor(notification.tipo)} me-2"></i>
+                    <strong class="me-auto">${this.escapeHtml(notification.titulo)}</strong>
+                    <small>Ahora</small>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${this.escapeHtml(notification.mensaje)}
+                </div>
+            </div>
+        `;
+        
+        // Crear contenedor de toasts si no existe
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Agregar toast
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        
+        // Mostrar toast
+        const toastElement = toastContainer.lastElementChild;
+        const toast = new bootstrap.Toast(toastElement);
+        toast.show();
+        
+        // Limpiar después de que se oculte
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
     }
     
     updateBadge() {
@@ -273,6 +377,13 @@ class NotificationsManager {
     
     async markAsRead(notificationId) {
         try {
+            // Mostrar feedback visual inmediato
+            const notificationElement = document.querySelector(`[data-id="${notificationId}"]`);
+            if (notificationElement) {
+                notificationElement.style.opacity = '0.6';
+                notificationElement.style.transition = 'opacity 0.3s ease';
+            }
+            
             const response = await fetch(this.apiUrl, {
                 method: 'PUT',
                 headers: {
@@ -293,18 +404,38 @@ class NotificationsManager {
             const data = await response.json();
             
             if (data.success) {
+                // Actualizar el estado local de la notificación
                 const notification = this.notifications.find(n => n.id_notificacion == notificationId);
                 if (notification) {
                     notification.leido = 1;
                     notification.fecha_leido = new Date().toISOString();
                 }
                 
+                // Actualizar contador y rerender
                 this.unreadCount = Math.max(0, this.unreadCount - 1);
                 this.updateBadge();
-                this.renderNotifications();
+                
+                // Actualizar visualmente el elemento
+                if (notificationElement) {
+                    notificationElement.classList.remove('bg-light');
+                    notificationElement.dataset.read = 'true';
+                    const badge = notificationElement.querySelector('.badge.bg-primary');
+                    if (badge) {
+                        badge.remove();
+                    }
+                    notificationElement.style.opacity = '1';
+                }
+                
+                console.log('Notificación marcada como leída:', notificationId);
             }
         } catch (error) {
             console.error('Error al marcar como leída:', error);
+            
+            // Restaurar estado visual en caso de error
+            const notificationElement = document.querySelector(`[data-id="${notificationId}"]`);
+            if (notificationElement) {
+                notificationElement.style.opacity = '1';
+            }
         }
     }
     
@@ -348,7 +479,11 @@ class NotificationsManager {
     handleNotificationClick(notificationElement) {
         const type = notificationElement.dataset.type;
         const reference = notificationElement.dataset.reference;
+        const titulo = notificationElement.querySelector('h6').textContent;
         
+        console.log('Navegando desde notificación:', { type, reference, titulo });
+        
+        // Cerrar el dropdown
         if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
             const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('notificationDropdown'));
             if (dropdown) {
@@ -356,31 +491,62 @@ class NotificationsManager {
             }
         }
         
+        // Pequeña pausa para que se cierre el dropdown
         setTimeout(() => {
-            switch (type) {
-                case 'tarea':
-                    if (reference) {
-                        window.location.href = `/simpro-lite/web/index.php?modulo=actividades&id=${reference}`;
-                    } else {
-                        window.location.href = '/simpro-lite/web/index.php?modulo=actividades';
-                    }
-                    break;
-                case 'proyecto':
-                    if (reference) {
-                        window.location.href = `/simpro-lite/web/index.php?modulo=proyectos&id=${reference}`;
-                    } else {
-                        window.location.href = '/simpro-lite/web/index.php?modulo=proyectos';
-                    }
-                    break;
-                case 'asistencia':
-                    window.location.href = '/simpro-lite/web/index.php?modulo=asistencia';
-                    break;
-                default:
-                    window.location.href = '/simpro-lite/web/index.php?modulo=notificaciones';
-                    break;
-            }
+            this.navigateToNotification(type, reference, titulo);
         }, 100);
     }
+
+    navigateToNotification(type, reference, titulo) {
+        let targetUrl = '';
+        
+        switch (type) {
+            case 'sistema':
+                // Para notificaciones del sistema, revisar si hay referencia específica
+                if (reference) {
+                    // Si es una solicitud de asignación, ir a usuarios/empleados
+                    if (titulo.includes('Solicitud de Asignación') || titulo.includes('Asignación')) {
+                        targetUrl = `/simpro-lite/web/index.php?modulo=admin&submodulo=usuarios&action=view&id=${reference}`;
+                    } else {
+                        targetUrl = `/simpro-lite/web/index.php?modulo=admin&ref=${reference}`;
+                    }
+                } else {
+                    targetUrl = '/simpro-lite/web/index.php?modulo=admin';
+                }
+                break;
+                
+            case 'tarea':
+                if (reference) {
+                    targetUrl = `/simpro-lite/web/index.php?modulo=actividades&action=view&id=${reference}`;
+                } else {
+                    targetUrl = '/simpro-lite/web/index.php?modulo=actividades';
+                }
+                break;
+                
+            case 'proyecto':
+                if (reference) {
+                    targetUrl = `/simpro-lite/web/index.php?modulo=proyectos&action=view&id=${reference}`;
+                } else {
+                    targetUrl = '/simpro-lite/web/index.php?modulo=proyectos';
+                }
+                break;
+                
+            case 'asistencia':
+                if (reference) {
+                    targetUrl = `/simpro-lite/web/index.php?modulo=asistencia&action=view&id=${reference}`;
+                } else {
+                    targetUrl = '/simpro-lite/web/index.php?modulo=asistencia';
+                }
+                break;
+                
+            default:
+                targetUrl = '/simpro-lite/web/index.php?modulo=dashboard';
+                break;
+        }
+        
+        console.log('Navegando a:', targetUrl);
+        window.location.href = targetUrl;
+    }    
     
     startPolling() {
         if (this.isPolling) {
@@ -464,8 +630,12 @@ class NotificationsManager {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    window.notificationsManager = new NotificationsManager();
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('notification-action-btn')) {
+        const notificationId = e.target.dataset.notificationId;
+        const actionType = e.target.dataset.actionType;
+        this.handleDirectAction(notificationId, actionType);
+    }
 });
 
 if (typeof module !== 'undefined' && module.exports) {
