@@ -1,9 +1,7 @@
 // web/assets/js/notifications.js
-// Verificar si ya está cargado para evitar duplicaciones
 if (window.NotificationsManager) {
     console.log('NotificationsManager ya está cargado');
-} else {
-    
+} else {    
 class NotificationsManager {
     constructor() {
         this.apiUrl = window.notificationConfig?.apiUrl || '/simpro-lite/api/v1/notificaciones.php';
@@ -21,24 +19,18 @@ class NotificationsManager {
             userRole: this.userRole,
             userId: this.userId
         });
-        
-        // Verificar si estamos en roles que NO usan notificaciones
         if (this.userRole === 'admin') {
             console.log('Admin no usa notificaciones avanzadas');
             return;
         }
-        
-        // Solo inicializar para empleado y supervisor
         if (!['empleado', 'supervisor'].includes(this.userRole)) {
             console.log('Rol no requiere notificaciones:', this.userRole);
             return;
         }
         
         this.init();
-    }
-    
+    }    
     init() {
-        // Verificar si el usuario está autenticado y tiene rol apropiado
         if (!this.userId || this.userId <= 0) {
             console.log('Usuario no autenticado, no inicializar notificaciones');
             return;
@@ -52,25 +44,15 @@ class NotificationsManager {
         
         console.log('Inicializando sistema de notificaciones...');
         this.isInitialized = true;
-        
-        // Configurar eventos primero
         this.bindEvents();
-        
-        // Cargar datos iniciales
         this.loadNotifications();
         this.loadUnreadCount();
-        
-        // Iniciar polling después de un pequeño delay
         setTimeout(() => {
             this.startPolling();
         }, 1000);
-        
-        // Crear modal si no existe
         this.createModal();
-    }
-    
+    }    
     createModal() {
-        // Verificar si el modal ya existe
         if (document.getElementById('notificationModal')) {
             return;
         }
@@ -107,8 +89,6 @@ class NotificationsManager {
         `;
         
         document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // Configurar eventos del modal
         this.setupModalEvents();
     }
     
@@ -140,15 +120,9 @@ class NotificationsManager {
             console.error('Modal no encontrado');
             return;
         }
-        
-        // Guardar la notificación actual
         this.currentNotification = notification;
-        
-        // Verificar si es una solicitud de asignación
         const isAssignmentRequest = notification.titulo.includes('Solicitud de Asignación') || 
                                   notification.titulo.includes('Solicitud de equipo');
-        
-        // Configurar contenido del modal
         modalContent.innerHTML = `
             <div class="card">
                 <div class="card-header bg-light">
@@ -198,7 +172,6 @@ class NotificationsManager {
             </div>
         `;
         
-        // Mostrar/ocultar botones según el tipo de notificación
         if (isAssignmentRequest && notification.leido != 1) {
             btnAceptar.style.display = 'inline-block';
             btnRechazar.style.display = 'inline-block';
@@ -206,8 +179,6 @@ class NotificationsManager {
             btnAceptar.style.display = 'none';
             btnRechazar.style.display = 'none';
         }
-        
-        // Mostrar modal
         const bootstrapModal = new bootstrap.Modal(modal);
         bootstrapModal.show();
     }
@@ -220,9 +191,7 @@ class NotificationsManager {
         }
         
         const comentario = document.getElementById('comentarioRespuesta')?.value || '';
-        
-        // Mostrar loading
-        const btnAceptar = document.getElementById('btnAceptar');
+                const btnAceptar = document.getElementById('btnAceptar');
         const btnRechazar = document.getElementById('btnRechazar');
         
         if (btnAceptar) btnAceptar.disabled = true;
@@ -246,19 +215,12 @@ class NotificationsManager {
             const data = await response.json();
             
             if (data.success) {
-                // Mostrar mensaje de éxito
-                this.showToast(data.message, 'success');
-                
-                // Cerrar modal
+                this.showToast(data.message, 'success');                
                 const modal = bootstrap.Modal.getInstance(document.getElementById('notificationModal'));
                 if (modal) {
                     modal.hide();
-                }
-                
-                // Actualizar notificación como leída
+                }                
                 notification.leido = 1;
-                
-                // Recargar notificaciones
                 setTimeout(() => {
                     this.loadNotifications();
                     this.loadUnreadCount();
@@ -279,7 +241,6 @@ class NotificationsManager {
     }
     
     showToast(message, type = 'info') {
-        // Crear toast si no existe
         let toastContainer = document.getElementById('toastContainer');
         if (!toastContainer) {
             toastContainer = document.createElement('div');
@@ -313,8 +274,6 @@ class NotificationsManager {
         });
         
         toast.show();
-        
-        // Remover del DOM después de ocultarse
         toastElement.addEventListener('hidden.bs.toast', () => {
             toastElement.remove();
         });
@@ -749,7 +708,6 @@ class NotificationsManager {
 window.NotificationsManager = NotificationsManager;
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Solo inicializar si hay configuración de notificaciones y no es admin
     if (window.notificationConfig && window.notificationConfig.userRole !== 'admin') {
         console.log('Inicializando NotificationsManager automáticamente');
         window.notificationsManager = new NotificationsManager();

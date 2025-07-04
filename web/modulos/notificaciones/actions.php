@@ -127,21 +127,15 @@ try {
             
         case 'reject_team':
             if ($id_notificacion > 0) {
-                // Obtener detalles de la notificación
                 $stmt = $conexion->prepare("SELECT * FROM notificaciones WHERE id_notificacion = ? AND id_usuario = ?");
                 $stmt->bind_param("ii", $id_notificacion, $id_usuario);
                 $stmt->execute();
                 $result = $stmt->get_result();
-                $notificacion = $result->fetch_assoc();
-                
+                $notificacion = $result->fetch_assoc();                
                 if ($notificacion && $notificacion['id_referencia']) {
-                    // El id_referencia contiene el ID del supervisor que envió la solicitud
-                    $supervisor_id = $notificacion['id_referencia'];
-                    
-                    // Marcar notificación como leída
+                    $supervisor_id = $notificacion['id_referencia'];                
                     $notificacionesManager->marcarComoLeida($id_notificacion, $id_usuario);
                     
-                    // Crear notificación de rechazo para el supervisor
                     $stmt = $conexion->prepare("SELECT nombre_completo FROM usuarios WHERE id_usuario = ?");
                     $stmt->bind_param("i", $id_usuario);
                     $stmt->execute();
@@ -152,7 +146,6 @@ try {
                     $mensaje = "{$empleado['nombre_completo']} ha rechazado la solicitud de unirse a tu equipo";
                     $notificacionesManager->insertarNotificacion($supervisor_id, $titulo, $mensaje, 'sistema');
                     
-                    // Log de la acción
                     $stmt = $conexion->prepare("INSERT INTO logs_sistema (tipo, modulo, mensaje, id_usuario) VALUES (?, ?, ?, ?)");
                     $tipo = "equipo";
                     $modulo = "notificaciones";

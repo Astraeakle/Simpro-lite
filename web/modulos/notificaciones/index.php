@@ -6,7 +6,6 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../core/autenticacion.php';
 require_once __DIR__ . '/../../core/notificaciones.php';
 require_once __DIR__ . '/../../config/database.php';
-
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
 $id_usuario = 0;
 if (isset($userData['id_usuario'])) {
@@ -16,16 +15,12 @@ if (isset($userData['id_usuario'])) {
 }
 $usuario_rol = $userData['rol'] ?? 'empleado';
 $nombreUsuario = $userData['nombre_completo'] ?? 'Usuario';
-
-// Solo supervisores y empleados usan notificaciones
 if ($usuario_rol === 'admin') {
     header('Location: /simpro-lite/web/index.php?modulo=dashboard');
     exit;
 }
-
 $notificacionesManager = null;
 $error_conexion = null;
-
 try {
     $config = DatabaseConfig::getConfig();
     $conexion = new mysqli($config['host'], $config['username'], $config['password'], $config['database']);
@@ -41,11 +36,8 @@ try {
     error_log("Error conectando a la base de datos: " . $e->getMessage());
     $error_conexion = "Error de conexión a la base de datos";
 }
-
-// Procesar mensajes de resultado
 $mensaje = '';
 $error = '';
-
 if (isset($_GET['msg'])) {
     switch ($_GET['msg']) {
         case 'read_success':
@@ -62,7 +54,6 @@ if (isset($_GET['msg'])) {
             break;
     }
 }
-
 if (isset($_GET['error'])) {
     switch ($_GET['error']) {
         case 'read_error':
@@ -79,26 +70,17 @@ if (isset($_GET['error'])) {
             break;
     }
 }
-
-// Mostrar error de conexión si existe
 if ($error_conexion) {
     $error = $error_conexion;
 }
-
-// Obtener filtros
 $filtro_leido = $_GET['leido'] ?? '';
 $limite = intval($_GET['limite'] ?? 50);
-
-// Obtener notificaciones
 $notificaciones = [];
 $estadisticas = [];
-
 if ($notificacionesManager) {
     try {
         $solo_no_leidas = $filtro_leido === 'no_leidas';
         $notificaciones = $notificacionesManager->obtenerNotificaciones($id_usuario, $solo_no_leidas, $limite);
-        
-        // Obtener estadísticas
         $estadisticas = $notificacionesManager->obtenerEstadisticasNotificaciones($id_usuario);
         
     } catch (Exception $e) {
@@ -118,49 +100,13 @@ function formatearFechaNotificacion($fecha) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notificaciones de Equipo - SimPro Lite</title>
+    <title>Notificaciones de Equipo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-    .notification-item.unread {
-        background-color: #f8f9fa;
-        border-left: 4px solid #0d6efd;
-    }
-
-    .notification-item.read {
-        background-color: #ffffff;
-        border-left: 4px solid #dee2e6;
-    }
-
-    .stats-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-    }
-
-    .filter-card {
-        background-color: #f8f9fa;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 20px;
-    }
-
-    .btn-accept {
-        background-color: #28a745;
-        border-color: #28a745;
-        color: white;
-    }
-
-    .btn-reject {
-        background-color: #dc3545;
-        border-color: #dc3545;
-        color: white;
-    }
-    </style>
 </head>
 
 <body>
     <?php include_once __DIR__ . '/../../includes/nav.php'; ?>
-
     <div class="container-fluid mt-4">
         <div class="row">
             <div class="col-12">
@@ -345,7 +291,6 @@ function formatearFechaNotificacion($fecha) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-    // Configuración para empleados y supervisores solamente
     <?php if ($usuario_rol !== 'admin'): ?>
     window.notificationConfig = {
         apiUrl: '/simpro-lite/api/v1/notificaciones.php',
@@ -354,8 +299,6 @@ function formatearFechaNotificacion($fecha) {
         userId: <?php echo $id_usuario; ?>
     };
     <?php endif; ?>
-
-    // Auto-refresh cada 60 segundos
     setInterval(function() {
         if (!document.hidden) {
             const urlParams = new URLSearchParams(window.location.search);
