@@ -83,7 +83,9 @@ ob_end_clean();
             </ul>
 
             <ul class="navbar-nav">
-                <?php if ($isAuthenticated && in_array($rolUsuario, ['empleado', 'supervisor', 'admin'])): ?>
+                <?php 
+                // Solo mostrar notificaciones para empleado y supervisor (NO admin)
+                if ($isAuthenticated && in_array($rolUsuario, ['empleado', 'supervisor'])): ?>
                 <li class="nav-item dropdown me-3" id="notification-dropdown-container">
                     <a class="nav-link position-relative" href="#" id="notificationDropdown" role="button"
                         data-bs-toggle="dropdown" aria-expanded="false" title="Notificaciones">
@@ -144,8 +146,11 @@ ob_end_clean();
     </div>
 </nav>
 
-<?php if ($isAuthenticated && in_array($rolUsuario, ['empleado', 'supervisor', 'admin'])): ?>
+<?php 
+// Solo incluir el JavaScript de notificaciones para empleado y supervisor
+if ($isAuthenticated && in_array($rolUsuario, ['empleado', 'supervisor'])): ?>
 <script>
+// Configuración de notificaciones solo para empleado y supervisor
 window.notificationConfig = {
     apiUrl: '/simpro-lite/api/v1/notificaciones.php',
     pollFrequency: 30000,
