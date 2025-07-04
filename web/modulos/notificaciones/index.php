@@ -6,21 +6,19 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../core/autenticacion.php';
 require_once __DIR__ . '/../../core/notificaciones.php';
 require_once __DIR__ . '/../../config/database.php';
-$userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
-$id_usuario = 0;
-if (isset($userData['id_usuario'])) {
-    $id_usuario = $userData['id_usuario'];
-} elseif (isset($userData['id'])) {
-    $id_usuario = $userData['id'];
-}
+
+$userData = json_decode($_COOKIE['user_data'] ?? '{}', true);
+$id_usuario = $userData['id_usuario'] ?? $userData['id'] ?? 0;
 $usuario_rol = $userData['rol'] ?? 'empleado';
-$nombreUsuario = $userData['nombre_completo'] ?? 'Usuario';
-if ($usuario_rol === 'admin') {
-    header('Location: /simpro-lite/web/index.php?modulo=dashboard');
+
+if ($id_usuario === 0) {
+    header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
     exit;
 }
+
 $notificacionesManager = null;
 $error_conexion = null;
+
 try {
     $config = DatabaseConfig::getConfig();
     $conexion = new mysqli($config['host'], $config['username'], $config['password'], $config['database']);
@@ -36,8 +34,10 @@ try {
     error_log("Error conectando a la base de datos: " . $e->getMessage());
     $error_conexion = "Error de conexión a la base de datos";
 }
+
 $mensaje = '';
 $error = '';
+
 if (isset($_GET['msg'])) {
     switch ($_GET['msg']) {
         case 'read_success':
@@ -46,43 +46,34 @@ if (isset($_GET['msg'])) {
         case 'all_read_success':
             $mensaje = "Todas las notificaciones marcadas como leídas";
             break;
-        case 'accept_success':
-            $mensaje = "Solicitud de equipo aceptada";
-            break;
-        case 'reject_success':
-            $mensaje = "Solicitud de equipo rechazada";
-            break;
     }
 }
+
 if (isset($_GET['error'])) {
     switch ($_GET['error']) {
         case 'read_error':
             $error = "Error al marcar la notificación";
             break;
-        case 'no_permission':
-            $error = "No tienes permisos para esta acción";
-            break;
         case 'db_error':
             $error = "Error de conexión a la base de datos";
             break;
-        case 'accept_error':
-            $error = "Error al procesar la solicitud";
-            break;
     }
 }
+
 if ($error_conexion) {
     $error = $error_conexion;
 }
+
 $filtro_leido = $_GET['leido'] ?? '';
 $limite = intval($_GET['limite'] ?? 50);
 $notificaciones = [];
 $estadisticas = [];
+
 if ($notificacionesManager) {
     try {
         $solo_no_leidas = $filtro_leido === 'no_leidas';
         $notificaciones = $notificacionesManager->obtenerNotificaciones($id_usuario, $solo_no_leidas, $limite);
         $estadisticas = $notificacionesManager->obtenerEstadisticasNotificaciones($id_usuario);
-        
     } catch (Exception $e) {
         error_log("Error obteniendo notificaciones: " . $e->getMessage());
         $error = "Error al cargar las notificaciones";
@@ -100,7 +91,7 @@ function formatearFechaNotificacion($fecha) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notificaciones de Equipo</title>
+    <title>Notificaciones</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -112,7 +103,7 @@ function formatearFechaNotificacion($fecha) {
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h1 class="h3 mb-0">
-                        <i class="fas fa-users text-primary"></i> Notificaciones de Equipo
+                        <i class="fas fa-bell text-primary"></i> Notificaciones
                     </h1>
                     <div class="btn-group" role="group">
                         <a href="?modulo=notificaciones&action=mark_all_read" class="btn btn-outline-primary btn-sm"
@@ -137,7 +128,6 @@ function formatearFechaNotificacion($fecha) {
                 <?php endif; ?>
 
                 <div class="row">
-                    <!-- Estadísticas -->
                     <?php if (!empty($estadisticas)): ?>
                     <div class="col-md-3 mb-4">
                         <div class="card stats-card">
@@ -158,9 +148,7 @@ function formatearFechaNotificacion($fecha) {
                     </div>
                     <?php endif; ?>
 
-                    <!-- Notificaciones -->
                     <div class="col-md-<?php echo !empty($estadisticas) ? '9' : '12'; ?>">
-                        <!-- Filtros -->
                         <div class="filter-card">
                             <form method="GET" class="row g-3">
                                 <input type="hidden" name="modulo" value="notificaciones">
@@ -195,7 +183,6 @@ function formatearFechaNotificacion($fecha) {
                             </form>
                         </div>
 
-                        <!-- Lista de notificaciones -->
                         <div class="card">
                             <div class="card-header">
                                 <h5 class="mb-0">
@@ -208,9 +195,6 @@ function formatearFechaNotificacion($fecha) {
                                 <div class="text-center py-5">
                                     <i class="fas fa-inbox text-muted" style="font-size: 3rem;"></i>
                                     <h5 class="mt-3 text-muted">No hay notificaciones</h5>
-                                    <p class="text-muted">
-                                        Las notificaciones de equipo aparecerán aquí cuando las recibas.
-                                    </p>
                                 </div>
                                 <?php else: ?>
                                 <div class="list-group list-group-flush">
@@ -218,7 +202,6 @@ function formatearFechaNotificacion($fecha) {
                                     <?php
                                     $isRead = $notificacion['leido'] == 1;
                                     $timeAgo = formatearFechaNotificacion($notificacion['fecha_envio']);
-                                    $isSolicitudEquipo = strpos($notificacion['titulo'], 'Solicitud de equipo') !== false;
                                     ?>
                                     <div
                                         class="list-group-item notification-item <?php echo $isRead ? 'read' : 'unread'; ?>">
@@ -226,7 +209,7 @@ function formatearFechaNotificacion($fecha) {
                                             <div class="flex-grow-1">
                                                 <div class="d-flex align-items-start">
                                                     <div class="flex-shrink-0 me-3">
-                                                        <i class="fas fa-users text-primary fa-lg"></i>
+                                                        <i class="fas fa-bell text-primary fa-lg"></i>
                                                     </div>
                                                     <div class="flex-grow-1">
                                                         <h6 class="mb-1 fw-bold">
@@ -253,14 +236,14 @@ function formatearFechaNotificacion($fecha) {
                                                     </div>
                                                 </div>
                                             </div>
+                                            <?php if (!$isRead): ?>
                                             <div class="flex-shrink-0">
-                                                <?php if (!$isRead): ?>
                                                 <a href="?modulo=notificaciones&action=mark_read&id=<?php echo $notificacion['id_notificacion']; ?>"
                                                     class="btn btn-sm btn-outline-primary" title="Marcar como leída">
-                                                    <i class="fas fa-check"></i> Marcar como leída
+                                                    <i class="fas fa-check"></i>
                                                 </a>
-                                                <?php endif; ?>
                                             </div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                     <?php endforeach; ?>
@@ -284,14 +267,6 @@ function formatearFechaNotificacion($fecha) {
         userId: <?php echo $id_usuario; ?>
     };
     <?php endif; ?>
-    setInterval(function() {
-        if (!document.hidden) {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (!urlParams.get('leido')) {
-                window.location.reload();
-            }
-        }
-    }, 60000);
     </script>
 
     <?php if ($usuario_rol !== 'admin'): ?>
