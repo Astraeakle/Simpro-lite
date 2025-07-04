@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../core/autenticacion.php';
 require_once __DIR__ . '/../../core/notificaciones.php';
 require_once __DIR__ . '/../../config/database.php';
+
 $userData = json_decode(isset($_COOKIE['user_data']) ? $_COOKIE['user_data'] : '{}', true);
 $id_usuario = 0;
 if (isset($userData['id_usuario'])) {
@@ -15,6 +16,13 @@ if (isset($userData['id_usuario'])) {
 }
 $usuario_rol = $userData['rol'] ?? 'empleado';
 $nombreUsuario = $userData['nombre_completo'] ?? 'Usuario';
+
+// Solo supervisores y empleados usan notificaciones
+if ($usuario_rol === 'admin') {
+    header('Location: /simpro-lite/web/index.php?modulo=dashboard');
+    exit;
+}
+
 $notificacionesManager = null;
 $error_conexion = null;
 
@@ -46,9 +54,11 @@ if (isset($_GET['msg'])) {
         case 'all_read_success':
             $mensaje = "Todas las notificaciones marcadas como leídas";
             break;
-        case 'clean_success':
-            $count = intval($_GET['count'] ?? 0);
-            $mensaje = "Se eliminaron {$count} notificaciones antiguas";
+        case 'accept_success':
+            $mensaje = "Solicitud de equipo aceptada";
+            break;
+        case 'reject_success':
+            $mensaje = "Solicitud de equipo rechazada";
             break;
     }
 }
@@ -58,17 +68,14 @@ if (isset($_GET['error'])) {
         case 'read_error':
             $error = "Error al marcar la notificación";
             break;
-        case 'all_read_error':
-            $error = "Error al marcar las notificaciones";
-            break;
-        case 'clean_error':
-            $error = "Error al limpiar notificaciones antiguas";
-            break;
         case 'no_permission':
             $error = "No tienes permisos para esta acción";
             break;
         case 'db_error':
             $error = "Error de conexión a la base de datos";
+            break;
+        case 'accept_error':
+            $error = "Error al procesar la solicitud";
             break;
     }
 }
@@ -79,10 +86,8 @@ if ($error_conexion) {
 }
 
 // Obtener filtros
-$filtro_tipo = $_GET['tipo'] ?? '';
 $filtro_leido = $_GET['leido'] ?? '';
 $limite = intval($_GET['limite'] ?? 50);
-$pagina = intval($_GET['pagina'] ?? 1);
 
 // Obtener notificaciones
 $notificaciones = [];
@@ -90,16 +95,8 @@ $estadisticas = [];
 
 if ($notificacionesManager) {
     try {
-        // Obtener notificaciones con filtros
         $solo_no_leidas = $filtro_leido === 'no_leidas';
         $notificaciones = $notificacionesManager->obtenerNotificaciones($id_usuario, $solo_no_leidas, $limite);
-        
-        // Filtrar por tipo si se especifica
-        if ($filtro_tipo) {
-            $notificaciones = array_filter($notificaciones, function($n) use ($filtro_tipo) {
-                return $n['tipo'] === $filtro_tipo;
-            });
-        }
         
         // Obtener estadísticas
         $estadisticas = $notificacionesManager->obtenerEstadisticasNotificaciones($id_usuario);
@@ -110,27 +107,9 @@ if ($notificacionesManager) {
     }
 }
 
-// Definir título de página
-$titulo_pagina = "Notificaciones de Asignación";
-
-// Funciones auxiliares
-function getNotificationIcon($tipo) {
-    return 'fas fa-user-plus'; // Icono único para asignaciones
-}
-
-function getNotificationColor($tipo) {
-    return 'primary'; // Color único para asignaciones
-}
-
 function formatearFechaNotificacion($fecha) {
     return date('d/m/Y H:i', strtotime($fecha));
 }
-
-// Preparar datos para el nav personalizado
-$modulo_actual = $_GET['modulo'] ?? '';
-$en_pagina_notificaciones = ($modulo_actual === 'notificaciones');
-$isAuthenticated = !empty($userData) && $id_usuario > 0;
-$rolUsuario = $usuario_rol;
 ?>
 
 <!DOCTYPE html>
@@ -139,38 +118,61 @@ $rolUsuario = $usuario_rol;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $titulo_pagina; ?> - SimPro Lite</title>
+    <title>Notificaciones de Equipo - SimPro Lite</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="/simpro-lite/web/assets/css/notifications.css" rel="stylesheet">
+    <style>
+    .notification-item.unread {
+        background-color: #f8f9fa;
+        border-left: 4px solid #0d6efd;
+    }
+
+    .notification-item.read {
+        background-color: #ffffff;
+        border-left: 4px solid #dee2e6;
+    }
+
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .filter-card {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .btn-accept {
+        background-color: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+
+    .btn-reject {
+        background-color: #dc3545;
+        border-color: #dc3545;
+        color: white;
+    }
+    </style>
 </head>
 
 <body>
-    <!-- Navegación personalizada para notificaciones -->
-    <?php 
-    // Incluir nav.php pero pasando información sobre la página actual
-    $GLOBALS['en_pagina_notificaciones'] = true;
-    include_once __DIR__ . '/../../includes/nav.php';
-    ?>
+    <?php include_once __DIR__ . '/../../includes/nav.php'; ?>
 
     <div class="container-fluid mt-4">
         <div class="row">
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h1 class="h3 mb-0">
-                        <i class="fas fa-user-plus text-primary"></i> <?php echo $titulo_pagina; ?>
+                        <i class="fas fa-users text-primary"></i> Notificaciones de Equipo
                     </h1>
                     <div class="btn-group" role="group">
                         <a href="?modulo=notificaciones&action=mark_all_read" class="btn btn-outline-primary btn-sm"
                             onclick="return confirm('¿Marcar todas como leídas?')">
                             <i class="fas fa-check-double"></i> Marcar todas como leídas
                         </a>
-                        <?php if (in_array($usuario_rol, ['admin', 'supervisor'])): ?>
-                        <a href="?modulo=notificaciones&action=clean_old&days=30" class="btn btn-outline-warning btn-sm"
-                            onclick="return confirm('¿Eliminar notificaciones leídas de más de 30 días?')">
-                            <i class="fas fa-trash"></i> Limpiar antiguas
-                        </a>
-                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -217,14 +219,6 @@ $rolUsuario = $usuario_rol;
                             <form method="GET" class="row g-3">
                                 <input type="hidden" name="modulo" value="notificaciones">
                                 <div class="col-md-3">
-                                    <select name="tipo" class="form-select form-select-sm">
-                                        <option value="">Todos los tipos</option>
-                                        <option value="asignacion"
-                                            <?php echo $filtro_tipo === 'asignacion' ? 'selected' : ''; ?>>Asignaciones
-                                        </option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
                                     <select name="leido" class="form-select form-select-sm">
                                         <option value="">Todas</option>
                                         <option value="no_leidas"
@@ -259,7 +253,7 @@ $rolUsuario = $usuario_rol;
                         <div class="card">
                             <div class="card-header">
                                 <h5 class="mb-0">
-                                    <i class="fas fa-list"></i> Notificaciones
+                                    <i class="fas fa-bell"></i> Notificaciones
                                     <span class="badge bg-primary"><?php echo count($notificaciones); ?></span>
                                 </h5>
                             </div>
@@ -269,11 +263,7 @@ $rolUsuario = $usuario_rol;
                                     <i class="fas fa-inbox text-muted" style="font-size: 3rem;"></i>
                                     <h5 class="mt-3 text-muted">No hay notificaciones</h5>
                                     <p class="text-muted">
-                                        <?php if ($filtro_tipo || $filtro_leido): ?>
-                                        No se encontraron notificaciones con los filtros aplicados.
-                                        <?php else: ?>
-                                        Las notificaciones de asignación aparecerán aquí cuando las recibas.
-                                        <?php endif; ?>
+                                        Las notificaciones de equipo aparecerán aquí cuando las recibas.
                                     </p>
                                 </div>
                                 <?php else: ?>
@@ -281,20 +271,16 @@ $rolUsuario = $usuario_rol;
                                     <?php foreach ($notificaciones as $notificacion): ?>
                                     <?php
                                     $isRead = $notificacion['leido'] == 1;
-                                    $iconClass = getNotificationIcon($notificacion['tipo']);
-                                    $colorClass = getNotificationColor($notificacion['tipo']);
                                     $timeAgo = formatearFechaNotificacion($notificacion['fecha_envio']);
+                                    $isSolicitudEquipo = strpos($notificacion['titulo'], 'Solicitud de equipo') !== false;
                                     ?>
-                                    <div class="list-group-item notification-item <?php echo $isRead ? 'read' : 'unread'; ?>"
-                                        data-id="<?php echo $notificacion['id_notificacion']; ?>"
-                                        data-type="<?php echo $notificacion['tipo']; ?>"
-                                        data-reference="<?php echo $notificacion['id_referencia'] ?? ''; ?>">
+                                    <div
+                                        class="list-group-item notification-item <?php echo $isRead ? 'read' : 'unread'; ?>">
                                         <div class="d-flex w-100 justify-content-between">
                                             <div class="flex-grow-1">
                                                 <div class="d-flex align-items-start">
                                                     <div class="flex-shrink-0 me-3">
-                                                        <i
-                                                            class="<?php echo $iconClass; ?> text-<?php echo $colorClass; ?> fa-lg"></i>
+                                                        <i class="fas fa-users text-primary fa-lg"></i>
                                                     </div>
                                                     <div class="flex-grow-1">
                                                         <h6 class="mb-1 fw-bold">
@@ -306,10 +292,7 @@ $rolUsuario = $usuario_rol;
                                                         <p class="mb-2 text-muted">
                                                             <?php echo htmlspecialchars($notificacion['mensaje']); ?>
                                                         </p>
-                                                        <div class="notification-meta d-flex align-items-center">
-                                                            <span class="badge bg-<?php echo $colorClass; ?> me-2">
-                                                                Asignación
-                                                            </span>
+                                                        <div class="d-flex align-items-center">
                                                             <small class="text-muted me-2">
                                                                 <i class="fas fa-clock"></i> <?php echo $timeAgo; ?>
                                                             </small>
@@ -324,23 +307,27 @@ $rolUsuario = $usuario_rol;
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div class="flex-shrink-0 notification-actions">
-                                                <?php if (!$isRead): ?>
+                                            <div class="flex-shrink-0">
+                                                <?php if ($isSolicitudEquipo && !$isRead): ?>
+                                                <!-- Botones de aceptar/rechazar solo para solicitudes de equipo no leídas -->
+                                                <div class="btn-group" role="group">
+                                                    <a href="?modulo=notificaciones&action=accept_team&id=<?php echo $notificacion['id_notificacion']; ?>"
+                                                        class="btn btn-sm btn-accept me-1"
+                                                        onclick="return confirm('¿Aceptar unirse al equipo?')">
+                                                        <i class="fas fa-check"></i> Aceptar
+                                                    </a>
+                                                    <a href="?modulo=notificaciones&action=reject_team&id=<?php echo $notificacion['id_notificacion']; ?>"
+                                                        class="btn btn-sm btn-reject"
+                                                        onclick="return confirm('¿Rechazar la solicitud?')">
+                                                        <i class="fas fa-times"></i> Rechazar
+                                                    </a>
+                                                </div>
+                                                <?php elseif (!$isRead): ?>
+                                                <!-- Botón de marcar como leída para otras notificaciones -->
                                                 <a href="?modulo=notificaciones&action=mark_read&id=<?php echo $notificacion['id_notificacion']; ?>"
-                                                    class="btn btn-sm btn-outline-primary me-1"
-                                                    title="Marcar como leída">
+                                                    class="btn btn-sm btn-outline-primary" title="Marcar como leída">
                                                     <i class="fas fa-check"></i>
                                                 </a>
-                                                <?php endif; ?>
-                                                <?php if ($notificacion['id_referencia']): ?>
-                                                <button
-                                                    class="btn btn-sm btn-outline-<?php echo $colorClass; ?> notification-navigate-btn"
-                                                    data-type="<?php echo $notificacion['tipo']; ?>"
-                                                    data-reference="<?php echo $notificacion['id_referencia']; ?>"
-                                                    data-id="<?php echo $notificacion['id_notificacion']; ?>"
-                                                    title="Ir a asignación">
-                                                    <i class="fas fa-arrow-right"></i>
-                                                </button>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
@@ -356,167 +343,32 @@ $rolUsuario = $usuario_rol;
         </div>
     </div>
 
-    <!-- Modal para responder solicitudes -->
-    <div class="modal fade" id="responseModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">Responder Solicitud de Asignación</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-info" id="notificationDetails">
-                        <!-- Aquí se cargarán los detalles de la notificación -->
-                    </div>
-                    <div class="mb-3">
-                        <label for="responseComment" class="form-label">Comentario (opcional)</label>
-                        <textarea class="form-control" id="responseComment" rows="3"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-danger" id="rejectBtn">
-                        <i class="fas fa-times-circle me-1"></i> Rechazar
-                    </button>
-                    <button type="button" class="btn btn-success" id="acceptBtn">
-                        <i class="fas fa-check-circle me-1"></i> Aceptar
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-    // Configuración específica para la página de notificaciones
+    // Configuración para empleados y supervisores solamente
+    <?php if ($usuario_rol !== 'admin'): ?>
     window.notificationConfig = {
         apiUrl: '/simpro-lite/api/v1/notificaciones.php',
         pollFrequency: 30000,
         userRole: '<?php echo $usuario_rol; ?>',
         userId: <?php echo $id_usuario; ?>
     };
-    </script>
-    <script src="/simpro-lite/web/assets/js/notifications.js"></script>
-
-    <script>
-    // Manejar navegación desde notificaciones
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('notification-navigate-btn') ||
-            e.target.closest('.notification-navigate-btn')) {
-
-            const btn = e.target.classList.contains('notification-navigate-btn') ?
-                e.target : e.target.closest('.notification-navigate-btn');
-
-            const type = btn.dataset.type;
-            const reference = btn.dataset.reference;
-            const notificationId = btn.dataset.id;
-
-            // Marcar como leída si no lo está
-            const item = btn.closest('.notification-item');
-            if (item.classList.contains('unread')) {
-                // Usar fetch para marcar como leída sin redirect
-                fetch(`/simpro-lite/web/modulos/notificaciones/ajax_mark_read.php?id=${notificationId}`, {
-                    method: 'GET'
-                });
-            }
-
-            // Navegar a la asignación
-            window.location.href = `/simpro-lite/web/index.php?modulo=asignaciones&action=view&id=${reference}`;
-        }
-    });
-
-    // Logout functionality
-    document.getElementById('btnLogout')?.addEventListener('click', function(e) {
-        e.preventDefault();
-        if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-            // Clear cookies
-            document.cookie = 'user_data=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-            window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login';
-        }
-    });
+    <?php endif; ?>
 
     // Auto-refresh cada 60 segundos
     setInterval(function() {
         if (!document.hidden) {
-            // Solo refrescar si no hay filtros aplicados
             const urlParams = new URLSearchParams(window.location.search);
-            if (!urlParams.get('tipo') && !urlParams.get('leido')) {
+            if (!urlParams.get('leido')) {
                 window.location.reload();
             }
         }
     }, 60000);
-
-    // Manejar clic en notificaciones
-    document.addEventListener('DOMContentLoaded', function() {
-        const responseModal = new bootstrap.Modal(document.getElementById('responseModal'));
-        let currentNotificationId = null;
-
-        // Delegación de eventos para las notificaciones
-        document.querySelector('.list-group').addEventListener('click', function(e) {
-            const item = e.target.closest('.notification-item');
-            if (!item) return;
-
-            const notificationId = item.dataset.id;
-            const notificationTitle = item.querySelector('h6').textContent;
-
-            // Si es una solicitud de asignación, mostrar modal
-            if (notificationTitle.includes('Solicitud de Asignación')) {
-                e.preventDefault();
-                currentNotificationId = notificationId;
-
-                // Mostrar detalles en el modal
-                document.getElementById('notificationDetails').innerHTML = `
-                    <strong>${notificationTitle}</strong>
-                    <p>${item.querySelector('p').textContent}</p>
-                `;
-
-                responseModal.show();
-            }
-        });
-
-        // Manejar aceptar/rechazar
-        document.getElementById('acceptBtn').addEventListener('click', function() {
-            sendResponse('aceptar');
-            responseModal.hide();
-        });
-
-        document.getElementById('rejectBtn').addEventListener('click', function() {
-            sendResponse('rechazar');
-            responseModal.hide();
-        });
-
-        function sendResponse(action) {
-            if (!currentNotificationId) return;
-
-            const comment = document.getElementById('responseComment').value;
-
-            fetch('/simpro-lite/web/modulos/notificaciones/ajax_responder.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        id_notificacion: currentNotificationId,
-                        respuesta: action,
-                        comentario: comment
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Recargar la página para actualizar las notificaciones
-                        window.location.reload();
-                    } else {
-                        alert('Error al procesar la respuesta');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error al enviar la respuesta');
-                });
-        }
-    });
     </script>
+
+    <?php if ($usuario_rol !== 'admin'): ?>
+    <script src="/simpro-lite/web/assets/js/notifications.js"></script>
+    <?php endif; ?>
 </body>
 
 </html>
