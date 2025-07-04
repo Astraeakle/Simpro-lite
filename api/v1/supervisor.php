@@ -290,16 +290,36 @@ function handleDelete($pdo, $user, $action) {
                     throw new Exception('ID de empleado requerido');
                 }
                 
-                $stmt = $pdo->prepare("CALL sp_remover_empleado_supervisor(?, ?, @resultado)");
-                $stmt->execute([$user['id_usuario'], $empleadoId]);
-                $result = $pdo->query("SELECT @resultado as resultado")->fetch(PDO::FETCH_ASSOC);
-                $response = json_decode($result['resultado'], true);
+                // Verify the employee is actually assigned to this supervisor
+                $stmt = $pdo->prepare("SELECT id_usuario FROM usuarios WHERE id_usuario = ? AND supervisor_id = ?");
+                $stmt->execute([$empleadoId, $user['id_usuario']]);
+                $exists = $stmt->fetchColumn();
                 
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    throw new Exception('Error al decodificar respuesta del procedimiento');
+                if (!$exists) {
+                    throw new Exception('El empleado no está asignado a tu equipo');
                 }
                 
-                echo json_encode($response, JSON_PRETTY_PRINT);
+                // Directly remove the employee assignment
+                $stmt = $pdo->prepare("UPDATE usuarios SET supervisor_id = NULL WHERE id_usuario = ?");
+                $stmt->execute([$empleadoId]);
+                
+                // Get employee info for notification
+                $stmt = $pdo->prepare("SELECT nombre_completo FROM usuarios WHERE id_usuario = ?");
+                $stmt->execute([$empleadoId]);
+                $empleado = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                // Create notification
+                $titulo = "Cambio de asignación de equipo";
+                $mensaje = "Has sido removido del equipo del supervisor {$user['nombre_completo']}";
+                
+                $stmt = $pdo->prepare("INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo) VALUES (?, ?, ?, 'sistema')");
+                $stmt->execute([$empleadoId, $titulo, $mensaje]);
+                
+                // Also notify supervisor
+                $supervisorMsg = "Has removido a {$empleado['nombre_completo']} de tu equipo";
+                $stmt->execute([$user['id_usuario'], $titulo, $supervisorMsg]);
+                
+                echo json_encode(['success' => true, 'message' => 'Empleado removido correctamente'], JSON_PRETTY_PRINT);
                 break;
                 
             default:
