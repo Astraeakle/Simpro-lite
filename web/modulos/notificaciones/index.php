@@ -111,27 +111,15 @@ if ($notificacionesManager) {
 }
 
 // Definir título de página
-$titulo_pagina = "Notificaciones";
+$titulo_pagina = "Notificaciones de Asignación";
 
 // Funciones auxiliares
 function getNotificationIcon($tipo) {
-    $iconos = [
-        'sistema' => 'fas fa-cog',
-        'asistencia' => 'fas fa-clock',
-        'tarea' => 'fas fa-tasks',
-        'proyecto' => 'fas fa-project-diagram'
-    ];
-    return $iconos[$tipo] ?? 'fas fa-bell';
+    return 'fas fa-user-plus'; // Icono único para asignaciones
 }
 
 function getNotificationColor($tipo) {
-    $colores = [
-        'sistema' => 'primary',
-        'asistencia' => 'warning',
-        'tarea' => 'info',
-        'proyecto' => 'success'
-    ];
-    return $colores[$tipo] ?? 'secondary';
+    return 'primary'; // Color único para asignaciones
 }
 
 function formatearFechaNotificacion($fecha) {
@@ -170,7 +158,7 @@ $rolUsuario = $usuario_rol;
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h1 class="h3 mb-0">
-                        <i class="fas fa-bell text-primary"></i> <?php echo $titulo_pagina; ?>
+                        <i class="fas fa-user-plus text-primary"></i> <?php echo $titulo_pagina; ?>
                     </h1>
                     <div class="btn-group" role="group">
                         <a href="?modulo=notificaciones&action=mark_all_read" class="btn btn-outline-primary btn-sm"
@@ -217,15 +205,6 @@ $rolUsuario = $usuario_rol;
                                         <small>Total</small>
                                     </div>
                                 </div>
-                                <hr class="my-2" style="border-color: rgba(255,255,255,0.3);">
-                                <div class="row small">
-                                    <div class="col-6">Sistema: <?php echo $estadisticas['sistema']; ?></div>
-                                    <div class="col-6">Tareas: <?php echo $estadisticas['tareas']; ?></div>
-                                </div>
-                                <div class="row small">
-                                    <div class="col-6">Proyectos: <?php echo $estadisticas['proyectos']; ?></div>
-                                    <div class="col-6">Asistencia: <?php echo $estadisticas['asistencia']; ?></div>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -240,15 +219,8 @@ $rolUsuario = $usuario_rol;
                                 <div class="col-md-3">
                                     <select name="tipo" class="form-select form-select-sm">
                                         <option value="">Todos los tipos</option>
-                                        <option value="sistema"
-                                            <?php echo $filtro_tipo === 'sistema' ? 'selected' : ''; ?>>Sistema</option>
-                                        <option value="tarea" <?php echo $filtro_tipo === 'tarea' ? 'selected' : ''; ?>>
-                                            Tareas</option>
-                                        <option value="proyecto"
-                                            <?php echo $filtro_tipo === 'proyecto' ? 'selected' : ''; ?>>Proyectos
-                                        </option>
-                                        <option value="asistencia"
-                                            <?php echo $filtro_tipo === 'asistencia' ? 'selected' : ''; ?>>Asistencia
+                                        <option value="asignacion"
+                                            <?php echo $filtro_tipo === 'asignacion' ? 'selected' : ''; ?>>Asignaciones
                                         </option>
                                     </select>
                                 </div>
@@ -300,7 +272,7 @@ $rolUsuario = $usuario_rol;
                                         <?php if ($filtro_tipo || $filtro_leido): ?>
                                         No se encontraron notificaciones con los filtros aplicados.
                                         <?php else: ?>
-                                        Las notificaciones aparecerán aquí cuando las recibas.
+                                        Las notificaciones de asignación aparecerán aquí cuando las recibas.
                                         <?php endif; ?>
                                     </p>
                                 </div>
@@ -336,7 +308,7 @@ $rolUsuario = $usuario_rol;
                                                         </p>
                                                         <div class="notification-meta d-flex align-items-center">
                                                             <span class="badge bg-<?php echo $colorClass; ?> me-2">
-                                                                <?php echo ucfirst($notificacion['tipo']); ?>
+                                                                Asignación
                                                             </span>
                                                             <small class="text-muted me-2">
                                                                 <i class="fas fa-clock"></i> <?php echo $timeAgo; ?>
@@ -366,7 +338,7 @@ $rolUsuario = $usuario_rol;
                                                     data-type="<?php echo $notificacion['tipo']; ?>"
                                                     data-reference="<?php echo $notificacion['id_referencia']; ?>"
                                                     data-id="<?php echo $notificacion['id_notificacion']; ?>"
-                                                    title="Ir a <?php echo $notificacion['tipo']; ?>">
+                                                    title="Ir a asignación">
                                                     <i class="fas fa-arrow-right"></i>
                                                 </button>
                                                 <?php endif; ?>
@@ -389,7 +361,7 @@ $rolUsuario = $usuario_rol;
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">Responder Solicitud</h5>
+                    <h5 class="modal-title">Responder Solicitud de Asignación</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -448,26 +420,8 @@ $rolUsuario = $usuario_rol;
                 });
             }
 
-            // Navegar según el tipo
-            let targetUrl = '';
-            switch (type) {
-                case 'sistema':
-                    targetUrl = `/simpro-lite/web/index.php?modulo=admin&ref=${reference}`;
-                    break;
-                case 'tarea':
-                    targetUrl = `/simpro-lite/web/index.php?modulo=actividades&action=view&id=${reference}`;
-                    break;
-                case 'proyecto':
-                    targetUrl = `/simpro-lite/web/index.php?modulo=proyectos&action=view&id=${reference}`;
-                    break;
-                case 'asistencia':
-                    targetUrl = `/simpro-lite/web/index.php?modulo=asistencia&action=view&id=${reference}`;
-                    break;
-                default:
-                    targetUrl = '/simpro-lite/web/index.php?modulo=dashboard';
-            }
-
-            window.location.href = targetUrl;
+            // Navegar a la asignación
+            window.location.href = `/simpro-lite/web/index.php?modulo=asignaciones&action=view&id=${reference}`;
         }
     });
 
@@ -503,7 +457,6 @@ $rolUsuario = $usuario_rol;
             if (!item) return;
 
             const notificationId = item.dataset.id;
-            const notificationType = item.dataset.type;
             const notificationTitle = item.querySelector('h6').textContent;
 
             // Si es una solicitud de asignación, mostrar modal

@@ -32,6 +32,32 @@ class NotificacionesManager {
         return $this->crearNotificacionSistema($id_admin, $titulo, $mensaje, $id_empleado);
     }
     
+    // Método simplificado para obtener notificaciones (del código original)
+    public function obtenerNotificaciones($id_usuario, $solo_no_leidas = false, $limite = 20) {
+        $where_leido = $solo_no_leidas ? "AND leido = 0" : "";
+        
+        $sql = "SELECT n.*, 
+                       DATE_FORMAT(n.fecha_envio, '%Y-%m-%d %H:%i:%s') as fecha_envio,
+                       DATE_FORMAT(n.fecha_leido, '%Y-%m-%d %H:%i:%s') as fecha_leido,
+                       u.nombre_completo as empleado_nombre
+                FROM notificaciones n
+                LEFT JOIN usuarios u ON n.id_referencia = u.id_usuario
+                WHERE n.id_usuario = ? {$where_leido}
+                ORDER BY n.fecha_envio DESC
+                LIMIT ?";
+                
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Error preparando consulta: " . $this->db->error);
+        }
+        
+        $stmt->bind_param("ii", $id_usuario, $limite);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    
     // Método para notificar cambios en proyectos
     public function notificarCambioProyecto($id_usuario, $accion, $nombre_proyecto, $id_proyecto) {
         $acciones = [
@@ -227,12 +253,7 @@ class NotificacionesManager {
         return $result->fetch_all(MYSQLI_ASSOC);
     }
     
-    // Métodos existentes mejorados
-    public function obtenerNotificaciones($id_usuario, $solo_no_leidas = false, $limite = 20) {
-        // Usar el método mejorado
-        return $this->obtenerNotificacionesConDetalles($id_usuario, $solo_no_leidas, $limite);
-    }
-    
+    // Método para contar notificaciones no leídas
     public function contarNoLeidas($id_usuario) {
         $sql = "SELECT COUNT(*) as no_leidas FROM notificaciones WHERE id_usuario = ? AND leido = 0";
         $stmt = $this->db->prepare($sql);
@@ -247,6 +268,7 @@ class NotificacionesManager {
         return $result->fetch_assoc()['no_leidas'];
     }
     
+    // Método para marcar una notificación como leída
     public function marcarComoLeida($id_notificacion, $id_usuario) {
         $sql = "UPDATE notificaciones 
                 SET leido = 1, fecha_leido = NOW() 
@@ -262,6 +284,7 @@ class NotificacionesManager {
         return $stmt->execute() && $stmt->affected_rows > 0;
     }
     
+    // Método para marcar todas las notificaciones como leídas
     public function marcarTodasComoLeidas($id_usuario) {
         $sql = "UPDATE notificaciones 
                 SET leido = 1, fecha_leido = NOW() 
@@ -277,6 +300,7 @@ class NotificacionesManager {
         return $stmt->execute();
     }
     
+    // Método base para insertar notificaciones
     public function insertarNotificacion($id_usuario, $titulo, $mensaje, $tipo, $id_referencia = null) {
         $sql = "INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo, id_referencia, fecha_envio) 
                 VALUES (?, ?, ?, ?, ?, NOW())";

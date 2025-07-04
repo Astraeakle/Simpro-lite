@@ -216,13 +216,7 @@ class NotificationsManager {
     renderNotificationItem(notification) {
         const isRead = notification.leido == 1;
         const bgClass = isRead ? '' : 'bg-light';
-        const iconClass = this.getNotificationIcon(notification.tipo);
-        const colorClass = this.getNotificationColor(notification.tipo);
         const timeAgo = this.formatTimeAgo(notification.fecha_envio);
-        
-        // Determinar si mostrar botón de acción
-        const showActionButton = this.shouldShowActionButton(notification);
-        const actionButtonText = this.getActionButtonText(notification);
         
         return `
             <div class="dropdown-item notification-item ${bgClass}" 
@@ -230,10 +224,10 @@ class NotificationsManager {
                  data-read="${isRead}" 
                  data-type="${notification.tipo}"
                  data-reference="${notification.id_referencia || ''}"
-                 style="cursor: pointer; border-left: 3px solid var(--bs-${colorClass}); white-space: normal;">
+                 style="cursor: pointer; border-left: 3px solid var(--bs-primary); white-space: normal;">
                 <div class="d-flex">
                     <div class="flex-shrink-0 me-2">
-                        <i class="${iconClass} text-${colorClass}"></i>
+                        <i class="fas fa-user-plus text-primary"></i>
                     </div>
                     <div class="flex-grow-1">
                         <h6 class="mb-1 fw-bold">${this.escapeHtml(notification.titulo)}</h6>
@@ -244,14 +238,11 @@ class NotificationsManager {
                             <small class="text-muted">
                                 <i class="fas fa-clock me-1"></i>${timeAgo}
                             </small>
-                            ${showActionButton ? `
-                                <button class="btn btn-sm btn-outline-${colorClass} notification-action-btn" 
-                                        data-notification-id="${notification.id_notificacion}"
-                                        data-action-type="${notification.tipo}"
-                                        onclick="event.stopPropagation();">
-                                    ${actionButtonText}
-                                </button>
-                            ` : ''}
+                            <button class="btn btn-sm btn-outline-primary notification-action-btn" 
+                                    data-notification-id="${notification.id_notificacion}"
+                                    onclick="event.stopPropagation();">
+                                Responder
+                            </button>
                         </div>
                     </div>
                     ${!isRead ? `
@@ -264,37 +255,7 @@ class NotificationsManager {
             </div>
         `;
     }
-
-    shouldShowActionButton(notification) {
-        // Mostrar botón de acción solo para ciertos tipos de notificaciones
-        const actionTypes = ['sistema', 'tarea', 'proyecto'];
-        return actionTypes.includes(notification.tipo) && notification.id_referencia;
-    }
     
-    getActionButtonText(notification) {
-        const actionTexts = {
-            'sistema': 'Ver detalles',
-            'tarea': 'Ir a tarea',
-            'proyecto': 'Ver proyecto',
-            'asistencia': 'Ver asistencia'
-        };
-        
-        return actionTexts[notification.tipo] || 'Ver';
-    }
-
-    handleDirectAction(notificationId, actionType) {
-        const notification = this.notifications.find(n => n.id_notificacion == notificationId);
-        if (!notification) return;
-        
-        // Marcar como leída si no está leída
-        if (!notification.leido) {
-            this.markAsRead(notificationId);
-        }
-        
-        // Ejecutar acción específica
-        this.navigateToNotification(actionType, notification.id_referencia, notification.titulo);
-    }
-
     addNewNotification(notification) {
         // Agregar al inicio de la lista
         this.notifications.unshift(notification);
@@ -320,7 +281,7 @@ class NotificationsManager {
         const toastHtml = `
             <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">
                 <div class="toast-header">
-                    <i class="${this.getNotificationIcon(notification.tipo)} text-${this.getNotificationColor(notification.tipo)} me-2"></i>
+                    <i class="fas fa-user-plus text-primary me-2"></i>
                     <strong class="me-auto">${this.escapeHtml(notification.titulo)}</strong>
                     <small>Ahora</small>
                     <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
@@ -633,55 +594,19 @@ class NotificationsManager {
     }
 
     navigateToNotification(type, reference, titulo) {
-        let targetUrl = '';
-        
-        switch (type) {
-            case 'sistema':
-                // Para notificaciones del sistema, revisar si hay referencia específica
-                if (reference) {
-                    // Si es una solicitud de asignación, ir a usuarios/empleados
-                    if (titulo.includes('Solicitud de Asignación') || titulo.includes('Asignación')) {
-                        targetUrl = `/simpro-lite/web/index.php?modulo=admin&submodulo=usuarios&action=view&id=${reference}`;
-                    } else {
-                        targetUrl = `/simpro-lite/web/index.php?modulo=admin&ref=${reference}`;
-                    }
-                } else {
-                    targetUrl = '/simpro-lite/web/index.php?modulo=admin';
-                }
-                break;
-                
-            case 'tarea':
-                if (reference) {
-                    targetUrl = `/simpro-lite/web/index.php?modulo=actividades&action=view&id=${reference}`;
-                } else {
-                    targetUrl = '/simpro-lite/web/index.php?modulo=actividades';
-                }
-                break;
-                
-            case 'proyecto':
-                if (reference) {
-                    targetUrl = `/simpro-lite/web/index.php?modulo=proyectos&action=view&id=${reference}`;
-                } else {
-                    targetUrl = '/simpro-lite/web/index.php?modulo=proyectos';
-                }
-                break;
-                
-            case 'asistencia':
-                if (reference) {
-                    targetUrl = `/simpro-lite/web/index.php?modulo=asistencia&action=view&id=${reference}`;
-                } else {
-                    targetUrl = '/simpro-lite/web/index.php?modulo=asistencia';
-                }
-                break;
-                
-            default:
-                targetUrl = '/simpro-lite/web/index.php?modulo=dashboard';
-                break;
+        if (titulo.includes('Solicitud de Asignación')) {
+            // Mostrar modal de respuesta en lugar de navegar
+            this.showResponseModal({
+                id_notificacion: reference, // Usamos reference como ID temporal
+                mensaje: titulo,
+                tipo: 'asignacion'
+            });
+            return;
         }
         
-        console.log('Navegando a:', targetUrl);
-        window.location.href = targetUrl;
-    }    
+        // Por defecto ir al dashboard
+        window.location.href = '/simpro-lite/web/index.php?modulo=dashboard';
+    }
     
     startPolling() {
         if (this.isPolling) {
@@ -700,28 +625,6 @@ class NotificationsManager {
             this.pollInterval = null;
         }
         this.isPolling = false;
-    }
-    
-    getNotificationIcon(tipo) {
-        const iconos = {
-            'sistema': 'fas fa-cog',
-            'asistencia': 'fas fa-clock',
-            'tarea': 'fas fa-tasks',
-            'proyecto': 'fas fa-project-diagram'
-        };
-        
-        return iconos[tipo] || 'fas fa-bell';
-    }
-    
-    getNotificationColor(tipo) {
-        const colores = {
-            'sistema': 'primary',
-            'asistencia': 'warning',
-            'tarea': 'info',
-            'proyecto': 'success'
-        };
-        
-        return colores[tipo] || 'secondary';
     }
     
     formatTimeAgo(fechaEnvio) {
@@ -764,11 +667,16 @@ class NotificationsManager {
         this.unreadCount = 0;
     }
 }
+
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('notification-action-btn')) {
         const notificationId = e.target.dataset.notificationId;
-        const actionType = e.target.dataset.actionType;
-        window.notificationsManager?.handleDirectAction(notificationId, actionType);
+        const notificationElement = e.target.closest('.notification-item');
+        const type = notificationElement.dataset.type;
+        const reference = notificationElement.dataset.reference;
+        const titulo = notificationElement.querySelector('h6').textContent;
+        
+        window.notificationsManager?.navigateToNotification(type, reference, titulo);
     }
 });
 
