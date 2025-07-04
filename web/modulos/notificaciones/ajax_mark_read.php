@@ -1,7 +1,5 @@
 <?php
 // web/modulos/notificaciones/ajax_mark_read.php
-
-// Iniciar sesión si no está iniciada
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -10,28 +8,27 @@ require_once __DIR__ . '/../../core/autenticacion.php';
 require_once __DIR__ . '/../../core/notificaciones.php';
 require_once __DIR__ . '/../../config/database.php';
 
-// Establecer header para JSON
 header('Content-Type: application/json');
 
-// Verificar autenticación
-if (!isset($_SESSION['usuario_id'])) {
+// Obtener datos del usuario
+$userData = json_decode($_COOKIE['user_data'] ?? '{}', true);
+$id_usuario = $userData['id_usuario'] ?? $userData['id'] ?? 0;
+
+if ($id_usuario === 0) {
     http_response_code(401);
     echo json_encode(['error' => 'No autorizado']);
     exit;
 }
 
-// Verificar que se envió el ID
-if (!isset($_GET['id'])) {
+$id_notificacion = intval($_GET['id'] ?? 0);
+
+if ($id_notificacion === 0) {
     http_response_code(400);
     echo json_encode(['error' => 'ID de notificación requerido']);
     exit;
 }
 
-$usuario_id = $_SESSION['usuario_id'];
-$id_notificacion = intval($_GET['id']);
-
 try {
-    // Conectar a la base de datos
     $config = DatabaseConfig::getConfig();
     $conexion = new mysqli($config['host'], $config['username'], $config['password'], $config['database']);
     
