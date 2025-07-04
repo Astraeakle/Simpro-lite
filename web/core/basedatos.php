@@ -4,6 +4,8 @@
  * File: web/core/basedatos.php
  * SIMPRO Lite - Sistema de Monitoreo de Productividad
  */
+require_once __DIR__ . '/../config/database.php';
+
 class DB {
     private static $instance = null;
     private $conn;
@@ -95,6 +97,34 @@ class DB {
         $stmt = self::query($sql, $params, $types);
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
+    }
+}
+function obtenerConexionBD() {
+    try {
+        return Database::getConnection();
+    } catch (Exception $e) {
+        error_log("Error en obtenerConexionBD(): " . $e->getMessage());
+        throw new Exception('Error de conexión a la base de datos');
+    }
+}
+
+/**
+ * Función alternativa con MySQLi si es necesaria
+ */
+function obtenerConexionMySQLi() {
+    try {
+        $config = DatabaseConfig::getConfig();
+        $conexion = new mysqli($config['host'], $config['username'], $config['password'], $config['database']);
+        
+        if ($conexion->connect_error) {
+            throw new Exception("Error de conexión MySQLi: " . $conexion->connect_error);
+        }
+        
+        $conexion->set_charset($config['charset']);
+        return $conexion;
+    } catch (Exception $e) {
+        error_log("Error en obtenerConexionMySQLi(): " . $e->getMessage());
+        throw new Exception('Error de conexión a la base de datos');
     }
 }
 ?>

@@ -396,14 +396,6 @@ class NotificacionesManager {
                 $tarea['id_actividad']
             );
         }
-    }
-    
-    // Método para notificar ausencia de empleado (nuevo)
-    private function notificarAusenciaEmpleado($id_supervisor, $nombre_empleado, $fecha) {
-        $titulo = "Ausencia no reportada";
-        $mensaje = "El empleado {$nombre_empleado} no ha registrado su asistencia el día {$fecha}";
-        
-        return $this->crearNotificacionAsistencia($id_supervisor, $titulo, $mensaje);
-    }
+    }    
 }
 ?>

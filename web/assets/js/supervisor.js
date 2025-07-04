@@ -1,5 +1,4 @@
 // File: web/assets/js/supervisor.js
-// Enhanced version with better error handling and debugging
 
 class SupervisorManager {
     constructor() {
@@ -10,8 +9,6 @@ class SupervisorManager {
 
     init() {
         this.log('Initializing SupervisorManager...');
-        
-        // Test API connectivity first
         this.testAPI().then(() => {
             this.cargarAreas();
             this.cargarEstadisticas();
@@ -48,8 +45,6 @@ class SupervisorManager {
 
     setupEventListeners() {
         this.log('Setting up event listeners...');
-        
-        // Eventos de pestañas
         document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
             tab.addEventListener('shown.bs.tab', (e) => {
                 const target = e.target.getAttribute('data-bs-target');
@@ -502,28 +497,20 @@ class SupervisorManager {
         };
         new bootstrap.Modal(document.getElementById('modalConfirmacion')).show();
     }
-
     mostrarExito(mensaje) {
         this.mostrarToast(mensaje, 'success');
     }
-
     mostrarError(mensaje) {
         this.mostrarToast(mensaje, 'danger');
     }
-
     mostrarToast(mensaje, tipo) {
-        // Si existe sistema de toasts, usarlo
         if (window.toastManager) {
             window.toastManager.show(mensaje, tipo);
             return;
-        }
-        
-        // Fallback: alert simple
+        }        
         alert(mensaje);
     }
-
     getAreaSupervisor() {
-        // Obtener área del supervisor desde cookie o localStorage
         try {
             const userData = JSON.parse(getCookie('user_data') || '{}');
             return userData.area || '';
@@ -532,39 +519,86 @@ class SupervisorManager {
         }
     }
 }
-
-// Funciones globales para mantener compatibilidad
 function cargarMiEquipo() {
     if (window.supervisor) {
         window.supervisor.cargarMiEquipo();
     }
 }
-
 function cargarEmpleadosDisponibles() {
     if (window.supervisor) {
         window.supervisor.cargarEmpleadosDisponibles();
     }
 }
-
 function filtrarEmpleados() {
     if (window.supervisor) {
         window.supervisor.filtrarEmpleados();
     }
 }
-
 function exportarReporteEquipo() {
-    // Implementar exportación de reportes
     alert('Funcionalidad de exportación en desarrollo');
 }
-
-// Utilidad para cookies
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
 }
+function verReportesEquipo() {
+    window.location.href = '/simpro-lite/web/index.php?modulo=reports&vista=equipo';
+}
 
-// Inicialización
+async function exportarReporte(formato) {
+    const fechaInicio = new Date();
+    fechaInicio.setDate(1); 
+    const fechaFin = new Date();
+    fechaFin.setMonth(fechaFin.getMonth() + 1, 0); // Último día del mes
+    
+    const params = new URLSearchParams({
+        fecha_inicio: fechaInicio.toISOString().split('T')[0],
+        fecha_fin: fechaFin.toISOString().split('T')[0],
+        formato: formato
+    });
+
+    if (window.supervisor && typeof window.supervisor.mostrarToast === 'function') {
+        window.supervisor.mostrarToast('Generando reporte, por favor espere...', 'info');
+    } else {
+        console.log('Generando reporte, por favor espere...');
+    }
+    
+    try {
+        const response = await fetch(`/simpro-lite/api/v1/supervisor.php?accion=exportar_reporte&${params}`);
+        
+        if (!response.ok) {
+            throw new Error('Error al generar reporte');
+        }        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `reporte_equipo_${new Date().toISOString().split('T')[0]}.${formato}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+        if (window.supervisor && typeof window.supervisor.mostrarExito === 'function') {
+            window.supervisor.mostrarExito('Reporte generado exitosamente');
+        }
+    } catch (error) {
+        if (window.supervisor && typeof window.supervisor.mostrarError === 'function') {
+            window.supervisor.mostrarError('Error al generar reporte: ' + error.message);
+        } else {
+            console.error('Error al generar reporte:', error);
+        }
+    }
+}
+SupervisorManager.prototype.mostrarToast = function(mensaje, tipo, persistente = false) {
+    if (window.toastManager) {
+        return window.toastManager.show(mensaje, tipo, persistente);
+    }
+    if (!persistente) {
+        alert(mensaje);
+    }
+    return null;
+};
 document.addEventListener('DOMContentLoaded', function() {
     window.supervisor = new SupervisorManager();
 });

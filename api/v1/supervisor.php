@@ -57,12 +57,9 @@ function handleException($exception) {
 // Set error handlers
 set_error_handler('handleError');
 set_exception_handler('handleException');
-
-// Start output buffering to catch any unexpected output
 ob_start();
 
 try {
-    // Check if required files exist
     $middleware_path = __DIR__ . '/middleware.php';
     $database_path = __DIR__ . '/../../web/config/database.php';
     
@@ -180,7 +177,49 @@ function handleGet($pdo, $user, $action) {
                     'timestamp' => date('Y-m-d H:i:s')
                 ], JSON_PRETTY_PRINT);
                 break;
+            // Añadir este caso al switch de handleGet
+            case 'exportar_reporte':
+                $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
+                $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
+                $formato = $_GET['formato'] ?? 'pdf';
                 
+                try {
+                    // Obtener datos del equipo
+                    $stmt = $pdo->prepare("CALL sp_estadisticas_equipo_supervisor(?, ?, ?)");
+                    $stmt->execute([$user['id_usuario'], $fechaInicio, $fechaFin]);
+                    $datosEquipo = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    // Obtener lista de empleados
+                    $stmt = $pdo->prepare("CALL sp_obtener_empleados_supervisor(?)");
+                    $stmt->execute([$user['id_usuario']]);
+                    $empleados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    // Generar reporte según formato
+                    if ($formato === 'pdf') {
+                        require_once __DIR__.'/../../web/core/reportes.php';
+                        $pdf = Reportes::generarReporteEquipoPDF($user, $datosEquipo, $empleados, $fechaInicio, $fechaFin);
+                        
+                        header('Content-Type: application/pdf');
+                        header('Content-Disposition: attachment; filename="reporte_equipo.pdf"');
+                        echo $pdf;
+                        
+                    } elseif ($formato === 'excel') {
+                        require_once __DIR__.'/../../web/core/reportes.php';
+                        $excel = Reportes::generarReporteEquipoExcel($user, $datosEquipo, $empleados, $fechaInicio, $fechaFin);
+                        
+                        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                        header('Content-Disposition: attachment; filename="reporte_equipo.xlsx"');
+                        echo $excel;
+                        
+                    } else {
+                        throw new Exception('Formato no soportado');
+                    }
+                    
+                } catch (Exception $e) {
+                    http_response_code(500);
+                    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+                }
+                break;                
             default:
                 http_response_code(400);
                 echo json_encode(['success' => false, 'error' => 'Acción no válida: ' . $action], JSON_PRETTY_PRINT);

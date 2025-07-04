@@ -3,33 +3,39 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
 // Manejar solicitudes OPTIONS (preflight)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
+
 // Función auxiliar para enviar respuesta JSON
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     echo json_encode($data);
     exit();
 }
+
 // Función auxiliar para manejar errores
 function sendError($message, $statusCode = 400) {
-    sendJsonResponse(['error' => $message], $statusCode);
+    sendJsonResponse(['success' => false, 'error' => $message], $statusCode);
 }
+
 // Función auxiliar para logging
 function logError($message) {
     error_log("[REPORTES] " . date('Y-m-d H:i:s') . " - " . $message);
 }
+
 try {
-    // RUTAS CORREGIDAS
+    // Cargar archivos de configuración
     require_once __DIR__ . '/../../web/config/database.php';
-    require_once __DIR__ . '/jwt_helper.php';
+    require_once __DIR__ . '/../../web/core/basedatos.php';
     
     logError("Archivos requeridos cargados correctamente");
     
@@ -38,59 +44,50 @@ try {
     sendError('Error interno del servidor - configuración', 500);
 }
 
-// Verificar autenticación
-try {
-    $headers = getallheaders();
-    $authHeader = '';
+function verificarAutenticacionCookie() {
+    $userData = null;
     
-    // Buscar header de autorización de diferentes formas
-    if (isset($headers['Authorization'])) {
-        $authHeader = $headers['Authorization'];
-    } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
-        $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
-    } elseif (function_exists('apache_request_headers')) {
-        $apacheHeaders = apache_request_headers();
-        if (isset($apacheHeaders['Authorization'])) {
-            $authHeader = $apacheHeaders['Authorization'];
+    if (isset($_COOKIE['user_data'])) {
+        $userData = json_decode($_COOKIE['user_data'], true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            logError("Error decodificando JSON de cookie: " . json_last_error_msg());
+            return null;
         }
     }
     
-    logError("Auth header encontrado: " . (!empty($authHeader) ? 'Sí' : 'No'));
-    
-    if (empty($authHeader) || !preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
-        logError("Token de autorización no encontrado o formato incorrecto");
-        sendError('Token de autorización requerido', 401);
+    if (empty($userData)) {
+        logError("Cookie user_data vacía o no encontrada");
+        return null;
     }
     
-    $token = $matches[1];
-    logError("Token extraído: " . substr($token, 0, 20) . "...");
-    
-    // Verificar el token JWT usando la clase JWT
-    if (!class_exists('JWT')) {
-        logError("Clase JWT no encontrada");
-        sendError('Error de configuración del servidor', 500);
+    // Intentar obtener el ID del usuario de diferentes claves posibles
+    $id_usuario = 0;
+    if (isset($userData['id_usuario'])) {
+        $id_usuario = $userData['id_usuario'];
+    } elseif (isset($userData['id'])) {
+        $id_usuario = $userData['id'];
+    } elseif (isset($userData['user_id'])) {
+        $id_usuario = $userData['user_id'];
     }
     
-    $decoded = JWT::verificar($token);
-    
-    if (!$decoded) {
-        logError("Token inválido o expirado");
-        sendError('Token inválido o expirado', 401);
+    if ($id_usuario == 0) {
+        logError("No se pudo obtener ID de usuario. Claves disponibles: " . implode(', ', array_keys($userData)));
+        return null;
     }
     
-    $userId = $decoded['sub'] ?? null;
-    
-    if (!$userId) {
-        logError("ID de usuario no encontrado en token");
-        sendError('Token inválido - datos de usuario faltantes', 401);
-    }
-    
-    logError("Usuario autenticado: ID " . $userId);
-    
-} catch (Exception $e) {
-    logError("Error en autenticación: " . $e->getMessage());
-    sendError('Error de autenticación: ' . $e->getMessage(), 401);
+    $userData['id_usuario'] = $id_usuario;
+    return $userData;
 }
+
+$userData = verificarAutenticacionCookie();
+if (!$userData) {
+    logError("Usuario no autenticado");
+    sendError('No autorizado', 401);
+}
+
+$userId = $userData['id_usuario'];
+logError("Usuario autenticado: ID " . $userId);
 
 // Obtener la acción solicitada
 $action = $_GET['action'] ?? '';
@@ -98,6 +95,10 @@ logError("Acción solicitada: " . $action);
 
 // Procesar según la acción
 switch ($action) {
+    case 'test':
+        handleTest();
+        break;
+        
     case 'resumen_general':
         handleResumenGeneral($userId);
         break;
@@ -110,11 +111,129 @@ switch ($action) {
         handleTopApps($userId);
         break;
     
+    case 'reporte_comparativo_equipo':
+        handleReporteComparativoEquipo();
+        break;
+    
     default:
-        sendError('Acción no válida');
+        sendError('Acción no válida: ' . $action);
 }
 
-// Función para resumen general usando procedimiento almacenado
+// Función de test
+function handleTest() {
+    sendJsonResponse([
+        'success' => true,
+        'message' => 'API funcionando correctamente',
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+}
+
+// Función para reporte comparativo de equipo
+function handleReporteComparativoEquipo() {
+    try {
+        $supervisorId = intval($_GET['supervisor_id'] ?? 0);
+        $empleadoId = intval($_GET['empleado_id'] ?? 0);
+        $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
+        $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
+        
+        logError("Reporte comparativo - Supervisor: $supervisorId, Empleado: $empleadoId, Fechas: $fechaInicio a $fechaFin");
+        
+        // Validar fechas
+        if (!validateDate($fechaInicio) || !validateDate($fechaFin)) {
+            sendError('Formato de fecha inválido');
+        }
+        
+        if ($supervisorId <= 0) {
+            sendError('ID de supervisor inválido');
+        }
+        
+        // Obtener conexión a la base de datos
+        $db = obtenerConexionBD();
+        
+        if (!$db) {
+            logError("No se pudo conectar a la base de datos");
+            sendError('Error de conexión a base de datos', 500);
+        }
+        
+        // Consulta directa sin procedimiento almacenado
+        $whereEmpleado = "";
+        $params = [$supervisorId, $fechaInicio, $fechaFin];
+        
+        if ($empleadoId > 0) {
+            $whereEmpleado = " AND u.id_usuario = ?";
+            $params[] = $empleadoId;
+        }
+        
+        $query = "
+            SELECT 
+                u.id_usuario,
+                u.nombre_completo,
+                u.area,
+                COALESCE(
+                    TIME_FORMAT(SEC_TO_TIME(SUM(aa.tiempo_segundos)), '%H:%i:%s'),
+                    '00:00:00'
+                ) as tiempo_total_mes,
+                COUNT(DISTINCT DATE(aa.fecha_hora_inicio)) as dias_activos_mes,
+                ROUND(
+                    COALESCE(
+                        (SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END) / 
+                         NULLIF(SUM(aa.tiempo_segundos), 0)) * 100,
+                        0
+                    ),
+                    2
+                ) as porcentaje_productivo
+            FROM usuarios u
+            LEFT JOIN actividad_apps aa ON u.id_usuario = aa.id_usuario 
+                AND aa.fecha_hora_inicio BETWEEN ? AND ?
+            WHERE u.supervisor_id = ?
+            AND u.estado = 'activo'
+            $whereEmpleado
+            GROUP BY u.id_usuario, u.nombre_completo, u.area
+            ORDER BY u.nombre_completo
+        ";
+        
+        // Reordenar parámetros para la consulta
+        $queryParams = [$fechaInicio, $fechaFin, $supervisorId];
+        if ($empleadoId > 0) {
+            $queryParams[] = $empleadoId;
+        }
+        
+        $stmt = $db->prepare($query);
+        
+        if (!$stmt) {
+            logError("Error preparando consulta: " . $db->errorInfo()[2]);
+            sendError('Error en la consulta', 500);
+        }
+        
+        $resultado = $stmt->execute($queryParams);
+        
+        if (!$resultado) {
+            logError("Error ejecutando consulta: " . print_r($stmt->errorInfo(), true));
+            sendError('Error ejecutando consulta', 500);
+        }
+        
+        $empleados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        logError("Empleados encontrados: " . count($empleados));
+        
+        // Preparar respuesta
+        $data = [
+            'empleados' => $empleados,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'supervisor_id' => $supervisorId,
+            'empleado_id' => $empleadoId
+        ];
+        
+        sendJsonResponse(['success' => true, 'data' => $data]);
+        
+    } catch (Exception $e) {
+        logError("Error en reporte comparativo: " . $e->getMessage());
+        sendError('Error interno del servidor: ' . $e->getMessage(), 500);
+    }
+}
+
+// Función para resumen general
 function handleResumenGeneral($userId) {
     try {
         logError("Iniciando resumen general para usuario: " . $userId);
@@ -122,33 +241,52 @@ function handleResumenGeneral($userId) {
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-d', strtotime('-7 days'));
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-d');
         
-        // Validar fechas
         if (!validateDate($fechaInicio) || !validateDate($fechaFin)) {
             sendError('Formato de fecha inválido');
         }
         
         logError("Fechas: $fechaInicio a $fechaFin");
         
-        // Obtener conexión a la base de datos
-        $db = Database::getConnection();
+        $db = obtenerConexionBD();
         
-        // Llamar al procedimiento almacenado
-        $query = "CALL sp_obtener_resumen_general(?, ?, ?)";
+        // Consulta corregida
+        $query = "
+            SELECT 
+                COALESCE(
+                    TIME_FORMAT(
+                        SEC_TO_TIME(SUM(tiempo_segundos)), 
+                        '%H:%i:%s'
+                    ), 
+                    '00:00:00'
+                ) as tiempo_total,
+                COUNT(DISTINCT DATE(fecha_hora_inicio)) as dias_trabajados,
+                COUNT(*) as total_actividades,
+                ROUND(
+                    COALESCE(
+                        (SUM(CASE WHEN categoria = 'productiva' THEN tiempo_segundos ELSE 0 END) / 
+                         NULLIF(SUM(tiempo_segundos), 0)) * 100,
+                        0
+                    ), 
+                    2
+                ) as porcentaje_productivo
+            FROM actividad_apps 
+            WHERE id_usuario = ? 
+            AND fecha_hora_inicio BETWEEN ? AND ?
+        ";
+        
         $stmt = $db->prepare($query);
-        $stmt->bindParam(1, $userId, PDO::PARAM_INT);
-        $stmt->bindParam(2, $fechaInicio, PDO::PARAM_STR);
-        $stmt->bindParam(3, $fechaFin, PDO::PARAM_STR);
+        $stmt->bind_param("iss", $userId, $fechaInicio, $fechaFin);
         
         if (!$stmt->execute()) {
-            logError("Error ejecutando procedimiento sp_obtener_resumen_general: " . implode(', ', $stmt->errorInfo()));
+            logError("Error ejecutando consulta resumen: " . $stmt->error);
             sendError('Error ejecutando consulta', 500);
         }
         
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $result = $stmt->get_result();
+        $data = $result->fetch_assoc();
         
-        // Si no hay datos, devolver valores por defecto
-        if (!$result || $result['tiempo_total'] === null) {
-            $result = [
+        if (!$data || $data['tiempo_total'] === null) {
+            $data = [
                 'tiempo_total' => '00:00:00',
                 'dias_trabajados' => 0,
                 'total_actividades' => 0,
@@ -156,11 +294,10 @@ function handleResumenGeneral($userId) {
             ];
         }
         
-        // Cerrar el cursor para liberar la conexión
-        $stmt->closeCursor();
+        $stmt->close();
         
         logError("Resumen general completado");
-        sendJsonResponse($result);
+        sendJsonResponse($data);
         
     } catch (Exception $e) {
         logError("Error en resumen general: " . $e->getMessage());
@@ -168,7 +305,7 @@ function handleResumenGeneral($userId) {
     }
 }
 
-// Función para distribución de tiempo usando procedimiento almacenado
+// Función para distribución de tiempo
 function handleDistribucionTiempo($userId) {
     try {
         logError("Iniciando distribución de tiempo para usuario: " . $userId);
@@ -180,32 +317,58 @@ function handleDistribucionTiempo($userId) {
             sendError('Formato de fecha inválido');
         }
         
-        $db = Database::getConnection();
+        $db = obtenerConexionBD();
         
-        // Llamar al procedimiento almacenado
-        $query = "CALL sp_obtener_distribucion_tiempo(?, ?, ?)";
+        // Consulta directa sin procedimiento almacenado
+        $query = "
+            SELECT 
+                categoria,
+                COALESCE(
+                    TIME_FORMAT(
+                        SEC_TO_TIME(SUM(tiempo_segundos)), 
+                        '%H:%i:%s'
+                    ), 
+                    '00:00:00'
+                ) as tiempo_total,
+                ROUND(
+                    COALESCE(
+                        (SUM(tiempo_segundos) / 
+                         (SELECT SUM(tiempo_segundos) FROM actividad_apps 
+                          WHERE id_usuario = ? AND fecha_hora_inicio BETWEEN ? AND ?)) * 100,
+                        0
+                    ), 
+                    2
+                ) as porcentaje
+            FROM actividad_apps 
+            WHERE id_usuario = ? 
+            AND fecha_hora_inicio BETWEEN ? AND ?
+            GROUP BY categoria
+        ";
+        
         $stmt = $db->prepare($query);
-        $stmt->bindParam(1, $userId, PDO::PARAM_INT);
-        $stmt->bindParam(2, $fechaInicio, PDO::PARAM_STR);
-        $stmt->bindParam(3, $fechaFin, PDO::PARAM_STR);
+        $stmt->bind_param("issss", $userId, $fechaInicio, $fechaFin, $userId, $fechaInicio, $fechaFin);
         
         if (!$stmt->execute()) {
-            logError("Error ejecutando procedimiento sp_obtener_distribucion_tiempo: " . implode(', ', $stmt->errorInfo()));
+            logError("Error ejecutando consulta distribución: " . $stmt->error);
             sendError('Error ejecutando consulta', 500);
         }
         
-        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result = $stmt->get_result();
+        $data = [];
         
-        // Cerrar el cursor
-        $stmt->closeCursor();
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
         
-        // Asegurar que tenemos todas las categorías con valores por defecto
+        $stmt->close();
+        
+        // Asegurar que tenemos todas las categorías
         $categorias = ['productiva', 'distractora', 'neutral'];
         $resultFinal = [];
         
         foreach ($categorias as $cat) {
             $found = false;
-            foreach ($result as $row) {
+            foreach ($data as $row) {
                 if ($row['categoria'] === $cat) {
                     $resultFinal[] = $row;
                     $found = true;
@@ -230,7 +393,7 @@ function handleDistribucionTiempo($userId) {
     }
 }
 
-// Función para top de aplicaciones usando procedimiento almacenado
+// Función para top de aplicaciones
 function handleTopApps($userId) {
     try {
         logError("Iniciando top apps para usuario: " . $userId);
@@ -244,31 +407,60 @@ function handleTopApps($userId) {
         }
         
         if ($limit <= 0 || $limit > 100) {
-            $limit = 10; // Valor por defecto seguro
+            $limit = 10;
         }
         
-        $db = Database::getConnection();
+        $db = obtenerConexionBD();
         
-        // Llamar al procedimiento almacenado
-        $query = "CALL sp_obtener_top_apps(?, ?, ?, ?)";
+        // Consulta directa sin procedimiento almacenado
+        $query = "
+            SELECT 
+                nombre_app as aplicacion,
+                categoria,
+                COUNT(*) as frecuencia_uso,
+                COALESCE(
+                    TIME_FORMAT(
+                        SEC_TO_TIME(SUM(tiempo_segundos)), 
+                        '%H:%i:%s'
+                    ), 
+                    '00:00:00'
+                ) as tiempo_total,
+                ROUND(
+                    COALESCE(
+                        (SUM(tiempo_segundos) / 
+                         (SELECT SUM(tiempo_segundos) FROM actividad_apps 
+                          WHERE id_usuario = ? AND fecha_hora_inicio BETWEEN ? AND ?)) * 100,
+                        0
+                    ), 
+                    2
+                ) as porcentaje
+            FROM actividad_apps 
+            WHERE id_usuario = ? 
+            AND fecha_hora_inicio BETWEEN ? AND ?
+            GROUP BY nombre_app, categoria
+            ORDER BY SUM(tiempo_segundos) DESC
+            LIMIT ?
+        ";
+        
         $stmt = $db->prepare($query);
-        $stmt->bindParam(1, $userId, PDO::PARAM_INT);
-        $stmt->bindParam(2, $fechaInicio, PDO::PARAM_STR);
-        $stmt->bindParam(3, $fechaFin, PDO::PARAM_STR);
-        $stmt->bindParam(4, $limit, PDO::PARAM_INT);
+        $stmt->bind_param("issssi", $userId, $fechaInicio, $fechaFin, $userId, $fechaInicio, $fechaFin, $limit);
         
         if (!$stmt->execute()) {
-            logError("Error ejecutando procedimiento sp_obtener_top_apps: " . implode(', ', $stmt->errorInfo()));
+            logError("Error ejecutando consulta top apps: " . $stmt->error);
             sendError('Error ejecutando consulta', 500);
         }
         
-        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result = $stmt->get_result();
+        $data = [];
         
-        // Cerrar el cursor
-        $stmt->closeCursor();
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
         
-        logError("Top apps completado - " . count($result) . " registros");
-        sendJsonResponse($result);
+        $stmt->close();
+        
+        logError("Top apps completado - " . count($data) . " registros");
+        sendJsonResponse($data);
         
     } catch (Exception $e) {
         logError("Error en top apps: " . $e->getMessage());

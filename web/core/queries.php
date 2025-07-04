@@ -11,12 +11,6 @@ class Queries {
     public static $GET_ULTIMO_REGISTRO_ASISTENCIA = "SELECT tipo, fecha_hora FROM registros_asistencia WHERE id_usuario = ? AND DATE(fecha_hora) = CURDATE() ORDER BY fecha_hora DESC LIMIT 1";
     public static $GET_ULTIMO_REGISTRO_ASISTENCIA_GENERAL = "SELECT tipo, fecha_hora FROM registros_asistencia WHERE id_usuario = ? ORDER BY fecha_hora DESC LIMIT 1";
     public static $INSERT_REGISTRO_ASISTENCIA = "INSERT INTO registros_asistencia (id_usuario, tipo, fecha_hora, latitud, longitud, dispositivo, ip_address, metodo) VALUES (?, ?, NOW(), ?, ?, ?, ?, 'web')";    
-    // Horas extra
-    public static $VERIFICAR_AUTORIZACION_EXTRA = "SELECT id FROM autorizaciones_extras WHERE id_usuario = ? AND DATE(fecha) = CURDATE() AND TIME(NOW()) BETWEEN hora_inicio AND hora_fin";
-    public static $INSERTAR_AUTORIZACION_EXTRA = "INSERT INTO autorizaciones_extras (id_usuario, id_supervisor, fecha, hora_inicio, hora_fin, motivo) VALUES (?, ?, ?, ?, ?, ?)";
-    public static $GET_AUTORIZACIONES_EXTRAS_PENDIENTES = "SELECT ae.id, ae.id_usuario, u.nombre_completo, ae.fecha, ae.hora_inicio, ae.hora_fin, ae.motivo FROM autorizaciones_extras ae INNER JOIN usuarios u ON ae.id_usuario = u.id_usuario WHERE ae.id_supervisor = ? AND ae.estado = 'pendiente'";
-    public static $ACTUALIZAR_ESTADO_AUTORIZACION = "UPDATE autorizaciones_extras SET estado = ? WHERE id = ?";
-    public static $VERIFICAR_HORARIO_LABORAL = "SELECT IF(HOUR(NOW()) BETWEEN ? AND ?, 1, 0) as en_horario";
     // Actividad
     public static $INSERT_ACTIVIDAD_APP = "INSERT INTO actividad_apps (id_usuario, nombre_app, titulo_ventana, fecha_hora_inicio, fecha_hora_fin) VALUES (?, ?, ?, ?, ?)";
     // Proyectos

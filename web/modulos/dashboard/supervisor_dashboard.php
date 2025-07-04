@@ -61,6 +61,7 @@ if ($rol !== 'supervisor') {
                         </div>
                     </div>
                 </div>
+                <!-- Reemplazar la sección de Acciones Rápidas con esto: -->
                 <div class="col-md-12">
                     <div class="card shadow">
                         <div class="card-header py-3">
@@ -68,13 +69,21 @@ if ($rol !== 'supervisor') {
                         </div>
                         <div class="card-body">
                             <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-                                <a href="/simpro-lite/web/index.php?modulo=reportes&vista=equipo"
-                                    class="btn btn-primary me-md-2">
+                                <button class="btn btn-primary me-md-2" onclick="verReportesEquipo()">
                                     <i class="fas fa-chart-line"></i> Ver Reportes Detallados
-                                </a>
-                                <button class="btn btn-secondary" onclick="exportarReporteEquipo()">
-                                    <i class="fas fa-download"></i> Exportar Reporte
                                 </button>
+                                <div class="dropdown me-md-2">
+                                    <button class="btn btn-secondary dropdown-toggle" type="button"
+                                        id="dropdownExportar" data-bs-toggle="dropdown">
+                                        <i class="fas fa-download"></i> Exportar Reporte
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="#" onclick="exportarReporte('pdf')"><i
+                                                    class="fas fa-file-pdf"></i> PDF</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="exportarReporte('excel')"><i
+                                                    class="fas fa-file-excel"></i> Excel</a></li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                     </div>
