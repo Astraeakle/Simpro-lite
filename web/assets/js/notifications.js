@@ -19,6 +19,7 @@ class NotificationsManager {
             userRole: this.userRole,
             userId: this.userId
         });
+        
         if (this.userRole === 'admin') {
             console.log('Admin no usa notificaciones avanzadas');
             return;
@@ -30,28 +31,29 @@ class NotificationsManager {
         
         this.init();
     }    
+    
     init() {
         if (!this.userId || this.userId <= 0) {
             console.log('Usuario no autenticado, no inicializar notificaciones');
             return;
         }
         
-        const notificationContainer = document.getElementById('notification-dropdown-container');
-        if (!notificationContainer) {
-            console.log('Contenedor de notificaciones no encontrado');
-            return;
-        }
-        
         console.log('Inicializando sistema de notificaciones...');
         this.isInitialized = true;
         this.bindEvents();
-        this.loadNotifications();
-        this.loadUnreadCount();
-        setTimeout(() => {
-            this.startPolling();
-        }, 1000);
         this.createModal();
+        
+        // Solo cargar desde API si hay contenedor dropdown
+        const notificationContainer = document.getElementById('notification-dropdown-container');
+        if (notificationContainer) {
+            this.loadNotifications();
+            this.loadUnreadCount();
+            setTimeout(() => {
+                this.startPolling();
+            }, 1000);
+        }
     }    
+    
     createModal() {
         if (document.getElementById('notificationModal')) {
             return;
@@ -120,9 +122,11 @@ class NotificationsManager {
             console.error('Modal no encontrado');
             return;
         }
+        
         this.currentNotification = notification;
         const isAssignmentRequest = notification.titulo.includes('Solicitud de Asignación') || 
                                   notification.titulo.includes('Solicitud de equipo');
+        
         modalContent.innerHTML = `
             <div class="card">
                 <div class="card-header bg-light">
@@ -179,6 +183,7 @@ class NotificationsManager {
             btnAceptar.style.display = 'none';
             btnRechazar.style.display = 'none';
         }
+        
         const bootstrapModal = new bootstrap.Modal(modal);
         bootstrapModal.show();
     }
@@ -191,7 +196,7 @@ class NotificationsManager {
         }
         
         const comentario = document.getElementById('comentarioRespuesta')?.value || '';
-                const btnAceptar = document.getElementById('btnAceptar');
+        const btnAceptar = document.getElementById('btnAceptar');
         const btnRechazar = document.getElementById('btnRechazar');
         
         if (btnAceptar) btnAceptar.disabled = true;
@@ -220,11 +225,20 @@ class NotificationsManager {
                 if (modal) {
                     modal.hide();
                 }                
+                
+                // Actualizar notificación local
                 notification.leido = 1;
-                setTimeout(() => {
-                    this.loadNotifications();
-                    this.loadUnreadCount();
-                }, 1000);
+                
+                // Actualizar interfaz
+                this.updateNotificationInPage(notification);
+                
+                // Recargar desde API si estamos en navbar
+                if (document.getElementById('notification-dropdown-container')) {
+                    setTimeout(() => {
+                        this.loadNotifications();
+                        this.loadUnreadCount();
+                    }, 1000);
+                }
                 
             } else {
                 this.showToast(data.error || 'Error al procesar la respuesta', 'error');
@@ -234,10 +248,42 @@ class NotificationsManager {
             console.error('Error al responder notificación:', error);
             this.showToast('Error de conexión', 'error');
         } finally {
-            // Restaurar botones
             if (btnAceptar) btnAceptar.disabled = false;
             if (btnRechazar) btnRechazar.disabled = false;
         }
+    }
+    
+    updateNotificationInPage(notification) {
+        // Buscar el elemento de notificación en la página
+        const notificationElements = document.querySelectorAll(`[data-notification-id="${notification.id_notificacion}"]`);
+        
+        notificationElements.forEach(element => {
+            // Marcar como leída visualmente
+            element.classList.remove('unread');
+            element.classList.add('read');
+            
+            // Remover badge "Nuevo"
+            const badge = element.querySelector('.badge.bg-primary');
+            if (badge && badge.textContent === 'Nuevo') {
+                badge.remove();
+            }
+            
+            // Ocultar botones de acción
+            const actionButtons = element.querySelector('.btn-group, .btn-accept, .btn-reject');
+            if (actionButtons) {
+                actionButtons.style.display = 'none';
+            }
+            
+            // Agregar información de leído
+            const timeInfo = element.querySelector('.notification-time-info');
+            if (timeInfo) {
+                timeInfo.innerHTML += `
+                    <small class="text-muted ms-2">
+                        <i class="fas fa-check"></i> Procesado
+                    </small>
+                `;
+            }
+        });
     }
     
     showToast(message, type = 'info') {
@@ -399,7 +445,6 @@ class NotificationsManager {
             return;
         }
         
-        // Si no hay notificaciones, mostrar mensaje informativo
         if (this.notifications.length === 0) {
             container.innerHTML = `
                 <div class="text-center p-3 text-muted">
@@ -432,7 +477,6 @@ class NotificationsManager {
             `;
         }
         
-        // Ocultar badge si hay error de autenticación
         const badge = document.getElementById('notificationBadge');
         if (badge) {
             badge.style.display = 'none';
@@ -539,7 +583,6 @@ class NotificationsManager {
             });
             
             if (response.ok) {
-                // Actualizar el estado local
                 const notification = this.notifications.find(n => n.id_notificacion == notificationId);
                 if (notification) {
                     notification.leido = 1;
@@ -553,31 +596,53 @@ class NotificationsManager {
     }
     
     bindEvents() {
-        // Evento para cuando se hace clic en el dropdown
+        // Evento para dropdown del navbar
         const dropdownElement = document.getElementById('notificationDropdown');
         if (dropdownElement) {
             dropdownElement.addEventListener('click', (e) => {
                 console.log('Click en dropdown de notificaciones');
-                // Recargar notificaciones cuando se abre el dropdown
                 setTimeout(() => {
                     this.loadNotifications();
                 }, 100);
             });
         }
         
-        // Evento para clicks en notificaciones - MODIFICADO
+        // Eventos para notificaciones - FUNCIONA EN AMBOS CONTEXTOS
         document.addEventListener('click', (e) => {
+            // Para el dropdown del navbar
             const notificationItem = e.target.closest('.notification-item');
             if (notificationItem) {
-                // PREVENIR COMPORTAMIENTO POR DEFECTO
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
                 
                 console.log('Click interceptado en notificación');
                 this.handleNotificationClick(notificationItem, e);
+                return false;
+            }
+            
+            // Para los botones de la página index
+            const acceptBtn = e.target.closest('.btn-accept');
+            const rejectBtn = e.target.closest('.btn-reject');
+            
+            if (acceptBtn || rejectBtn) {
+                e.preventDefault();
+                e.stopPropagation();
                 
-                // Retornar false para asegurar que no se ejecute ninguna acción por defecto
+                const notificationElement = e.target.closest('.notification-item, .list-group-item');
+                if (notificationElement) {
+                    this.handlePageNotificationAction(notificationElement, acceptBtn ? 'aceptar' : 'rechazar');
+                }
+                return false;
+            }
+            
+            // Para clics en notificaciones de la página
+            const pageNotificationItem = e.target.closest('.list-group-item.notification-item');
+            if (pageNotificationItem && !e.target.closest('.btn-group, .btn')) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                this.handlePageNotificationClick(pageNotificationItem);
                 return false;
             }
         });
@@ -593,7 +658,6 @@ class NotificationsManager {
     }
     
     handleNotificationClick(notificationElement, event) {
-        // PREVENIR CUALQUIER COMPORTAMIENTO POR DEFECTO
         if (event) {
             event.preventDefault();
             event.stopPropagation();
@@ -602,12 +666,9 @@ class NotificationsManager {
         
         const notificationId = notificationElement.dataset.id;
         const isRead = notificationElement.dataset.read === 'true';
-        const type = notificationElement.dataset.type;
-        const reference = notificationElement.dataset.reference;
         
-        console.log('Click en notificación:', { notificationId, isRead, type, reference });
+        console.log('Click en notificación:', { notificationId, isRead });
         
-        // Encontrar la notificación en el array
         const notification = this.notifications.find(n => n.id_notificacion == notificationId);
         
         if (!notification) {
@@ -615,7 +676,7 @@ class NotificationsManager {
             return false;
         }
         
-        // Cerrar el dropdown ANTES de mostrar el modal
+        // Cerrar dropdown si existe
         const dropdown = document.getElementById('notificationDropdown');
         if (dropdown && typeof bootstrap !== 'undefined') {
             const bsDropdown = bootstrap.Dropdown.getInstance(dropdown);
@@ -624,17 +685,55 @@ class NotificationsManager {
             }
         }
         
-        // Mostrar modal después de un pequeño delay
         setTimeout(() => {
             this.showNotificationModal(notification);
         }, 100);
         
-        // Marcar como leída si no lo está (sin recargar página)
         if (!isRead) {
             this.markAsRead(notificationId);
         }
         
         return false;
+    }
+    
+    handlePageNotificationClick(notificationElement) {
+        const notificationId = notificationElement.dataset.notificationId;
+        
+        if (!notificationId) {
+            console.error('ID de notificación no encontrado');
+            return;
+        }
+        
+        // Crear objeto de notificación desde los datos del elemento
+        const notification = {
+            id_notificacion: notificationId,
+            titulo: notificationElement.querySelector('.fw-bold').textContent.trim(),
+            mensaje: notificationElement.querySelector('.text-muted').textContent.trim(),
+            fecha_envio: new Date().toISOString(), // Aproximación
+            leido: notificationElement.classList.contains('read') ? 1 : 0
+        };
+        
+        this.showNotificationModal(notification);
+    }
+    
+    handlePageNotificationAction(notificationElement, action) {
+        const notificationId = notificationElement.dataset.notificationId;
+        
+        if (!notificationId) {
+            console.error('ID de notificación no encontrado');
+            return;
+        }
+        
+        const notification = {
+            id_notificacion: notificationId,
+            titulo: notificationElement.querySelector('.fw-bold').textContent.trim(),
+            mensaje: notificationElement.querySelector('.text-muted').textContent.trim(),
+            fecha_envio: new Date().toISOString(),
+            leido: 0
+        };
+        
+        this.currentNotification = notification;
+        this.handleModalResponse(action);
     }
     
     startPolling() {
@@ -645,7 +744,6 @@ class NotificationsManager {
         this.isPolling = true;
         this.pollInterval = setInterval(() => {
             this.loadUnreadCount();
-            // Recargar notificaciones cada 5 minutos
             if (Date.now() % 300000 < this.pollFrequency) {
                 this.loadNotifications();
             }

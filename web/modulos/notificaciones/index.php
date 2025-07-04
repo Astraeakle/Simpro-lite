@@ -254,25 +254,10 @@ function formatearFechaNotificacion($fecha) {
                                                 </div>
                                             </div>
                                             <div class="flex-shrink-0">
-                                                <?php if ($isSolicitudEquipo && !$isRead): ?>
-                                                <!-- Botones de aceptar/rechazar solo para solicitudes de equipo no leídas -->
-                                                <div class="btn-group" role="group">
-                                                    <a href="?modulo=notificaciones&action=accept_team&id=<?php echo $notificacion['id_notificacion']; ?>"
-                                                        class="btn btn-sm btn-accept me-1"
-                                                        onclick="return confirm('¿Aceptar unirse al equipo?')">
-                                                        <i class="fas fa-check"></i> Aceptar
-                                                    </a>
-                                                    <a href="?modulo=notificaciones&action=reject_team&id=<?php echo $notificacion['id_notificacion']; ?>"
-                                                        class="btn btn-sm btn-reject"
-                                                        onclick="return confirm('¿Rechazar la solicitud?')">
-                                                        <i class="fas fa-times"></i> Rechazar
-                                                    </a>
-                                                </div>
-                                                <?php elseif (!$isRead): ?>
-                                                <!-- Botón de marcar como leída para otras notificaciones -->
+                                                <?php if (!$isRead): ?>
                                                 <a href="?modulo=notificaciones&action=mark_read&id=<?php echo $notificacion['id_notificacion']; ?>"
                                                     class="btn btn-sm btn-outline-primary" title="Marcar como leída">
-                                                    <i class="fas fa-check"></i>
+                                                    <i class="fas fa-check"></i> Marcar como leída
                                                 </a>
                                                 <?php endif; ?>
                                             </div>
