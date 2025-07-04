@@ -57,14 +57,7 @@ class NotificationsManager {
             if (!response.ok) {
                 if (response.status === 401) {
                     console.log('Error 401 - No autorizado');
-                    try {
-                        const errorData = await response.json();
-                        console.log('Detalles del error 401:', errorData);
-                        this.renderAuthError(errorData);
-                    } catch (e) {
-                        console.log('No se pudo parsear el error 401');
-                        this.renderAuthError();
-                    }
+                    this.renderAuthError();
                     return;
                 }
                 const errorText = await response.text();
@@ -86,6 +79,10 @@ class NotificationsManager {
                 this.notifications = data.data || [];
                 console.log(`${this.notifications.length} notificaciones cargadas`);
                 this.renderNotifications();
+                
+                // Actualizar contador basado en las notificaciones cargadas
+                this.unreadCount = this.notifications.filter(n => n.leido == 0).length;
+                this.updateBadge();
             } else {
                 console.error('Error en la respuesta:', data);
                 this.renderErrorState();
@@ -144,6 +141,8 @@ class NotificationsManager {
             return;
         }
         
+        console.log('Renderizando notificaciones en contenedor:', container);
+        
         // Si no hay notificaciones, mostrar mensaje informativo
         if (this.notifications.length === 0) {
             container.innerHTML = `
@@ -164,24 +163,11 @@ class NotificationsManager {
     renderAuthError(errorData = null) {
         const container = document.getElementById('notificationsList');
         if (container) {
-            let debugInfo = '';
-            if (errorData && errorData.debug) {
-                debugInfo = `
-                    <div class="mt-2" style="font-size: 0.8em; color: #6c757d;">
-                        <strong>Debug:</strong><br>
-                        Cookies: ${errorData.debug.cookies ? errorData.debug.cookies.join(', ') : 'ninguna'}<br>
-                        user_data existe: ${errorData.debug.user_data_exists ? 'sí' : 'no'}<br>
-                        Timestamp: ${errorData.debug.timestamp || 'N/A'}
-                    </div>
-                `;
-            }
-            
             container.innerHTML = `
                 <div class="text-center p-3 text-warning">
                     <i class="fas fa-exclamation-triangle mb-2" style="font-size: 2rem;"></i><br>
                     <span><strong>Error de autenticación</strong></span><br>
                     <small>La sesión puede haber expirado</small>
-                    ${debugInfo}
                     <br>
                     <button class="btn btn-sm btn-outline-warning mt-2" onclick="window.location.reload()">
                         <i class="fas fa-refresh"></i> Recargar página
@@ -294,66 +280,6 @@ class NotificationsManager {
         // Ejecutar acción específica
         this.navigateToNotification(actionType, notification.id_referencia, notification.titulo);
     }
-
-    addNewNotification(notification) {
-        // Agregar al inicio de la lista
-        this.notifications.unshift(notification);
-        
-        // Incrementar contador
-        this.unreadCount++;
-        
-        // Actualizar UI
-        this.updateBadge();
-        this.animateBadge();
-        this.renderNotifications();
-        
-        // Mostrar notificación temporal si la página está activa
-        if (!document.hidden) {
-            this.showToastNotification(notification);
-        }
-    }
-
-    showToastNotification(notification) {
-        // Solo si Bootstrap está disponible
-        if (typeof bootstrap === 'undefined') return;
-        
-        const toastHtml = `
-            <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">
-                <div class="toast-header">
-                    <i class="${this.getNotificationIcon(notification.tipo)} text-${this.getNotificationColor(notification.tipo)} me-2"></i>
-                    <strong class="me-auto">${this.escapeHtml(notification.titulo)}</strong>
-                    <small>Ahora</small>
-                    <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-                </div>
-                <div class="toast-body">
-                    ${this.escapeHtml(notification.mensaje)}
-                </div>
-            </div>
-        `;
-        
-        // Crear contenedor de toasts si no existe
-        let toastContainer = document.getElementById('toast-container');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.id = 'toast-container';
-            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-            toastContainer.style.zIndex = '9999';
-            document.body.appendChild(toastContainer);
-        }
-        
-        // Agregar toast
-        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-        
-        // Mostrar toast
-        const toastElement = toastContainer.lastElementChild;
-        const toast = new bootstrap.Toast(toastElement);
-        toast.show();
-        
-        // Limpiar después de que se oculte
-        toastElement.addEventListener('hidden.bs.toast', () => {
-            toastElement.remove();
-        });
-    }
     
     updateBadge() {
         const badge = document.getElementById('notificationBadge');
@@ -440,6 +366,7 @@ class NotificationsManager {
     }
     
     bindEvents() {
+        // Evento para clicks en notificaciones
         document.addEventListener('click', (e) => {
             const notificationItem = e.target.closest('.notification-item');
             if (notificationItem) {
@@ -459,14 +386,27 @@ class NotificationsManager {
             }
         });
         
+        // Evento para botones de acción directa
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('notification-action-btn')) {
+                const notificationId = e.target.dataset.notificationId;
+                const actionType = e.target.dataset.actionType;
+                this.handleDirectAction(notificationId, actionType);
+            }
+        });
+        
+        // Evento para abrir dropdown
         const dropdownElement = document.getElementById('notificationDropdown');
         if (dropdownElement) {
             dropdownElement.addEventListener('click', (e) => {
                 console.log('Click en dropdown de notificaciones');
-                this.loadNotifications();
+                setTimeout(() => {
+                    this.loadNotifications();
+                }, 100);
             });
         }
         
+        // Evento para visibilidad de página
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 this.stopPolling();
@@ -630,14 +570,28 @@ class NotificationsManager {
     }
 }
 
-document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('notification-action-btn')) {
-        const notificationId = e.target.dataset.notificationId;
-        const actionType = e.target.dataset.actionType;
-        this.handleDirectAction(notificationId, actionType);
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM cargado, inicializando NotificationsManager...');
+    
+    // Verificar si existe la configuración
+    if (typeof window.notificationConfig === 'undefined') {
+        console.log('window.notificationConfig no está definido, usando configuración por defecto');
+        window.notificationConfig = {
+            apiUrl: '/simpro-lite/api/v1/notificaciones.php',
+            pollFrequency: 30000,
+            userRole: 'empleado',
+            userId: 0
+        };
     }
+    
+    // Inicializar el manager
+    window.notificationsManager = new NotificationsManager();
+    
+    console.log('NotificationsManager inicializado y disponible globalmente');
 });
 
+// Compatibilidad con módulos
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = NotificationsManager;
 }
