@@ -105,16 +105,19 @@ switch ($action) {
     
     case 'distribucion_tiempo':
         handleDistribucionTiempo($userId);
-        break;
-    
+        break;    
     case 'top_apps':
         handleTopApps($userId);
-        break;
-    
+        break;    
     case 'reporte_comparativo_equipo':
         handleReporteComparativoEquipo();
         break;
-    
+    case 'productividad_por_empleado':
+    handleProductividadPorEmpleado();
+    break;    
+    case 'tiempo_trabajado_empleado':
+        handleTiempoTrabajadoPorEmpleado();
+        break;    
     default:
         sendError('Acción no válida: ' . $action);
 }
@@ -472,5 +475,187 @@ function handleTopApps($userId) {
 function validateDate($date, $format = 'Y-m-d') {
     $d = DateTime::createFromFormat($format, $date);
     return $d && $d->format($format) === $date;
+}
+
+function handleProductividadPorEmpleado() {
+    try {
+        $supervisorId = intval($_GET['supervisor_id'] ?? 0);
+        $empleadoId = intval($_GET['empleado_id'] ?? 0);
+        $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
+        $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
+        
+        logError("Productividad por empleado - Supervisor: $supervisorId, Empleado: $empleadoId, Fechas: $fechaInicio a $fechaFin");
+        
+        // Validar fechas
+        if (!validateDate($fechaInicio) || !validateDate($fechaFin)) {
+            sendError('Formato de fecha inválido');
+        }
+        
+        if ($supervisorId <= 0) {
+            sendError('ID de supervisor inválido');
+        }
+        
+        // Obtener conexión a la base de datos
+        $db = obtenerConexionBD();
+        
+        if (!$db) {
+            logError("No se pudo conectar a la base de datos");
+            sendError('Error de conexión a base de datos', 500);
+        }
+        
+        // Consulta para obtener productividad por empleado
+        $whereEmpleado = "";
+        $params = [$supervisorId, $fechaInicio, $fechaFin];
+        
+        if ($empleadoId > 0) {
+            $whereEmpleado = " AND u.id_usuario = ?";
+            $params[] = $empleadoId;
+        }
+        
+        $query = "
+            SELECT 
+                u.id_usuario,
+                u.nombre_completo,
+                u.area,
+                COALESCE(SUM(aa.tiempo_segundos), 0) as tiempo_total_segundos,
+                COALESCE(SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END), 0) as tiempo_productivo_segundos,
+                ROUND(
+                    COALESCE(
+                        (SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END) / 
+                         NULLIF(SUM(aa.tiempo_segundos), 0)) * 100,
+                        0
+                    ),
+                    2
+                ) as porcentaje_productivo,
+                TIME_FORMAT(SEC_TO_TIME(SUM(aa.tiempo_segundos)), '%H:%i:%s') as tiempo_total_formateado,
+                TIME_FORMAT(SEC_TO_TIME(SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END)), '%H:%i:%s') as tiempo_productivo_formateado
+            FROM usuarios u
+            LEFT JOIN actividad_apps aa ON u.id_usuario = aa.id_usuario 
+                AND aa.fecha_hora_inicio BETWEEN ? AND ?
+            WHERE u.supervisor_id = ?
+            AND u.estado = 'activo'
+            $whereEmpleado
+            GROUP BY u.id_usuario, u.nombre_completo, u.area
+            HAVING SUM(aa.tiempo_segundos) > 0
+            ORDER BY porcentaje_productivo DESC
+        ";
+        
+        // Reordenar parámetros para la consulta
+        $queryParams = [$fechaInicio, $fechaFin, $supervisorId];
+        if ($empleadoId > 0) {
+            $queryParams[] = $empleadoId;
+        }
+        
+        $stmt = $db->prepare($query);
+        
+        if (!$stmt) {
+            logError("Error preparando consulta productividad: " . $db->errorInfo()[2]);
+            sendError('Error en la consulta', 500);
+        }
+        
+        $resultado = $stmt->execute($queryParams);
+        
+        if (!$resultado) {
+            logError("Error ejecutando consulta productividad: " . print_r($stmt->errorInfo(), true));
+            sendError('Error ejecutando consulta', 500);
+        }
+        
+        $empleados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        logError("Empleados con productividad encontrados: " . count($empleados));
+        
+        // Preparar respuesta
+        $data = [
+            'empleados' => $empleados,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'supervisor_id' => $supervisorId,
+            'empleado_id' => $empleadoId
+        ];
+        
+        sendJsonResponse(['success' => true, 'data' => $data]);
+        
+    } catch (Exception $e) {
+        logError("Error en productividad por empleado: " . $e->getMessage());
+        sendError('Error interno del servidor: ' . $e->getMessage(), 500);
+    }
+}
+
+function handleTiempoTrabajadoPorEmpleado() {
+    try {
+        $supervisorId = intval($_GET['supervisor_id'] ?? 0);
+        $empleadoId = intval($_GET['empleado_id'] ?? 0);
+        $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
+        $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
+        
+        logError("Tiempo trabajado por empleado - Supervisor: $supervisorId, Empleado: $empleadoId, Fechas: $fechaInicio a $fechaFin");
+        
+        if (!validateDate($fechaInicio) || !validateDate($fechaFin)) {
+            sendError('Formato de fecha inválido');
+        }
+        
+        if ($supervisorId <= 0) {
+            sendError('ID de supervisor inválido');
+        }
+        
+        $db = obtenerConexionBD();
+        
+        $whereEmpleado = "";
+        $params = [$fechaInicio, $fechaFin, $supervisorId];
+        
+        if ($empleadoId > 0) {
+            $whereEmpleado = " AND u.id_usuario = ?";
+            $params[] = $empleadoId;
+        }
+        
+        $query = "
+            SELECT 
+                u.id_usuario,
+                u.nombre_completo as nombre_empleado,
+                u.area,
+                DATE(aa.fecha_hora_inicio) as fecha,
+                COALESCE(SUM(aa.tiempo_segundos), 0) as tiempo_total,
+                COALESCE(SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END), 0) as tiempo_productivo,
+                TIME_FORMAT(SEC_TO_TIME(SUM(aa.tiempo_segundos)), '%H:%i:%s') as tiempo_formateado
+            FROM usuarios u
+            LEFT JOIN actividad_apps aa ON u.id_usuario = aa.id_usuario 
+                AND aa.fecha_hora_inicio BETWEEN ? AND ?
+            WHERE u.supervisor_id = ?
+            AND u.estado = 'activo'
+            $whereEmpleado
+            AND aa.fecha_hora_inicio IS NOT NULL
+            GROUP BY u.id_usuario, u.nombre_completo, u.area, DATE(aa.fecha_hora_inicio)
+            ORDER BY u.nombre_completo, fecha DESC
+        ";
+        
+        $stmt = $db->prepare($query);
+        
+        if (!$stmt) {
+            logError("Error preparando consulta tiempo trabajado: " . $db->errorInfo()[2]);
+            sendError('Error en la consulta', 500);
+        }
+        
+        $resultado = $stmt->execute($params);
+        
+        if (!$resultado) {
+            logError("Error ejecutando consulta tiempo trabajado: " . print_r($stmt->errorInfo(), true));
+            sendError('Error ejecutando consulta', 500);
+        }
+        
+        $dias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $data = [
+            'dias' => $dias,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'supervisor_id' => $supervisorId
+        ];
+        
+        sendJsonResponse(['success' => true, 'data' => $data]);
+        
+    } catch (Exception $e) {
+        logError("Error en tiempo trabajado por empleado: " . $e->getMessage());
+        sendError('Error interno del servidor: ' . $e->getMessage(), 500);
+    }
 }
 ?>

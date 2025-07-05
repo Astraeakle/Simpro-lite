@@ -149,6 +149,22 @@ if (empty($empleados)) {
             </div>
         </div>
 
+        <!-- Sección de gráficos -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card shadow">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Productividad por Empleado</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container" style="position: relative; height:400px; width:100%">
+                            <canvas id="productividadChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Tabla comparativa -->
         <div class="card shadow">
             <div class="card-header py-3">
@@ -181,8 +197,36 @@ if (empty($empleados)) {
                 </div>
             </div>
         </div>
+
+        <!-- Tabla de tiempo trabajado -->
+        <div class="card shadow mt-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Tiempo Trabajado Diario</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="tablaTiempoTrabajado">
+                        <thead>
+                            <tr>
+                                <th>Empleado</th>
+                                <th>Fecha</th>
+                                <th>Tiempo Trabajado</th>
+                                <th>Tiempo Productivo</th>
+                                <th>% Productividad</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpoTablaTiempo">
+                            <tr>
+                                <td colspan="5" class="text-center py-4">
+                                    <p class="text-muted">Aplica los filtros para ver los datos</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
 </div>
 
 <!-- Modal de carga -->
@@ -199,10 +243,12 @@ if (empty($empleados)) {
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // Variables globales
 const supervisorId = <?= json_encode($userId) ?>;
 const baseUrl = '/simpro-lite/api/v1/reportes.php';
+let productividadChart = null;
 
 // Función para cargar reportes
 function cargarReportes() {
@@ -289,12 +335,245 @@ function cargarReportes() {
         });
 }
 
+// Función para cargar productividad por empleado
+function cargarProductividadEmpleados() {
+    const empleadoId = document.getElementById('filtroEmpleado').value;
+    const fechaInicio = document.getElementById('fechaInicio').value;
+    const fechaFin = document.getElementById('fechaFin').value;
+
+    if (!fechaInicio || !fechaFin) {
+        return;
+    }
+
+    const params = new URLSearchParams({
+        action: 'productividad_por_empleado',
+        supervisor_id: supervisorId,
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin
+    });
+
+    if (empleadoId) {
+        params.append('empleado_id', empleadoId);
+    }
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                mostrarGraficoProductividad(data.data);
+            } else {
+                console.error('Error en productividad:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error cargando productividad:', error);
+        });
+}
+
+// Función para cargar tiempo trabajado
+function cargarTiempoTrabajado() {
+    const empleadoId = document.getElementById('filtroEmpleado').value;
+    const fechaInicio = document.getElementById('fechaInicio').value;
+    const fechaFin = document.getElementById('fechaFin').value;
+
+    if (!fechaInicio || !fechaFin) {
+        return;
+    }
+
+    const params = new URLSearchParams({
+        action: 'tiempo_trabajado_empleado',
+        supervisor_id: supervisorId,
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin
+    });
+
+    if (empleadoId) {
+        params.append('empleado_id', empleadoId);
+    }
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                actualizarTablaTiempoTrabajado(data.data);
+            } else {
+                console.error('Error en tiempo trabajado:', data.error);
+                actualizarTablaTiempoConMensaje('Error al cargar datos de tiempo trabajado');
+            }
+        })
+        .catch(error => {
+            console.error('Error cargando tiempo trabajado:', error);
+            actualizarTablaTiempoConMensaje('Error de conexión: ' + error.message);
+        });
+}
+
+// Función para mostrar gráfico de productividad
+function mostrarGraficoProductividad(data) {
+    const chartContainer = document.getElementById('productividadChart').parentElement;
+
+    // Destruir gráfico anterior si existe
+    if (productividadChart) {
+        productividadChart.destroy();
+        productividadChart = null;
+    }
+
+    if (!data || !data.empleados || data.empleados.length === 0) {
+        chartContainer.innerHTML =
+            '<p class="text-muted text-center py-4">No hay datos de productividad para mostrar</p>';
+        return;
+    }
+
+    // Recrear el canvas
+    chartContainer.innerHTML = '<canvas id="productividadChart"></canvas>';
+    const ctx = document.getElementById('productividadChart').getContext('2d');
+
+
+    if (!data || !data.empleados || data.empleados.length === 0) {
+        // Mostrar mensaje si no hay datos
+        const chartContainer = document.getElementById('productividadChart').parentElement;
+        chartContainer.innerHTML = '<canvas id="productividadChart"></canvas>';
+        '<p class="text-muted text-center py-4">No hay datos de productividad para mostrar</p>';
+        return;
+    }
+
+    // Preparar datos para el gráfico
+    const labels = data.empleados.map(e => e.nombre_completo);
+    const productividad = data.empleados.map(e => parseFloat(e.porcentaje_productivo) || 0);
+    const backgroundColors = productividad.map(p => {
+        if (p >= 80) return 'rgba(40, 167, 69, 0.7)';
+        if (p >= 60) return 'rgba(23, 162, 184, 0.7)';
+        if (p >= 40) return 'rgba(255, 193, 7, 0.7)';
+        return 'rgba(220, 53, 69, 0.7)';
+    });
+
+    productividadChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '% Productividad',
+                data: productividad,
+                backgroundColor: backgroundColors,
+                borderColor: backgroundColors.map(c => c.replace('0.7', '1')),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Porcentaje de Productividad'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Empleados'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Productividad: ${context.raw}%`;
+                        }
+                    }
+                },
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+// Función para actualizar tabla de tiempo trabajado
+function actualizarTablaTiempoTrabajado(data) {
+    const tbody = document.getElementById('cuerpoTablaTiempo');
+    tbody.innerHTML = '';
+
+    if (!data || !data.dias || data.dias.length === 0) {
+        actualizarTablaTiempoConMensaje('No hay datos de tiempo trabajado para el período seleccionado');
+        return;
+    }
+
+    data.dias.forEach(dia => {
+        const row = document.createElement('tr');
+        const productividad = dia.tiempo_productivo > 0 ?
+            (dia.tiempo_productivo / dia.tiempo_total) * 100 : 0;
+
+        row.innerHTML = `
+            <td>${dia.nombre_empleado || 'Sin nombre'}</td>
+            <td>${dia.fecha || 'Sin fecha'}</td>
+            <td>${formatTime(dia.tiempo_total) || '00:00:00'}</td>
+            <td>${formatTime(dia.tiempo_productivo) || '00:00:00'}</td>
+            <td>${productividad.toFixed(1)}%</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Función auxiliar para formatear tiempo
+function formatTime(seconds) {
+    if (!seconds) return '00:00:00';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
 // Función para actualizar tabla con mensaje
 function actualizarTablaConMensaje(mensaje) {
     const tbody = document.getElementById('cuerpoTabla');
     tbody.innerHTML = `
         <tr>
             <td colspan="6" class="text-center py-4 text-muted">
+                ${mensaje}
+            </td>
+        </tr>
+    `;
+}
+
+// Función para actualizar tabla de tiempo con mensaje
+function actualizarTablaTiempoConMensaje(mensaje) {
+    const tbody = document.getElementById('cuerpoTablaTiempo');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="5" class="text-center py-4 text-muted">
                 ${mensaje}
             </td>
         </tr>
@@ -407,11 +686,13 @@ function aplicarFiltros() {
     }
 
     cargarReportes();
+    cargarProductividadEmpleados();
+    cargarTiempoTrabajado();
 }
 
 // Función para actualizar reportes
 function actualizarReportes() {
-    cargarReportes();
+    aplicarFiltros();
 }
 
 // Función para ver detalle de empleado
@@ -435,5 +716,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // No cargar datos automáticamente, esperar que el usuario haga clic
     actualizarTablaConMensaje('Haz clic en "Aplicar Filtros" para cargar los datos');
+    actualizarTablaTiempoConMensaje('Aplica los filtros para ver los datos de tiempo trabajado');
 });
 </script>
