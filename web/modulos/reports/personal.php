@@ -307,7 +307,6 @@ async function cargarReportes() {
         // Actualizar UI
         actualizarResumen(resumen);
         actualizarDistribucion(distribucion);
-        actualizarTopApps(topApps);
 
     } catch (error) {
         console.error('Error al cargar reportes:', error);
@@ -369,70 +368,66 @@ async function cargarDistribucionTiempo(id_usuario, fechaInicio, fechaFin) {
             fecha_fin: fechaFin,
             empleado_id: id_usuario
         });
+
         const url = `${API_BASE_URL}/reportes_personal.php?${params.toString()}`;
         const data = await hacerSolicitudAutenticada(url);
-        const productiva = data.find(item => item.categoria === 'productiva') || {
-            porcentaje: 0
-        };
-        const distractora = data.find(item => item.categoria === 'distractora') || {
-            porcentaje: 0
-        };
-        const neutral = data.find(item => item.categoria === 'neutral') || {
-            porcentaje: 0
-        };
 
-        const tieneActividad = productiva.porcentaje > 0 || distractora.porcentaje > 0 || neutral
-            .porcentaje > 0;
-
-        if (!tieneActividad) {
-            console.log('No hay distribución de tiempo para mostrar');
-            document.getElementById('productivaPercent').innerHTML =
-                `<i class="fas fa-check-circle mr-1"></i> Productiva: Sin datos`;
-            document.getElementById('distractoraPercent').innerHTML =
-                `<i class="fas fa-times-circle mr-1"></i> Distractora: Sin datos`;
-            document.getElementById('neutralPercent').innerHTML =
-                `<i class="fas fa-minus-circle mr-1"></i> Neutral: Sin datos`;
-
-            // Mostrar gráfico vacío
-            actualizarGraficoVacio();
-        } else {
-            document.getElementById('productivaPercent').innerHTML =
-                `<i class="fas fa-check-circle mr-1"></i> Productiva: ${productiva.porcentaje}%`;
-            document.getElementById('distractoraPercent').innerHTML =
-                `<i class="fas fa-times-circle mr-1"></i> Distractora: ${distractora.porcentaje}%`;
-            document.getElementById('neutralPercent').innerHTML =
-                `<i class="fas fa-minus-circle mr-1"></i> Neutral: ${neutral.porcentaje}%`;
-
-            // Actualizar gráfico con datos reales
-            actualizarGrafico(data);
+        // Asegurar que siempre devolvemos un array válido
+        if (!Array.isArray(data)) {
+            return [{
+                    categoria: 'productiva',
+                    porcentaje: 0,
+                    tiempo_total: '00:00:00'
+                },
+                {
+                    categoria: 'distractora',
+                    porcentaje: 0,
+                    tiempo_total: '00:00:00'
+                },
+                {
+                    categoria: 'neutral',
+                    porcentaje: 0,
+                    tiempo_total: '00:00:00'
+                }
+            ];
         }
 
-        // Guardar datos para exportación
-        datosExportacion.distribucion = data;
+        return data;
 
     } catch (error) {
-        console.error('Error cargando distribución de tiempo:', error);
-        document.getElementById('productivaPercent').innerHTML =
-            '<i class="fas fa-check-circle mr-1"></i> Productiva: Error';
-        document.getElementById('distractoraPercent').innerHTML =
-            '<i class="fas fa-times-circle mr-1"></i> Distractora: Error';
-        document.getElementById('neutralPercent').innerHTML =
-            '<i class="fas fa-minus-circle mr-1"></i> Neutral: Error';
-        throw error;
+        console.log('No hay distribución de tiempo para mostrar');
+        return [{
+                categoria: 'productiva',
+                porcentaje: 0,
+                tiempo_total: '00:00:00'
+            },
+            {
+                categoria: 'distractora',
+                porcentaje: 0,
+                tiempo_total: '00:00:00'
+            },
+            {
+                categoria: 'neutral',
+                porcentaje: 0,
+                tiempo_total: '00:00:00'
+            }
+        ];
     }
 }
 
 function actualizarDistribucion(data) {
-    const productiva = data.find(item => item.categoria === 'productiva') || {
-        porcentaje: 0
-    };
-    const distractora = data.find(item => item.categoria === 'distractora') || {
-        porcentaje: 0
-    };
-    const neutral = data.find(item => item.categoria === 'neutral') || {
-        porcentaje: 0
-    };
+    // Asegurarnos que data es un array
+    const safeData = Array.isArray(data) ? data : [];
 
+    const productiva = safeData.find(item => item.categoria === 'productiva') || {
+        porcentaje: 0
+    };
+    const distractora = safeData.find(item => item.categoria === 'distractora') || {
+        porcentaje: 0
+    };
+    const neutral = safeData.find(item => item.categoria === 'neutral') || {
+        porcentaje: 0
+    };
     document.getElementById('productivaPercent').innerHTML =
         `<i class="fas fa-check-circle mr-1"></i> Productiva: ${productiva.porcentaje}%`;
     document.getElementById('distractoraPercent').innerHTML =
@@ -440,12 +435,14 @@ function actualizarDistribucion(data) {
     document.getElementById('neutralPercent').innerHTML =
         `<i class="fas fa-minus-circle mr-1"></i> Neutral: ${neutral.porcentaje}%`;
 
+    // Actualizar gráfico solo si hay datos
     if (productiva.porcentaje > 0 || distractora.porcentaje > 0 || neutral.porcentaje > 0) {
-        actualizarGrafico(data);
+        actualizarGrafico(safeData);
     } else {
         actualizarGraficoVacio();
     }
 }
+
 // Cargar top de aplicaciones
 async function cargarTopApps(id_usuario, fechaInicio, fechaFin) {
     try {
@@ -464,7 +461,6 @@ async function cargarTopApps(id_usuario, fechaInicio, fechaFin) {
         const tbody = document.getElementById('tablaTopApps');
         tbody.innerHTML = '';
 
-        // CORRECCIÓN: Verificar correctamente si hay datos
         if (!data || data.length === 0) {
             console.log('No hay aplicaciones para mostrar');
             tbody.innerHTML =
@@ -472,8 +468,6 @@ async function cargarTopApps(id_usuario, fechaInicio, fechaFin) {
             datosExportacion.topApps = [];
             return;
         }
-
-        // Verificar si los datos contienen información real
         const tieneActividad = data.some(app => app.tiempo_total !== '00:00:00' && app.frecuencia_uso > 0);
 
         if (!tieneActividad) {
@@ -484,7 +478,6 @@ async function cargarTopApps(id_usuario, fechaInicio, fechaFin) {
             return;
         }
 
-        // Mostrar datos reales
         data.forEach(app => {
             const row = document.createElement('tr');
             row.innerHTML = `
@@ -521,6 +514,8 @@ async function cargarTopApps(id_usuario, fechaInicio, fechaFin) {
         throw error;
     }
 }
+
+
 
 // Actualizar gráfico de distribución
 function actualizarGrafico(data) {
@@ -1349,6 +1344,8 @@ function mostrarAlerta(mensaje, tipo = 'info') {
         }
     }, 5000);
 }
+
+
 
 // Inicializar cuando se carga la página
 document.addEventListener('DOMContentLoaded', function() {
