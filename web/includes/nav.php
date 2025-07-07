@@ -60,7 +60,7 @@ ob_end_clean();
 
                 <?php if ($rolUsuario === 'supervisor'): ?>
                 <li class="nav-item">
-                    <a class="nav-link" href="/simpro-lite/web/index.php?modulo=reports&vista=reports">
+                    <a class="nav-link" href="/simpro-lite/web/index.php?modulo=reports&vista=equipo">
                         <i class="fas fa-chart-bar"></i> Reportes
                     </a>
                 </li>

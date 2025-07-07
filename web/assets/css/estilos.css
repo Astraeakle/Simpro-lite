@@ -75,24 +75,6 @@ body {
     color: #ffc107 !important;
 }
 
-.badge-productiva {
-    background-color: #d4edda;
-    color: #155724; /* Verde oscuro para contraste */
-    border: 1px solid #c3e6cb;
-}
-
-.badge-distractora {
-    background-color: #f8d7da;
-    color: #721c24; /* Rojo oscuro para contraste */
-    border: 1px solid #f5c6cb;
-}
-
-.badge-neutral {
-    background-color: #e2e3e5;
-    color: #383d41; /* Gris oscuro para contraste */
-    border: 1px solid #d6d8db;
-}
-
 .custom-footer {
     background-color: var(--footer-bg);
     color: var(--footer-text);
@@ -107,4 +89,26 @@ body {
 [data-theme="dark"] {
     --footer-bg: #121212;
     --footer-text: #cccccc;
+}
+
+.export-option {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.export-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
 }

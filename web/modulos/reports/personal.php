@@ -303,7 +303,7 @@ async function cargarResumenGeneral() {
         const fechaFin = document.getElementById('fecha_fin').value;
 
         const url =
-            `${API_BASE_URL}/reportes.php?action=resumen_general&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+            `${API_BASE_URL}/reportes_personal.php?action=resumen_general&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
         const data = await hacerSolicitudAutenticada(url);
 
         // Actualizar elementos del DOM
@@ -328,7 +328,7 @@ async function cargarDistribucionTiempo() {
         const fechaFin = document.getElementById('fecha_fin').value;
 
         const url =
-            `${API_BASE_URL}/reportes.php?action=distribucion_tiempo&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+            `${API_BASE_URL}/reportes_personal.php?action=distribucion_tiempo&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
         const data = await hacerSolicitudAutenticada(url);
 
         // Actualizar badges
@@ -372,7 +372,7 @@ async function cargarTopApps() {
         const fechaFin = document.getElementById('fecha_fin').value;
 
         const url =
-            `${API_BASE_URL}/reportes.php?action=top_apps&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`;
+            `${API_BASE_URL}/reportes_personal.php?action=top_apps&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`;
         const data = await hacerSolicitudAutenticada(url);
 
         // Actualizar tabla
@@ -648,13 +648,13 @@ async function recopilarDatosExportacion() {
         // Recopilar todos los datos necesarios
         const [resumen, distribucion, topApps] = await Promise.all([
             hacerSolicitudAutenticada(
-                `${API_BASE_URL}/reportes.php?action=resumen_general&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
+                `${API_BASE_URL}/reportes_personal.php?action=resumen_general&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
             ),
             hacerSolicitudAutenticada(
-                `${API_BASE_URL}/reportes.php?action=distribucion_tiempo&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
+                `${API_BASE_URL}/reportes_personal.php?action=distribucion_tiempo&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
             ),
             hacerSolicitudAutenticada(
-                `${API_BASE_URL}/reportes.php?action=top_apps&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`
+                `${API_BASE_URL}/reportes_personal.php?action=top_apps&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`
             )
         ]);
 

@@ -1,4 +1,4 @@
-// File: web/assets/jsauth.js
+// File: web/assets/js/auth.js
 const Auth = {
     // Inicializa el módulo
     init: function() {
