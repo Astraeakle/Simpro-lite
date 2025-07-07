@@ -333,20 +333,25 @@ async function cargarResumenGeneral(id_usuario, fechaInicio, fechaFin) {
         const params = new URLSearchParams({
             action: 'resumen_general',
             fecha_inicio: fechaInicio,
-            fecha_fin: fechaFin
+            fecha_fin: fechaFin,
+            empleado_id: id_usuario
         });
 
         const url = `${API_BASE_URL}/reportes_personal.php?${params.toString()}`;
         const data = await hacerSolicitudAutenticada(url);
-
-        if (!data.success) {
-            throw new Error(data.error || 'Error desconocido al cargar resumen');
+        if (!data || data.tiempo_total === null) {
+            return {
+                tiempo_total: '00:00:00',
+                dias_trabajados: 0,
+                total_actividades: 0,
+                porcentaje_productivo: 0
+            };
         }
 
-        return data.data;
+        return data;
 
     } catch (error) {
-        console.error('Error en resumen general:', error);
+        console.log('No hay datos de resumen general para mostrar');
         return {
             tiempo_total: '00:00:00',
             dias_trabajados: 0,
@@ -355,12 +360,10 @@ async function cargarResumenGeneral(id_usuario, fechaInicio, fechaFin) {
         };
     }
 }
-
 // Cargar distribución de tiempo
 async function cargarDistribucionTiempo(id_usuario, fechaInicio, fechaFin) {
     try {
         const params = new URLSearchParams({
-
             action: 'distribucion_tiempo',
             fecha_inicio: fechaInicio,
             fecha_fin: fechaFin,
@@ -419,6 +422,30 @@ async function cargarDistribucionTiempo(id_usuario, fechaInicio, fechaFin) {
     }
 }
 
+function actualizarDistribucion(data) {
+    const productiva = data.find(item => item.categoria === 'productiva') || {
+        porcentaje: 0
+    };
+    const distractora = data.find(item => item.categoria === 'distractora') || {
+        porcentaje: 0
+    };
+    const neutral = data.find(item => item.categoria === 'neutral') || {
+        porcentaje: 0
+    };
+
+    document.getElementById('productivaPercent').innerHTML =
+        `<i class="fas fa-check-circle mr-1"></i> Productiva: ${productiva.porcentaje}%`;
+    document.getElementById('distractoraPercent').innerHTML =
+        `<i class="fas fa-times-circle mr-1"></i> Distractora: ${distractora.porcentaje}%`;
+    document.getElementById('neutralPercent').innerHTML =
+        `<i class="fas fa-minus-circle mr-1"></i> Neutral: ${neutral.porcentaje}%`;
+
+    if (productiva.porcentaje > 0 || distractora.porcentaje > 0 || neutral.porcentaje > 0) {
+        actualizarGrafico(data);
+    } else {
+        actualizarGraficoVacio();
+    }
+}
 // Cargar top de aplicaciones
 async function cargarTopApps(id_usuario, fechaInicio, fechaFin) {
     try {
