@@ -72,18 +72,6 @@ if ($rol !== 'supervisor') {
                                 <button class="btn btn-primary me-md-2" onclick="verReportesEquipo()">
                                     <i class="fas fa-chart-line"></i> Ver Reportes Detallados
                                 </button>
-                                <div class="dropdown me-md-2">
-                                    <button class="btn btn-secondary dropdown-toggle" type="button"
-                                        id="dropdownExportar" data-bs-toggle="dropdown">
-                                        <i class="fas fa-download"></i> Exportar Reporte
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        <li><a class="dropdown-item" href="#" onclick="exportarReporte('pdf')"><i
-                                                    class="fas fa-file-pdf"></i> PDF</a></li>
-                                        <li><a class="dropdown-item" href="#" onclick="exportarReporte('excel')"><i
-                                                    class="fas fa-file-excel"></i> Excel</a></li>
-                                    </ul>
-                                </div>
                             </div>
                         </div>
                     </div>
