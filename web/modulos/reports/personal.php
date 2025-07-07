@@ -273,14 +273,12 @@ async function hacerSolicitudAutenticada(url, opciones = {}) {
 // Función principal para cargar los reportes
 function cargarReportes() {
     mostrarModal(true);
-
-    // CAMBIO: Siempre usar el ID del usuario logueado, ignorar URL
     const userData = <?php echo json_encode($userData); ?>;
-    const empleadoId = userData.id;
+    const id_usuario = userData.id;
 
-    console.log('Cargando reportes personales para usuario:', empleadoId);
+    console.log('Cargando reportes personales para usuario:', id_usuario);
 
-    if (!empleadoId) {
+    if (!id_usuario) {
         console.error('No se pudo obtener el ID del usuario');
         mostrarModal(false);
         mostrarAlerta('Error: No se pudo obtener el ID del usuario', 'error');
@@ -291,9 +289,9 @@ function cargarReportes() {
     const fechaFin = document.getElementById('fecha_fin').value;
 
     Promise.all([
-        cargarResumenGeneral(empleadoId, fechaInicio, fechaFin),
-        cargarDistribucionTiempo(empleadoId, fechaInicio, fechaFin),
-        cargarTopApps(empleadoId, fechaInicio, fechaFin)
+        cargarResumenGeneral(id_usuario, fechaInicio, fechaFin),
+        cargarDistribucionTiempo(id_usuario, fechaInicio, fechaFin),
+        cargarTopApps(id_usuario, fechaInicio, fechaFin)
     ]).then(() => {
         mostrarModal(false);
     }).catch(error => {
@@ -304,14 +302,14 @@ function cargarReportes() {
 }
 
 // Cargar resumen general
-async function cargarResumenGeneral(empleadoId, fechaInicio, fechaFin) {
-    console.log('Cargando resumen general para empleado:', empleadoId, 'desde', fechaInicio, 'hasta', fechaFin);
+async function cargarResumenGeneral(id_usuario, fechaInicio, fechaFin) {
+    console.log('Cargando resumen general para empleado:', id_usuario, 'desde', fechaInicio, 'hasta', fechaFin);
     try {
         const params = new URLSearchParams({
             action: 'resumen_general',
             fecha_inicio: fechaInicio,
             fecha_fin: fechaFin,
-            empleado_id: empleadoId
+            empleado_id: id_usuario
         });
 
         const url = `${API_BASE_URL}/reportes_personal.php?${params.toString()}`;
@@ -354,18 +352,17 @@ async function cargarResumenGeneral(empleadoId, fechaInicio, fechaFin) {
 }
 
 // Cargar distribución de tiempo
-async function cargarDistribucionTiempo(empleadoId, fechaInicio, fechaFin) {
+async function cargarDistribucionTiempo(id_usuario, fechaInicio, fechaFin) {
     try {
         const params = new URLSearchParams({
+
             action: 'distribucion_tiempo',
             fecha_inicio: fechaInicio,
             fecha_fin: fechaFin,
-            empleado_id: empleadoId
+            empleado_id: id_usuario
         });
-
         const url = `${API_BASE_URL}/reportes_personal.php?${params.toString()}`;
         const data = await hacerSolicitudAutenticada(url);
-
         const productiva = data.find(item => item.categoria === 'productiva') || {
             porcentaje: 0
         };
@@ -376,7 +373,6 @@ async function cargarDistribucionTiempo(empleadoId, fechaInicio, fechaFin) {
             porcentaje: 0
         };
 
-        // CORRECCIÓN: Verificar si hay datos reales
         const tieneActividad = productiva.porcentaje > 0 || distractora.porcentaje > 0 || neutral.porcentaje > 0;
 
         if (!tieneActividad) {
@@ -418,14 +414,14 @@ async function cargarDistribucionTiempo(empleadoId, fechaInicio, fechaFin) {
 }
 
 // Cargar top de aplicaciones
-async function cargarTopApps(empleadoId, fechaInicio, fechaFin) {
+async function cargarTopApps(id_usuario, fechaInicio, fechaFin) {
     try {
         const params = new URLSearchParams({
             action: 'top_apps',
             fecha_inicio: fechaInicio,
             fecha_fin: fechaFin,
             limit: 10,
-            empleado_id: empleadoId
+            empleado_id: id_usuario
         });
 
         const url = `${API_BASE_URL}/reportes_personal.php?${params.toString()}`;
@@ -456,7 +452,7 @@ async function cargarTopApps(empleadoId, fechaInicio, fechaFin) {
         }
 
         // Mostrar datos reales
-        data.forEach((app, index) => {
+        data.forEach(app => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>
@@ -475,14 +471,13 @@ async function cargarTopApps(empleadoId, fechaInicio, fechaFin) {
                     <small class="text-muted">${app.porcentaje}% del tiempo</small>
                 </td>
                 <td>
-                    <span class="badge badge-${getColorCategoria(app.categoria)} px-3 py-2">
+                    <span class="badge badge-${app.categoria} px-3 py-2">
                         ${capitalizar(app.categoria)}
                     </span>
                 </td>
             `;
             tbody.appendChild(row);
         });
-
         datosExportacion.topApps = data;
 
     } catch (error) {
@@ -791,23 +786,23 @@ async function recopilarDatosExportacion() {
 
         // Obtener empleado_id de la misma manera
         const urlParams = new URLSearchParams(window.location.search);
-        let empleadoId = urlParams.get('empleado_id');
+        let id_usuario = urlParams.get('empleado_id');
 
-        if (!empleadoId) {
+        if (!id_usuario) {
             const userData = <?php echo json_encode($userData); ?>;
-            empleadoId = userData.id || userData.id_usuario || userData.user_id;
+            id_usuario = userData.id || userData.id_usuario || userData.user_id;
         }
 
         // Recopilar todos los datos necesarios - AGREGADO empleado_id
         const [resumen, distribucion, topApps] = await Promise.all([
             hacerSolicitudAutenticada(
-                `${API_BASE_URL}/reportes_personal.php?action=resumen_general&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
+                `${API_BASE_URL}/reportes_personal.php?action=resumen_general&empleado_id=${id_usuario}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
             ),
             hacerSolicitudAutenticada(
-                `${API_BASE_URL}/reportes_personal.php?action=distribucion_tiempo&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
+                `${API_BASE_URL}/reportes_personal.php?action=distribucion_tiempo&empleado_id=${id_usuario}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
             ),
             hacerSolicitudAutenticada(
-                `${API_BASE_URL}/reportes_personal.php?action=top_apps&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`
+                `${API_BASE_URL}/reportes_personal.php?action=top_apps&empleado_id=${id_usuario}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`
             )
         ]);
 
