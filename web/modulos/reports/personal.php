@@ -196,14 +196,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
+
 <script>
 // Configuración de la base URL de la API
 const API_BASE_URL = window.location.origin + '/simpro-lite/api/v1';
 
-// Funciones globales para evitar errores de referencia
+// Variables globales
 let graficoProductividad = null;
-
-// Variables globales para los datos de exportación
 let datosExportacion = {
     resumen: null,
     distribucion: null,
@@ -222,21 +221,15 @@ function getCookie(name) {
 
 // Función auxiliar para hacer solicitudes autenticadas
 async function hacerSolicitudAutenticada(url, opciones = {}) {
-    // Primero intentar localStorage, luego cookies
     let token = localStorage.getItem('token');
-
-    console.log('Token en localStorage:', token ? 'Presente' : 'Ausente');
 
     if (!token) {
         token = getCookie('auth_token');
-        console.log('Token en cookies:', token ? 'Presente' : 'Ausente');
     }
 
     if (!token) {
         throw new Error('No se encontró token de autenticación');
     }
-
-    console.log('Usando token:', token ? 'Sí' : 'No');
 
     const defaultOptions = {
         method: 'GET',
@@ -255,22 +248,20 @@ async function hacerSolicitudAutenticada(url, opciones = {}) {
         }
     };
 
-    console.log('Haciendo solicitud a:', url);
-    console.log('Headers:', finalOptions.headers);
-
     try {
         const response = await fetch(url, finalOptions);
 
-        console.log('Respuesta recibida:', response.status, response.statusText);
-
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Error en respuesta:', response.status, errorText);
-            throw new Error(`HTTP error! status: ${response.status}`);
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            } catch (parseError) {
+                throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+            }
         }
 
         const data = await response.json();
-        console.log('Datos recibidos:', data);
         return data;
 
     } catch (error) {
@@ -283,10 +274,26 @@ async function hacerSolicitudAutenticada(url, opciones = {}) {
 function cargarReportes() {
     mostrarModal(true);
 
+    // CAMBIO: Siempre usar el ID del usuario logueado, ignorar URL
+    const userData = <?php echo json_encode($userData); ?>;
+    const empleadoId = userData.id;
+
+    console.log('Cargando reportes personales para usuario:', empleadoId);
+
+    if (!empleadoId) {
+        console.error('No se pudo obtener el ID del usuario');
+        mostrarModal(false);
+        mostrarAlerta('Error: No se pudo obtener el ID del usuario', 'error');
+        return;
+    }
+
+    const fechaInicio = document.getElementById('fecha_inicio').value;
+    const fechaFin = document.getElementById('fecha_fin').value;
+
     Promise.all([
-        cargarResumenGeneral(),
-        cargarDistribucionTiempo(),
-        cargarTopApps()
+        cargarResumenGeneral(empleadoId, fechaInicio, fechaFin),
+        cargarDistribucionTiempo(empleadoId, fechaInicio, fechaFin),
+        cargarTopApps(empleadoId, fechaInicio, fechaFin)
     ]).then(() => {
         mostrarModal(false);
     }).catch(error => {
@@ -297,24 +304,49 @@ function cargarReportes() {
 }
 
 // Cargar resumen general
-async function cargarResumenGeneral() {
+async function cargarResumenGeneral(empleadoId, fechaInicio, fechaFin) {
+    console.log('Cargando resumen general para empleado:', empleadoId, 'desde', fechaInicio, 'hasta', fechaFin);
     try {
-        const fechaInicio = document.getElementById('fecha_inicio').value;
-        const fechaFin = document.getElementById('fecha_fin').value;
+        const params = new URLSearchParams({
+            action: 'resumen_general',
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+            empleado_id: empleadoId
+        });
 
-        const url =
-            `${API_BASE_URL}/reportes_personal.php?action=resumen_general&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        const url = `${API_BASE_URL}/reportes_personal.php?${params.toString()}`;
         const data = await hacerSolicitudAutenticada(url);
 
-        // Actualizar elementos del DOM
-        document.getElementById('tiempoTotalHoras').textContent = formatearTiempo(data.tiempo_total);
-        document.getElementById('totalActividades').textContent = data.total_actividades.toLocaleString();
-        document.getElementById('productividadPercent').textContent = `${data.porcentaje_productivo}%`;
+        // CORRECCIÓN: Verificar si los datos están vacíos
+        const tieneActividad = data.total_actividades > 0 && data.tiempo_total !== '00:00:00';
+
+        if (!tieneActividad) {
+            console.log('No hay actividad para el período seleccionado');
+            // Mostrar mensaje de "sin datos"
+            document.getElementById('tiempoTotalHoras').textContent = 'Sin datos';
+            document.getElementById('totalActividades').textContent = '0';
+            document.getElementById('productividadPercent').textContent = '0%';
+
+            // Mostrar mensaje informativo
+            mostrarMensajeSinDatos();
+        } else {
+            // Actualizar elementos del DOM con datos reales
+            document.getElementById('tiempoTotalHoras').textContent = formatearTiempo(data.tiempo_total);
+            document.getElementById('totalActividades').textContent = data.total_actividades.toLocaleString();
+            document.getElementById('productividadPercent').textContent = `${data.porcentaje_productivo}%`;
+
+            // Ocultar mensaje de sin datos si existe
+            ocultarMensajeSinDatos();
+        }
+
+        // Guardar datos para exportación
+        datosExportacion.resumen = data;
+        datosExportacion.fechaInicio = fechaInicio;
+        datosExportacion.fechaFin = fechaFin;
 
     } catch (error) {
         console.error('Error cargando resumen general:', error);
-        // Mostrar datos por defecto en caso de error
-        document.getElementById('tiempoTotalHoras').textContent = '0h 0m';
+        document.getElementById('tiempoTotalHoras').textContent = 'Error';
         document.getElementById('totalActividades').textContent = '0';
         document.getElementById('productividadPercent').textContent = '0%';
         throw error;
@@ -322,16 +354,18 @@ async function cargarResumenGeneral() {
 }
 
 // Cargar distribución de tiempo
-async function cargarDistribucionTiempo() {
+async function cargarDistribucionTiempo(empleadoId, fechaInicio, fechaFin) {
     try {
-        const fechaInicio = document.getElementById('fecha_inicio').value;
-        const fechaFin = document.getElementById('fecha_fin').value;
+        const params = new URLSearchParams({
+            action: 'distribucion_tiempo',
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+            empleado_id: empleadoId
+        });
 
-        const url =
-            `${API_BASE_URL}/reportes_personal.php?action=distribucion_tiempo&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        const url = `${API_BASE_URL}/reportes_personal.php?${params.toString()}`;
         const data = await hacerSolicitudAutenticada(url);
 
-        // Actualizar badges
         const productiva = data.find(item => item.categoria === 'productiva') || {
             porcentaje: 0
         };
@@ -342,50 +376,87 @@ async function cargarDistribucionTiempo() {
             porcentaje: 0
         };
 
-        document.getElementById('productivaPercent').innerHTML =
-            `<i class="fas fa-check-circle mr-1"></i> Productiva: ${productiva.porcentaje}%`;
-        document.getElementById('distractoraPercent').innerHTML =
-            `<i class="fas fa-times-circle mr-1"></i> Distractora: ${distractora.porcentaje}%`;
-        document.getElementById('neutralPercent').innerHTML =
-            `<i class="fas fa-minus-circle mr-1"></i> Neutral: ${neutral.porcentaje}%`;
+        // CORRECCIÓN: Verificar si hay datos reales
+        const tieneActividad = productiva.porcentaje > 0 || distractora.porcentaje > 0 || neutral.porcentaje > 0;
 
-        // Actualizar gráfico
-        actualizarGrafico(data);
+        if (!tieneActividad) {
+            console.log('No hay distribución de tiempo para mostrar');
+            document.getElementById('productivaPercent').innerHTML =
+                `<i class="fas fa-check-circle mr-1"></i> Productiva: Sin datos`;
+            document.getElementById('distractoraPercent').innerHTML =
+                `<i class="fas fa-times-circle mr-1"></i> Distractora: Sin datos`;
+            document.getElementById('neutralPercent').innerHTML =
+                `<i class="fas fa-minus-circle mr-1"></i> Neutral: Sin datos`;
+
+            // Mostrar gráfico vacío
+            actualizarGraficoVacio();
+        } else {
+            document.getElementById('productivaPercent').innerHTML =
+                `<i class="fas fa-check-circle mr-1"></i> Productiva: ${productiva.porcentaje}%`;
+            document.getElementById('distractoraPercent').innerHTML =
+                `<i class="fas fa-times-circle mr-1"></i> Distractora: ${distractora.porcentaje}%`;
+            document.getElementById('neutralPercent').innerHTML =
+                `<i class="fas fa-minus-circle mr-1"></i> Neutral: ${neutral.porcentaje}%`;
+
+            // Actualizar gráfico con datos reales
+            actualizarGrafico(data);
+        }
+
+        // Guardar datos para exportación
+        datosExportacion.distribucion = data;
 
     } catch (error) {
         console.error('Error cargando distribución de tiempo:', error);
-        // Mostrar datos por defecto
         document.getElementById('productivaPercent').innerHTML =
-            '<i class="fas fa-check-circle mr-1"></i> Productiva: 0%';
+            '<i class="fas fa-check-circle mr-1"></i> Productiva: Error';
         document.getElementById('distractoraPercent').innerHTML =
-            '<i class="fas fa-times-circle mr-1"></i> Distractora: 0%';
+            '<i class="fas fa-times-circle mr-1"></i> Distractora: Error';
         document.getElementById('neutralPercent').innerHTML =
-            '<i class="fas fa-minus-circle mr-1"></i> Neutral: 0%';
+            '<i class="fas fa-minus-circle mr-1"></i> Neutral: Error';
         throw error;
     }
 }
 
 // Cargar top de aplicaciones
-async function cargarTopApps() {
+async function cargarTopApps(empleadoId, fechaInicio, fechaFin) {
     try {
-        const fechaInicio = document.getElementById('fecha_inicio').value;
-        const fechaFin = document.getElementById('fecha_fin').value;
+        const params = new URLSearchParams({
+            action: 'top_apps',
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+            limit: 10,
+            empleado_id: empleadoId
+        });
 
-        const url =
-            `${API_BASE_URL}/reportes_personal.php?action=top_apps&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`;
+        const url = `${API_BASE_URL}/reportes_personal.php?${params.toString()}`;
         const data = await hacerSolicitudAutenticada(url);
 
         // Actualizar tabla
         const tbody = document.getElementById('tablaTopApps');
         tbody.innerHTML = '';
 
-        if (data.length === 0) {
+        // CORRECCIÓN: Verificar correctamente si hay datos
+        if (!data || data.length === 0) {
+            console.log('No hay aplicaciones para mostrar');
             tbody.innerHTML =
-                '<tr><td colspan="3" class="text-center py-4 text-muted">No hay datos disponibles para el período seleccionado</td></tr>';
+                '<tr><td colspan="3" class="text-center py-4 text-muted"><i class="fas fa-info-circle mr-2"></i>No hay datos de aplicaciones para el período seleccionado</td></tr>';
+            datosExportacion.topApps = [];
             return;
         }
 
-        data.forEach(app => {
+        // Verificar si los datos contienen información real
+        const tieneActividad = data.some(app => app.tiempo_total !== '00:00:00' && app.frecuencia_uso > 0);
+
+        if (!tieneActividad) {
+            console.log('Los datos de aplicaciones están vacíos');
+            tbody.innerHTML =
+                '<tr><td colspan="3" class="text-center py-4 text-muted"><i class="fas fa-info-circle mr-2"></i>No hay actividad registrada para el período seleccionado</td></tr>';
+            datosExportacion.topApps = [];
+            return;
+        }
+
+        // Mostrar datos reales
+        data.forEach((app, index) => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>
@@ -404,7 +475,7 @@ async function cargarTopApps() {
                     <small class="text-muted">${app.porcentaje}% del tiempo</small>
                 </td>
                 <td>
-                    <span class="badge badge-${app.categoria} px-3 py-2">
+                    <span class="badge badge-${getColorCategoria(app.categoria)} px-3 py-2">
                         ${capitalizar(app.categoria)}
                     </span>
                 </td>
@@ -412,11 +483,13 @@ async function cargarTopApps() {
             tbody.appendChild(row);
         });
 
+        datosExportacion.topApps = data;
+
     } catch (error) {
         console.error('Error cargando top apps:', error);
         const tbody = document.getElementById('tablaTopApps');
         tbody.innerHTML =
-            '<tr><td colspan="3" class="text-center py-4 text-danger">Error al cargar aplicaciones</td></tr>';
+            '<tr><td colspan="3" class="text-center py-4 text-danger"><i class="fas fa-exclamation-triangle mr-2"></i>Error al cargar aplicaciones</td></tr>';
         throw error;
     }
 }
@@ -461,6 +534,73 @@ function actualizarGrafico(data) {
     });
 }
 
+// NUEVA FUNCIÓN: Mostrar gráfico vacío
+function actualizarGraficoVacio() {
+    const ctx = document.getElementById('graficoProductividad').getContext('2d');
+
+    if (graficoProductividad) {
+        graficoProductividad.destroy();
+    }
+
+    graficoProductividad = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Sin datos'],
+            datasets: [{
+                data: [100],
+                backgroundColor: ['#e9ecef'],
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            cutout: '70%',
+            animation: {
+                animateScale: true,
+                animateRotate: true
+            }
+        }
+    });
+}
+
+// NUEVA FUNCIÓN: Mostrar mensaje de sin datos
+function mostrarMensajeSinDatos() {
+    // Verificar si ya existe el mensaje
+    if (document.getElementById('mensajeSinDatos')) {
+        return;
+    }
+
+    const mensaje = document.createElement('div');
+    mensaje.id = 'mensajeSinDatos';
+    mensaje.className = 'alert alert-info mt-3';
+    mensaje.innerHTML = `
+        <i class="fas fa-info-circle mr-2"></i>
+        <strong>No hay datos disponibles</strong><br>
+        No se encontró actividad registrada para el período seleccionado.
+    `;
+
+    // Insertar el mensaje después del primer card
+    const primeraCard = document.querySelector('.card');
+    if (primeraCard && primeraCard.parentNode) {
+        primeraCard.parentNode.insertBefore(mensaje, primeraCard.nextSibling);
+    }
+}
+
+// NUEVA FUNCIÓN: Ocultar mensaje de sin datos
+function ocultarMensajeSinDatos() {
+    const mensaje = document.getElementById('mensajeSinDatos');
+    if (mensaje) {
+        mensaje.remove();
+    }
+}
+
 // Funciones auxiliares
 function formatearTiempo(tiempoStr) {
     if (!tiempoStr || tiempoStr === '00:00:00') return '0h 0m';
@@ -489,7 +629,12 @@ function getIconoApp(nombreApp) {
         'Zoom': 'video',
         'Notepad': 'file-alt',
         'Calculator': 'calculator',
-        'Explorer': 'folder-open'
+        'Explorer': 'folder-open',
+        'brave.exe': 'globe',
+        'python.exe': 'code',
+        'Code.exe': 'code',
+        'TestApp.exe': 'cog',
+        'SnippingTool.exe': 'camera'
     };
 
     return iconos[nombreApp] || 'desktop';
@@ -520,7 +665,6 @@ function capitalizar(str) {
 }
 
 function mostrarModal(mostrar) {
-    const modal = document.getElementById('loadingModal');
     if (mostrar) {
         $('#loadingModal').modal('show');
     } else {
@@ -552,7 +696,6 @@ function actualizarReportes() {
 // Función principal de exportación
 async function procesarExportacion() {
     try {
-        // Mostrar modal de selección de formato
         mostrarModalExportacion();
     } catch (error) {
         console.error('Error en procesarExportacion:', error);
@@ -563,52 +706,53 @@ async function procesarExportacion() {
 // Función para mostrar modal de selección de formato
 function mostrarModalExportacion() {
     const modalHTML = `
-        <div class="modal fade" id="exportModal" tabindex="-1" role="dialog" aria-labelledby="exportModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="exportModalLabel">
-                            <i class="fas fa-download text-primary mr-2"></i>
-                            Exportar Reporte de Productividad
-                        </h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="card h-100 border-primary export-option" onclick="exportarPDF()">
-                                    <div class="card-body text-center">
-                                        <i class="fas fa-file-pdf fa-3x text-danger mb-3"></i>
-                                        <h5 class="card-title">PDF</h5>
-                                        <p class="card-text text-muted">Reporte visual con gráficos</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="card h-100 border-success export-option" onclick="exportarExcel()">
-                                    <div class="card-body text-center">
-                                        <i class="fas fa-file-excel fa-3x text-success mb-3"></i>
-                                        <h5 class="card-title">Excel</h5>
-                                        <p class="card-text text-muted">Datos + gráficos integrados</p>                                        
-                                    </div>
-                                </div>
+<div class="modal fade" id="exportModal" tabindex="-1" role="dialog" aria-labelledby="exportModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exportModalLabel">
+                    <i class="fas fa-download text-primary mr-2"></i>
+                    Exportar Reporte de Productividad
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card h-100 border-primary export-option" onclick="exportarPDF()">
+                            <div class="card-body text-center">
+                                <i class="fas fa-file-pdf fa-3x text-danger mb-3"></i>
+                                <h5 class="card-title">PDF</h5>
+                                <p class="card-text text-muted">Reporte visual con gráficos</p>
                             </div>
                         </div>
-                        <div class="mt-3">
-                            <small class="text-muted">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                Período: 
-                                <strong>${document.getElementById('fecha_inicio').value}</strong> al 
-                                <strong>${document.getElementById('fecha_fin').value}</strong>
-                            </small>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100 border-success export-option" onclick="exportarExcel()">
+                            <div class="card-body text-center">
+                                <i class="fas fa-file-excel fa-3x text-success mb-3"></i>
+                                <h5 class="card-title">Excel</h5>
+                                <p class="card-text text-muted">Datos + gráficos integrados</p>
+                            </div>
                         </div>
                     </div>
                 </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Período:
+                        <strong>${document.getElementById('fecha_inicio').value}</strong> al
+                        <strong>${document.getElementById('fecha_fin').value}</strong>
+                    </small>
+                </div>
             </div>
         </div>
-    `;
+    </div>
+</div>
+`;
 
     // Remover modal existente si existe
     const existingModal = document.getElementById('exportModal');
@@ -625,15 +769,15 @@ function mostrarModalExportacion() {
     // Agregar estilos para las opciones de exportación
     const style = document.createElement('style');
     style.textContent = `
-        .export-option {
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .export-option:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-    `;
+.export-option {
+cursor: pointer;
+transition: all 0.3s ease;
+}
+.export-option:hover {
+transform: translateY(-2px);
+box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+`;
     document.head.appendChild(style);
 }
 
@@ -645,16 +789,25 @@ async function recopilarDatosExportacion() {
         const fechaInicio = document.getElementById('fecha_inicio').value;
         const fechaFin = document.getElementById('fecha_fin').value;
 
-        // Recopilar todos los datos necesarios
+        // Obtener empleado_id de la misma manera
+        const urlParams = new URLSearchParams(window.location.search);
+        let empleadoId = urlParams.get('empleado_id');
+
+        if (!empleadoId) {
+            const userData = <?php echo json_encode($userData); ?>;
+            empleadoId = userData.id || userData.id_usuario || userData.user_id;
+        }
+
+        // Recopilar todos los datos necesarios - AGREGADO empleado_id
         const [resumen, distribucion, topApps] = await Promise.all([
             hacerSolicitudAutenticada(
-                `${API_BASE_URL}/reportes_personal.php?action=resumen_general&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
+                `${API_BASE_URL}/reportes_personal.php?action=resumen_general&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
             ),
             hacerSolicitudAutenticada(
-                `${API_BASE_URL}/reportes_personal.php?action=distribucion_tiempo&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
+                `${API_BASE_URL}/reportes_personal.php?action=distribucion_tiempo&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
             ),
             hacerSolicitudAutenticada(
-                `${API_BASE_URL}/reportes_personal.php?action=top_apps&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`
+                `${API_BASE_URL}/reportes_personal.php?action=top_apps&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limit=10`
             )
         ]);
 
@@ -802,10 +955,12 @@ async function exportarPDF() {
             jsPDFClass = window.jspdf.jsPDF;
         } else {
             // Verificar si está disponible globalmente
-            console.log('Objetos disponibles:', Object.keys(window).filter(key => key.toLowerCase().includes(
-                'pdf')));
-            throw new Error('jsPDF no está disponible. Objetos PDF encontrados: ' + Object.keys(window).filter(
-                key => key.toLowerCase().includes('pdf')).join(', '));
+            console.log('Objetos disponibles:', Object.keys(window).filter(key => key.toLowerCase()
+                .includes(
+                    'pdf')));
+            throw new Error('jsPDF no está disponible. Objetos PDF encontrados: ' + Object.keys(window)
+                .filter(
+                    key => key.toLowerCase().includes('pdf')).join(', '));
         }
 
         mostrarModal(true);
@@ -826,7 +981,8 @@ async function exportarPDF() {
         // Período
         pdf.setFontSize(12);
         pdf.setFont(undefined, 'normal');
-        pdf.text(`Período: ${formatearFecha(datos.fechaInicio)} - ${formatearFecha(datos.fechaFin)}`, margen, y);
+        pdf.text(`Período: ${formatearFecha(datos.fechaInicio)} - ${formatearFecha(datos.fechaFin)}`,
+            margen, y);
         y += 8;
         pdf.text(`Generado: ${new Date().toLocaleString('es-ES')}`, margen, y);
         y += 20;
@@ -926,17 +1082,12 @@ async function exportarExcel() {
         $('#exportModal').modal('hide');
 
         const datos = await recopilarDatosExportacion();
-
         if (typeof XLSX === 'undefined') {
             throw new Error('XLSX no está cargado');
         }
 
         mostrarModal(true);
-
-        // Crear libro de trabajo
         const wb = XLSX.utils.book_new();
-
-        // Hoja 1: Dashboard con resumen
         const dashboardData = [
             ['REPORTE DE PRODUCTIVIDAD PERSONAL'],
             [''],
@@ -959,8 +1110,6 @@ async function exportarExcel() {
         ];
 
         const wsDashboard = XLSX.utils.aoa_to_sheet(dashboardData);
-
-        // Dar formato a la hoja
         wsDashboard['!merges'] = [{
                 s: {
                     r: 0,
@@ -970,7 +1119,7 @@ async function exportarExcel() {
                     r: 0,
                     c: 2
                 }
-            }, // Título principal
+            },
             {
                 s: {
                     r: 5,
@@ -980,7 +1129,7 @@ async function exportarExcel() {
                     r: 5,
                     c: 2
                 }
-            }, // Resumen ejecutivo
+            },
             {
                 s: {
                     r: 11,
@@ -990,16 +1139,16 @@ async function exportarExcel() {
                     r: 11,
                     c: 2
                 }
-            } // Distribución de tiempo
+            }
         ];
 
         XLSX.utils.book_append_sheet(wb, wsDashboard, 'Dashboard');
-
-        // Hoja 2: Top 10 Aplicaciones
         const topAppsData = [
             ['TOP 10 APLICACIONES MÁS USADAS'],
             [''],
-            ['Ranking', 'Aplicación', 'Tiempo de Uso', 'Categoría', '% del Tiempo Total', 'Frecuencia de Uso'],
+            ['Ranking', 'Aplicación', 'Tiempo de Uso', 'Categoría', '% del Tiempo Total',
+                'Frecuencia de Uso'
+            ],
             ...datos.topApps.map((app, index) => [
                 index + 1,
                 app.aplicacion,
@@ -1012,30 +1161,29 @@ async function exportarExcel() {
 
         const wsTopApps = XLSX.utils.aoa_to_sheet(topAppsData);
         wsTopApps['!merges'] = [{
-                s: {
-                    r: 0,
-                    c: 0
-                },
-                e: {
-                    r: 0,
-                    c: 5
-                }
-            } // Título
-        ];
+            s: {
+                r: 0,
+                c: 0
+            },
+            e: {
+                r: 0,
+                c: 5
+            }
+        }];
 
         XLSX.utils.book_append_sheet(wb, wsTopApps, 'Top Apps');
-
-        // Hoja 3: Análisis por Categoría
         const analisisData = [
             ['ANÁLISIS DETALLADO POR CATEGORÍA'],
             [''],
             ['Categoría', 'Aplicaciones', 'Tiempo Total', 'Porcentaje'],
             ...datos.distribucion.map(categoria => {
-                const appsCategoria = datos.topApps.filter(app => app.categoria === categoria.categoria);
+                const appsCategoria = datos.topApps.filter(app => app.categoria === categoria
+                    .categoria);
                 return [
                     capitalizar(categoria.categoria),
                     appsCategoria.length,
-                    calcularTiempoPorCategoria(datos.resumen.tiempo_total, categoria.porcentaje),
+                    calcularTiempoPorCategoria(datos.resumen.tiempo_total, categoria
+                        .porcentaje),
                     `${categoria.porcentaje}%`
                 ];
             }),
@@ -1043,11 +1191,13 @@ async function exportarExcel() {
             ['DETALLE DE APLICACIONES POR CATEGORÍA'],
             [''],
             ...datos.distribucion.flatMap(categoria => {
-                const appsCategoria = datos.topApps.filter(app => app.categoria === categoria.categoria);
+                const appsCategoria = datos.topApps.filter(app => app.categoria === categoria
+                    .categoria);
                 return [
                     [`${capitalizar(categoria.categoria).toUpperCase()}`],
                     ['Aplicación', 'Tiempo', 'Porcentaje'],
-                    ...appsCategoria.map(app => [app.aplicacion, formatearTiempo(app.tiempo_total),
+                    ...appsCategoria.map(app => [app.aplicacion, formatearTiempo(app
+                            .tiempo_total),
                         `${app.porcentaje}%`
                     ]),
                     ['']
@@ -1057,8 +1207,6 @@ async function exportarExcel() {
 
         const wsAnalisis = XLSX.utils.aoa_to_sheet(analisisData);
         XLSX.utils.book_append_sheet(wb, wsAnalisis, 'Análisis');
-
-        // Hoja 4: Datos Raw para gráficos
         const rawData = [
             ['DATOS PARA GRÁFICOS Y ANÁLISIS AVANZADO'],
             [''],
@@ -1100,25 +1248,14 @@ async function exportarExcel() {
 
 function verificarLibrerias() {
     console.log('=== VERIFICACIÓN DE LIBRERÍAS ===');
-
-    // Verificar jsPDF
     console.log('window.jsPDF:', typeof window.jsPDF);
     console.log('jsPDF:', typeof jsPDF);
     console.log('window.jspdf:', typeof window.jspdf);
-
-    // Verificar Chart.js
     console.log('Chart:', typeof Chart);
-
-    // Verificar XLSX
     console.log('XLSX:', typeof XLSX);
-
-    // Verificar html2canvas
-    console.log('html2canvas:', typeof html2canvas);
-
-    // Listar todos los objetos que contengan 'pdf'
+    console.log('html2canvas:', typeof html2canvas)
     const pdfObjects = Object.keys(window).filter(key => key.toLowerCase().includes('pdf'));
     console.log('Objetos PDF encontrados:', pdfObjects);
-
     console.log('=== FIN VERIFICACIÓN ===');
 }
 
@@ -1130,24 +1267,19 @@ function formatearFecha(fecha) {
 
 function convertirTiempoAMinutos(tiempoStr) {
     if (!tiempoStr || tiempoStr === '00:00:00') return 0;
-
     const partes = tiempoStr.split(':');
     const horas = parseInt(partes[0]);
     const minutos = parseInt(partes[1]);
     const segundos = parseInt(partes[2] || 0);
-
     return horas * 60 + minutos + Math.round(segundos / 60);
 }
 
 function calcularTiempoPorCategoria(tiempoTotal, porcentaje) {
     if (!tiempoTotal || tiempoTotal === '00:00:00') return '0h 0m';
-
     const minutosTotal = convertirTiempoAMinutos(tiempoTotal);
     const minutosPorCategoria = Math.round(minutosTotal * porcentaje / 100);
-
     const horas = Math.floor(minutosPorCategoria / 60);
     const minutos = minutosPorCategoria % 60;
-
     return `${horas}h ${minutos}m`;
 }
 
@@ -1167,15 +1299,14 @@ function mostrarAlerta(mensaje, tipo = 'info') {
     } [tipo] || 'info-circle';
 
     const alerta = `
-        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
-            <i class="fas fa-${iconClass} mr-2"></i>
-            ${mensaje}
-            <button type="button" class="close" data-dismiss="alert">
-                <span>&times;</span>
-            </button>
-        </div>
-    `;
-
+<div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+    <i class="fas fa-${iconClass} mr-2"></i>
+    ${mensaje}
+    <button type="button" class="close" data-dismiss="alert">
+        <span>&times;</span>
+    </button>
+</div>
+`;
     const container = document.querySelector('.container-fluid');
     const existingAlert = container.querySelector('.alert');
     if (existingAlert) {
@@ -1183,7 +1314,6 @@ function mostrarAlerta(mensaje, tipo = 'info') {
     }
 
     container.insertAdjacentHTML('afterbegin', alerta);
-
     setTimeout(() => {
         const alertElement = container.querySelector('.alert');
         if (alertElement) {
@@ -1194,23 +1324,19 @@ function mostrarAlerta(mensaje, tipo = 'info') {
 
 // Inicializar cuando se carga la página
 document.addEventListener('DOMContentLoaded', function() {
-    // Verificar si Chart.js está disponible
     if (typeof Chart === 'undefined') {
         console.error('Chart.js no está cargado');
         mostrarAlerta('Error: Chart.js no está disponible', 'error');
         return;
     }
 
-    // Verificar token de autenticación
     const tokenLS = localStorage.getItem('token');
     const tokenCookie = getCookie('auth_token');
-
     if (!tokenLS && !tokenCookie) {
         mostrarAlerta('Error: No se encontró token de autenticación', 'error');
         return;
     }
 
-    // Cargar datos iniciales
     setTimeout(() => {
         cargarReportes();
     }, 100);

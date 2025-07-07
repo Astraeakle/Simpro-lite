@@ -7,31 +7,33 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
 // Manejar solicitudes OPTIONS (preflight)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
+
 // Función auxiliar para enviar respuesta JSON
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
     echo json_encode($data);
     exit();
 }
+
 // Función auxiliar para manejar errores
 function sendError($message, $statusCode = 400) {
     sendJsonResponse(['error' => $message], $statusCode);
 }
+
 // Función auxiliar para logging
 function logError($message) {
     error_log("[REPORTES] " . date('Y-m-d H:i:s') . " - " . $message);
 }
+
 try {
-    // RUTAS CORREGIDAS
     require_once __DIR__ . '/../../web/config/database.php';
     require_once __DIR__ . '/jwt_helper.php';
-    
-    logError("Archivos requeridos cargados correctamente");
     
 } catch (Exception $e) {
     logError("Error cargando archivos: " . $e->getMessage());
@@ -43,7 +45,6 @@ try {
     $headers = getallheaders();
     $authHeader = '';
     
-    // Buscar header de autorización de diferentes formas
     if (isset($headers['Authorization'])) {
         $authHeader = $headers['Authorization'];
     } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
@@ -55,37 +56,39 @@ try {
         }
     }
     
-    logError("Auth header encontrado: " . (!empty($authHeader) ? 'Sí' : 'No'));
-    
     if (empty($authHeader) || !preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
-        logError("Token de autorización no encontrado o formato incorrecto");
         sendError('Token de autorización requerido', 401);
     }
     
     $token = $matches[1];
-    logError("Token extraído: " . substr($token, 0, 20) . "...");
     
-    // Verificar el token JWT usando la clase JWT
     if (!class_exists('JWT')) {
-        logError("Clase JWT no encontrada");
         sendError('Error de configuración del servidor', 500);
     }
     
     $decoded = JWT::verificar($token);
     
     if (!$decoded) {
-        logError("Token inválido o expirado");
         sendError('Token inválido o expirado', 401);
     }
     
-    $userId = $decoded['sub'] ?? null;
+    // UNIFICADO: Usar solo el ID del usuario de la cookie, no del JWT
+    $db = Database::getConnection();
     
-    if (!$userId) {
-        logError("ID de usuario no encontrado en token");
-        sendError('Token inválido - datos de usuario faltantes', 401);
+    // Obtener el ID del usuario real desde el token o cookie
+    $checkUser = "SELECT id_usuario, nombre_usuario, rol FROM usuarios WHERE id_usuario = ?";
+    $stmt = $db->prepare($checkUser);
+    $stmt->execute([$decoded['sub']]);
+    $currentUser = $stmt->fetch();
+    
+    if (!$currentUser) {
+        sendError('Usuario no encontrado', 404);
     }
     
-    logError("Usuario autenticado: ID " . $userId);
+    $currentUserId = $currentUser['id_usuario'];
+    $currentUserRole = $currentUser['rol'];
+    
+    logError("Usuario autenticado: ID {$currentUserId}, Rol: {$currentUserRole}");
     
 } catch (Exception $e) {
     logError("Error en autenticación: " . $e->getMessage());
@@ -94,59 +97,82 @@ try {
 
 // Obtener la acción solicitada
 $action = $_GET['action'] ?? '';
-logError("Acción solicitada: " . $action);
+$empleadoId = $currentUserId;
+logError("Acceso a reportes personales - Usuario: {$currentUserId} (rol: {$currentUserRole}) - Solo verá sus propios datos");
 
 // Procesar según la acción
 switch ($action) {
     case 'resumen_general':
-        handleResumenGeneral($userId);
+        handleResumenGeneral($empleadoId);
         break;
     
     case 'distribucion_tiempo':
-        handleDistribucionTiempo($userId);
+        handleDistribucionTiempo($empleadoId);
         break;
     
     case 'top_apps':
-        handleTopApps($userId);
+        handleTopApps($empleadoId);
         break;
     
     default:
         sendError('Acción no válida');
 }
 
-// Función para resumen general usando procedimiento almacenado
-function handleResumenGeneral($userId) {
+function handleResumenGeneral($empleadoId) {
     try {
-        logError("Iniciando resumen general para usuario: " . $userId);
-        
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-d', strtotime('-7 days'));
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-d');
         
-        // Validar fechas
         if (!validateDate($fechaInicio) || !validateDate($fechaFin)) {
             sendError('Formato de fecha inválido');
         }
         
-        logError("Fechas: $fechaInicio a $fechaFin");
-        
-        // Obtener conexión a la base de datos
         $db = Database::getConnection();
         
-        // Llamar al procedimiento almacenado
+        // Verificar si el usuario existe
+        $checkUser = "SELECT id_usuario, nombre_usuario FROM usuarios WHERE id_usuario = ?";
+        $stmt = $db->prepare($checkUser);
+        $stmt->execute([$empleadoId]);
+        $usuario = $stmt->fetch();
+        
+        if (!$usuario) {
+            sendError("Usuario no encontrado", 404);
+        }
+        
+        // CORRECCIÓN: Verificar si hay datos de actividad con rango de fechas correcto
+        $checkActivity = "SELECT COUNT(*) as count FROM actividad_apps WHERE id_usuario = ? AND DATE(fecha_hora_inicio) BETWEEN ? AND ?";
+        $stmt = $db->prepare($checkActivity);
+        $stmt->execute([$empleadoId, $fechaInicio, $fechaFin]);
+        $activityCount = $stmt->fetch()['count'];
+        
+        logError("Usuario {$empleadoId}: {$activityCount} actividades encontradas entre {$fechaInicio} y {$fechaFin}");
+        
+        if ($activityCount == 0) {
+            $result = [
+                'tiempo_total' => '00:00:00',
+                'dias_trabajados' => 0,
+                'total_actividades' => 0,
+                'porcentaje_productivo' => 0
+            ];
+            logError("No se encontraron datos de actividad para el usuario {$empleadoId}");
+            sendJsonResponse($result);
+            return;
+        }
+        
+        // Llamar al procedimiento almacenado solo si hay datos
         $query = "CALL sp_obtener_resumen_general(?, ?, ?)";
         $stmt = $db->prepare($query);
-        $stmt->bindParam(1, $userId, PDO::PARAM_INT);
+        $stmt->bindParam(1, $empleadoId, PDO::PARAM_INT);
         $stmt->bindParam(2, $fechaInicio, PDO::PARAM_STR);
         $stmt->bindParam(3, $fechaFin, PDO::PARAM_STR);
         
         if (!$stmt->execute()) {
-            logError("Error ejecutando procedimiento sp_obtener_resumen_general: " . implode(', ', $stmt->errorInfo()));
+            logError("Error ejecutando sp_obtener_resumen_general para usuario {$empleadoId}");
             sendError('Error ejecutando consulta', 500);
         }
         
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        // Si no hay datos, devolver valores por defecto
         if (!$result || $result['tiempo_total'] === null) {
             $result = [
                 'tiempo_total' => '00:00:00',
@@ -154,25 +180,20 @@ function handleResumenGeneral($userId) {
                 'total_actividades' => 0,
                 'porcentaje_productivo' => 0
             ];
+            logError("Resultado vacío del procedimiento almacenado para usuario {$empleadoId}");
         }
         
-        // Cerrar el cursor para liberar la conexión
         $stmt->closeCursor();
-        
-        logError("Resumen general completado");
         sendJsonResponse($result);
         
     } catch (Exception $e) {
         logError("Error en resumen general: " . $e->getMessage());
-        sendError('Error interno del servidor', 500);
+        sendError('Error interno del servidor: ' . $e->getMessage(), 500);
     }
 }
 
-// Función para distribución de tiempo usando procedimiento almacenado
-function handleDistribucionTiempo($userId) {
+function handleDistribucionTiempo($empleadoId) {
     try {
-        logError("Iniciando distribución de tiempo para usuario: " . $userId);
-        
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-d', strtotime('-7 days'));
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-d');
         
@@ -182,24 +203,39 @@ function handleDistribucionTiempo($userId) {
         
         $db = Database::getConnection();
         
-        // Llamar al procedimiento almacenado
+        // CORRECCIÓN: Verificar si hay datos de actividad con rango de fechas correcto
+        $checkActivity = "SELECT COUNT(*) as count FROM actividad_apps WHERE id_usuario = ? AND DATE(fecha_hora_inicio) BETWEEN ? AND ?";
+        $stmt = $db->prepare($checkActivity);
+        $stmt->execute([$empleadoId, $fechaInicio, $fechaFin]);
+        $activityCount = $stmt->fetch()['count'];
+        
+        logError("Distribución tiempo - Usuario {$empleadoId}: {$activityCount} actividades encontradas");
+        
+        if ($activityCount == 0) {
+            $defaultResult = [
+                ['categoria' => 'productiva', 'tiempo_total' => '00:00:00', 'porcentaje' => 0.00],
+                ['categoria' => 'distractora', 'tiempo_total' => '00:00:00', 'porcentaje' => 0.00],
+                ['categoria' => 'neutral', 'tiempo_total' => '00:00:00', 'porcentaje' => 0.00]
+            ];
+            sendJsonResponse($defaultResult);
+            return;
+        }
+        
+        // Llamar al procedimiento almacenado solo si hay datos
         $query = "CALL sp_obtener_distribucion_tiempo(?, ?, ?)";
         $stmt = $db->prepare($query);
-        $stmt->bindParam(1, $userId, PDO::PARAM_INT);
+        $stmt->bindParam(1, $empleadoId, PDO::PARAM_INT);
         $stmt->bindParam(2, $fechaInicio, PDO::PARAM_STR);
         $stmt->bindParam(3, $fechaFin, PDO::PARAM_STR);
         
         if (!$stmt->execute()) {
-            logError("Error ejecutando procedimiento sp_obtener_distribucion_tiempo: " . implode(', ', $stmt->errorInfo()));
             sendError('Error ejecutando consulta', 500);
         }
         
         $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Cerrar el cursor
         $stmt->closeCursor();
         
-        // Asegurar que tenemos todas las categorías con valores por defecto
+        // Asegurar que tenemos todas las categorías
         $categorias = ['productiva', 'distractora', 'neutral'];
         $resultFinal = [];
         
@@ -221,20 +257,16 @@ function handleDistribucionTiempo($userId) {
             }
         }
         
-        logError("Distribución de tiempo completada");
         sendJsonResponse($resultFinal);
         
     } catch (Exception $e) {
         logError("Error en distribución de tiempo: " . $e->getMessage());
-        sendError('Error interno del servidor', 500);
+        sendError('Error interno del servidor: ' . $e->getMessage(), 500);
     }
 }
 
-// Función para top de aplicaciones usando procedimiento almacenado
-function handleTopApps($userId) {
+function handleTopApps($empleadoId) {
     try {
-        logError("Iniciando top apps para usuario: " . $userId);
-        
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-d', strtotime('-7 days'));
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-d');
         $limit = intval($_GET['limit'] ?? 10);
@@ -244,39 +276,46 @@ function handleTopApps($userId) {
         }
         
         if ($limit <= 0 || $limit > 100) {
-            $limit = 10; // Valor por defecto seguro
+            $limit = 10;
         }
         
         $db = Database::getConnection();
         
-        // Llamar al procedimiento almacenado
+        // CORRECCIÓN: Verificar si hay datos de actividad con rango de fechas correcto
+        $checkActivity = "SELECT COUNT(*) as count FROM actividad_apps WHERE id_usuario = ? AND DATE(fecha_hora_inicio) BETWEEN ? AND ?";
+        $stmt = $db->prepare($checkActivity);
+        $stmt->execute([$empleadoId, $fechaInicio, $fechaFin]);
+        $activityCount = $stmt->fetch()['count'];
+
+        logError("Top apps - Usuario {$empleadoId}: {$activityCount} actividades encontradas");
+
+        if ($activityCount == 0) {
+            sendJsonResponse([]);
+            return;
+        }
+        
         $query = "CALL sp_obtener_top_apps(?, ?, ?, ?)";
         $stmt = $db->prepare($query);
-        $stmt->bindParam(1, $userId, PDO::PARAM_INT);
+        $stmt->bindParam(1, $empleadoId, PDO::PARAM_INT);
         $stmt->bindParam(2, $fechaInicio, PDO::PARAM_STR);
         $stmt->bindParam(3, $fechaFin, PDO::PARAM_STR);
         $stmt->bindParam(4, $limit, PDO::PARAM_INT);
         
         if (!$stmt->execute()) {
-            logError("Error ejecutando procedimiento sp_obtener_top_apps: " . implode(', ', $stmt->errorInfo()));
             sendError('Error ejecutando consulta', 500);
         }
         
         $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Cerrar el cursor
         $stmt->closeCursor();
         
-        logError("Top apps completado - " . count($result) . " registros");
         sendJsonResponse($result);
         
     } catch (Exception $e) {
         logError("Error en top apps: " . $e->getMessage());
-        sendError('Error interno del servidor', 500);
+        sendError('Error interno del servidor: ' . $e->getMessage(), 500);
     }
 }
 
-// Función auxiliar para validar fechas
 function validateDate($date, $format = 'Y-m-d') {
     $d = DateTime::createFromFormat($format, $date);
     return $d && $d->format($format) === $date;
