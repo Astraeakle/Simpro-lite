@@ -30,8 +30,12 @@ if ($rol !== 'admin') {
                             class="btn btn-primary me-md-2">
                             <i class="fas fa-users"></i> Administrar Usuarios
                         </a>
-                        <a href="/simpro-lite/web/index.php?modulo=admin&vista=config" class="btn btn-secondary">
+                        <a href="/simpro-lite/web/index.php?modulo=admin&vista=config"
+                            class="btn btn-secondary me-md-2">
                             <i class="fas fa-cog"></i> Configuración del Sistema
+                        </a>
+                        <a href="/simpro-lite/web/index.php?modulo=reports&vista=equipo" class="btn btn-info">
+                            <i class="fas fa-chart-bar"></i> Reportes de Equipo
                         </a>
                     </div>
                 </div>

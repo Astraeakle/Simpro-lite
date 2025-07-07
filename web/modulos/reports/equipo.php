@@ -39,10 +39,10 @@ if (!$userId) {
     exit;
 }
 
-// Verificar que el usuario es supervisor
+// Verificar que el usuario es supervisor o admin
 $userRole = $userData['rol'] ?? '';
-if ($userRole !== 'supervisor') {
-    debugLog("Usuario no es supervisor. Rol: " . $userRole);
+if (!in_array($userRole, ['supervisor', 'admin'])) {
+    debugLog("Usuario no tiene permisos. Rol: " . $userRole);
     header('Location: /simpro-lite/web/index.php?modulo=auth&vista=login');
     exit;
 }
@@ -62,21 +62,29 @@ try {
     
     debugLog("Conexión a BD exitosa");
     
-    // Consulta para obtener empleados bajo este supervisor
-    $stmt = $pdo->prepare("
+    // Consulta para obtener empleados (todos si es admin, solo los del supervisor si es supervisor)
+        $query = "
         SELECT u.id_usuario, u.nombre_completo, u.area 
         FROM usuarios u 
-        WHERE u.supervisor_id = ? 
-        AND u.estado = 'activo'
-        ORDER BY u.nombre_completo
-    ");
+        WHERE u.estado = 'activo'
+    ";
+
+    $params = [];
+
+    if ($userRole === 'supervisor') {
+        $query .= " AND u.supervisor_id = ?";
+        $params[] = $userId;
+    }
+    $query .= " ORDER BY u.nombre_completo";
+    
+    $stmt = $pdo->prepare($query);
     
     if (!$stmt) {
         debugLog("Error preparando consulta: " . print_r($pdo->errorInfo(), true));
         throw new Exception("Error preparando consulta");
     }
     
-    $resultado = $stmt->execute([$userId]);
+    $resultado = $stmt->execute($params);
     
     if (!$resultado) {
         debugLog("Error ejecutando consulta: " . print_r($stmt->errorInfo(), true));
@@ -98,54 +106,73 @@ try {
 
 // Si no hay empleados, agregar mensaje de debug
 if (empty($empleados)) {
-    debugLog("ADVERTENCIA: No se encontraron empleados para el supervisor ID: " . $userId);
+    debugLog("ADVERTENCIA: No se encontraron empleados activos");
 }
+
+// Configurar fechas por defecto (primer día del mes hasta hoy)
+$fechaInicioDefault = date('Y-m-01');
+$fechaFinDefault = date('Y-m-d');
 ?>
 
 <div class="container-fluid py-4">
-    <div class="card shadow">
+    <div class="card shadow" style="padding: 1.25rem 1.25rem;">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h4 class="m-0 font-weight-bold text-primary">Reportes de Equipo</h4>
-            <div>
+            <div class="d-flex">
+                <div class="dropdown me-2">
+                    <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownExportar"
+                        data-bs-toggle="dropdown">
+                        <i class="fas fa-download"></i> Exportar Reporte
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="exportarReporte('pdf')"><i
+                                    class="fas fa-file-pdf"></i> PDF</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="exportarReporte('excel')"><i
+                                    class="fas fa-file-excel"></i> Excel</a></li>
+                    </ul>
+                </div>
                 <button class="btn btn-sm btn-outline-primary" onclick="actualizarReportes()">
                     <i class="fas fa-sync-alt"></i> Actualizar
                 </button>
             </div>
         </div>
         <!-- Filtros -->
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <label for="filtroEmpleado">Empleado:</label>
-                <select class="form-control" id="filtroEmpleado">
-                    <option value="">Todos los empleados</option>
-                    <?php if (!empty($empleados)): ?>
-                    <?php foreach ($empleados as $empleado): ?>
-                    <option value="<?= htmlspecialchars($empleado['id_usuario']) ?>">
-                        <?= htmlspecialchars($empleado['nombre_completo']) ?>
-                        (<?= htmlspecialchars($empleado['area'] ?? 'Sin área') ?>)
-                    </option>
-                    <?php endforeach; ?>
-                    <?php else: ?>
-                    <option value="" disabled>No hay empleados disponibles</option>
-                    <?php endif; ?>
-                </select>
+        <div class="card-body">
+            <!-- Filtros -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <label for="filtroEmpleado">Empleado:</label>
+                    <select class="form-control" id="filtroEmpleado">
+                        <option value="">Todos los empleados</option>
+                        <?php if (!empty($empleados)): ?>
+                        <?php foreach ($empleados as $empleado): ?>
+                        <option value="<?= htmlspecialchars($empleado['id_usuario']) ?>">
+                            <?= htmlspecialchars($empleado['nombre_completo']) ?>
+                            (<?= htmlspecialchars($empleado['area'] ?? 'Sin área') ?>)
+                        </option>
+                        <?php endforeach; ?>
+                        <?php else: ?>
+                        <option value="" disabled>No hay empleados disponibles</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="fechaInicio">Fecha Inicio:</label>
+                    <input type="date" class="form-control" id="fechaInicio" value="<?= $fechaInicioDefault ?>">
+                </div>
+                <div class="col-md-4">
+                    <label for="fechaFin">Fecha Fin:</label>
+                    <input type="date" class="form-control" id="fechaFin" value="<?= $fechaFinDefault ?>">
+                </div>
             </div>
-            <div class="col-md-4">
-                <label for="fechaInicio">Fecha Inicio:</label>
-                <input type="date" class="form-control" id="fechaInicio" value="<?= date('Y-m-01') ?>">
-            </div>
-            <div class="col-md-4">
-                <label for="fechaFin">Fecha Fin:</label>
-                <input type="date" class="form-control" id="fechaFin" value="<?= date('Y-m-t') ?>">
-            </div>
-        </div>
 
-        <!-- Botón aplicar filtros -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <button class="btn btn-primary" onclick="aplicarFiltros()">
-                    <i class="fas fa-filter"></i> Aplicar Filtros
-                </button>
+            <!-- Botón aplicar filtros -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <button class="btn btn-primary" onclick="aplicarFiltros()">
+                        <i class="fas fa-filter"></i> Aplicar Filtros
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -228,27 +255,74 @@ if (empty($empleados)) {
         </div>
     </div>
 </div>
-
-<!-- Modal de carga -->
-<div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered" role="document">
+<!-- Modal de carga - Modificado para accesibilidad -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-labelledby="loadingModalLabel" aria-hidden="true"
+    data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-body text-center py-4">
                 <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
-                    <span class="sr-only">Cargando...</span>
+                    <span class="visually-hidden">Cargando...</span>
                 </div>
-                <h5 class="mt-3">Cargando datos...</h5>
+                <h5 class="mt-3" id="loadingModalLabel">Cargando datos...</h5>
             </div>
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 // Variables globales
 const supervisorId = <?= json_encode($userId) ?>;
+const userRole = <?= json_encode($userRole) ?>;
 const baseUrl = '/simpro-lite/api/v1/reportes.php';
 let productividadChart = null;
+let loadingModal = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM cargado, inicializando reportes de equipo...');
+
+    // Inicializar modal de Bootstrap
+    loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+
+    // Cargar datos automáticamente al entrar
+    aplicarFiltros();
+});
+
+// Función para exportar reporte
+function exportarReporte(formato) {
+    const empleadoId = document.getElementById('filtroEmpleado').value;
+    const fechaInicio = document.getElementById('fechaInicio').value;
+    const fechaFin = document.getElementById('fechaFin').value;
+
+    let url =
+        `/simpro-lite/web/modulos/reports/exportar.php?formato=${formato}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+
+    if (empleadoId) {
+        url += `&empleado_id=${empleadoId}`;
+    }
+
+    if (userRole === 'supervisor') {
+        url += `&supervisor_id=${supervisorId}`;
+    }
+
+    window.open(url, '_blank');
+}
+
+// Función para mostrar/ocultar modal de carga
+function mostrarCarga(mostrar) {
+    if (!loadingModal) {
+        console.error('Modal no inicializado');
+        return;
+    }
+
+    if (mostrar) {
+        loadingModal.show();
+    } else {
+        loadingModal.hide();
+    }
+}
 
 // Función para cargar reportes
 function cargarReportes() {
@@ -437,7 +511,22 @@ function cargarTiempoTrabajado() {
 
 // Función para mostrar gráfico de productividad
 function mostrarGraficoProductividad(data) {
-    const chartContainer = document.getElementById('productividadChart').parentElement;
+    const chartCanvas = document.getElementById('productividadChart');
+
+    // Verificar si el canvas existe
+    if (!chartCanvas) {
+        console.error('No se encontró el elemento canvas para el gráfico');
+        // Intentar crear el canvas si no existe
+        const chartContainer = document.querySelector('.chart-container');
+        if (chartContainer) {
+            chartContainer.innerHTML = '<canvas id="productividadChart"></canvas>';
+            chartCanvas = document.getElementById('productividadChart');
+        } else {
+            return;
+        }
+    }
+
+    const chartContainer = chartCanvas.parentElement;
 
     // Destruir gráfico anterior si existe
     if (productividadChart) {
@@ -451,19 +540,6 @@ function mostrarGraficoProductividad(data) {
         return;
     }
 
-    // Recrear el canvas
-    chartContainer.innerHTML = '<canvas id="productividadChart"></canvas>';
-    const ctx = document.getElementById('productividadChart').getContext('2d');
-
-
-    if (!data || !data.empleados || data.empleados.length === 0) {
-        // Mostrar mensaje si no hay datos
-        const chartContainer = document.getElementById('productividadChart').parentElement;
-        chartContainer.innerHTML = '<canvas id="productividadChart"></canvas>';
-        '<p class="text-muted text-center py-4">No hay datos de productividad para mostrar</p>';
-        return;
-    }
-
     // Preparar datos para el gráfico
     const labels = data.empleados.map(e => e.nombre_completo);
     const productividad = data.empleados.map(e => parseFloat(e.porcentaje_productivo) || 0);
@@ -474,7 +550,8 @@ function mostrarGraficoProductividad(data) {
         return 'rgba(220, 53, 69, 0.7)';
     });
 
-    productividadChart = new Chart(ctx, {
+    // Crear nuevo gráfico
+    productividadChart = new Chart(chartCanvas, {
         type: 'bar',
         data: {
             labels: labels,
@@ -630,19 +707,6 @@ function getColorProductividad(porcentaje) {
     return 'bg-danger';
 }
 
-// Función para mostrar/ocultar modal de carga
-function mostrarCarga(mostrar) {
-    const modal = document.getElementById('loadingModal');
-    if (mostrar) {
-        if (typeof $ !== 'undefined') {
-            $(modal).modal('show');
-        }
-    } else {
-        if (typeof $ !== 'undefined') {
-            $(modal).modal('hide');
-        }
-    }
-}
 
 // Función para mostrar errores
 function mostrarError(mensaje) {
@@ -703,19 +767,4 @@ function verDetalleEmpleado(empleadoId, nombreEmpleado) {
     window.location.href =
         `/simpro-lite/web/index.php?modulo=reports&vista=personal&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
 }
-
-// Inicializar cuando se carga la página
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM cargado, inicializando reportes de equipo...');
-    console.log('Supervisor ID:', supervisorId);
-    console.log('Base URL:', baseUrl);
-
-    // Verificar que tenemos empleados en el select
-    const selectEmpleados = document.getElementById('filtroEmpleado');
-    console.log('Empleados en select:', selectEmpleados.options.length - 1);
-
-    // No cargar datos automáticamente, esperar que el usuario haga clic
-    actualizarTablaConMensaje('Haz clic en "Aplicar Filtros" para cargar los datos');
-    actualizarTablaTiempoConMensaje('Aplica los filtros para ver los datos de tiempo trabajado');
-});
 </script>
