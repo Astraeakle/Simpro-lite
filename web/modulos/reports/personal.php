@@ -221,133 +221,138 @@ function getCookie(name) {
 
 // Función auxiliar para hacer solicitudes autenticadas
 async function hacerSolicitudAutenticada(url, opciones = {}) {
-    let token = localStorage.getItem('token');
-
+    let token = localStorage.getItem('auth_token');
     if (!token) {
         token = getCookie('auth_token');
     }
 
     if (!token) {
-        throw new Error('No se encontró token de autenticación');
+        mostrarAlerta('Sesión expirada. Redirigiendo al login...', 'error');
+        setTimeout(() => window.location.href = '/simpro-lite/web/index.php?modulo=auth&vista=login', 2000);
+        throw new Error('Token no encontrado');
     }
 
-    const defaultOptions = {
+    const config = {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
-        }
-    };
-
-    const finalOptions = {
-        ...defaultOptions,
-        ...opciones,
-        headers: {
-            ...defaultOptions.headers,
-            ...opciones.headers
-        }
+        },
+        ...opciones
     };
 
     try {
-        const response = await fetch(url, finalOptions);
+        const response = await fetch(url, config);
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            try {
-                const errorData = JSON.parse(errorText);
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-            } catch (parseError) {
-                throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-            }
+        // Verificar primero si la respuesta es JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('Respuesta no JSON:', text.substring(0, 100));
+            throw new Error('La respuesta del servidor no es válida');
         }
 
         const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || `Error ${response.status}`);
+        }
+
         return data;
 
     } catch (error) {
-        console.error('Error en fetch:', error);
+        console.error(`Error en solicitud a ${url}:`, error);
+        mostrarAlerta(`Error de conexión: ${error.message}`, 'error');
         throw error;
     }
 }
 
 // Función principal para cargar los reportes
-function cargarReportes() {
-    mostrarModal(true);
-    const userData = <?php echo json_encode($userData); ?>;
-    const id_usuario = userData.id;
+async function cargarReportes() {
+    try {
+        // Mostrar carga
+        document.getElementById('loadingModal').classList.add('show');
+        document.getElementById('loadingModal').style.display = 'block';
 
-    console.log('Cargando reportes personales para usuario:', id_usuario);
+        // Obtener parámetros
+        const fechaInicio = document.getElementById('fecha_inicio').value;
+        const fechaFin = document.getElementById('fecha_fin').value;
 
-    if (!id_usuario) {
-        console.error('No se pudo obtener el ID del usuario');
-        mostrarModal(false);
-        mostrarAlerta('Error: No se pudo obtener el ID del usuario', 'error');
-        return;
+        // Validación básica
+        if (!fechaInicio || !fechaFin) {
+            throw new Error('Debes seleccionar ambas fechas');
+        }
+
+        if (new Date(fechaInicio) > new Date(fechaFin)) {
+            throw new Error('La fecha de inicio no puede ser mayor a la fecha fin');
+        }
+
+        // Obtener ID de usuario
+        const userData = JSON.parse(localStorage.getItem('user_data') || {});
+        const userId = userData.id || userData.id_usuario;
+
+        if (!userId) {
+            throw new Error('No se pudo identificar al usuario');
+        }
+
+        console.log(`Iniciando carga para usuario ${userId}`);
+
+        // Cargar datos en paralelo
+        const [resumen, distribucion, topApps] = await Promise.all([
+            cargarResumenGeneral(userId, fechaInicio, fechaFin),
+            cargarDistribucionTiempo(userId, fechaInicio, fechaFin),
+            cargarTopApps(userId, fechaInicio, fechaFin)
+        ]);
+
+        // Actualizar UI
+        actualizarResumen(resumen);
+        actualizarDistribucion(distribucion);
+        actualizarTopApps(topApps);
+
+    } catch (error) {
+        console.error('Error al cargar reportes:', error);
+        mostrarAlerta(error.message, 'error');
+    } finally {
+        // Ocultar carga
+        document.getElementById('loadingModal').classList.remove('show');
+        document.getElementById('loadingModal').style.display = 'none';
     }
-
-    const fechaInicio = document.getElementById('fecha_inicio').value;
-    const fechaFin = document.getElementById('fecha_fin').value;
-
-    Promise.all([
-        cargarResumenGeneral(id_usuario, fechaInicio, fechaFin),
-        cargarDistribucionTiempo(id_usuario, fechaInicio, fechaFin),
-        cargarTopApps(id_usuario, fechaInicio, fechaFin)
-    ]).then(() => {
-        mostrarModal(false);
-    }).catch(error => {
-        console.error('Error cargando reportes:', error);
-        mostrarModal(false);
-        mostrarAlerta('Error al cargar los reportes: ' + error.message, 'error');
-    });
 }
 
+function actualizarResumen(data) {
+    document.getElementById('tiempoTotalHoras').textContent =
+        data.tiempo_total === '00:00:00' ? 'Sin datos' : formatearTiempo(data.tiempo_total);
+    document.getElementById('totalActividades').textContent =
+        data.total_actividades || '0';
+    document.getElementById('productividadPercent').textContent =
+        data.porcentaje_productivo ? `${data.porcentaje_productivo}%` : '0%';
+}
 // Cargar resumen general
 async function cargarResumenGeneral(id_usuario, fechaInicio, fechaFin) {
-    console.log('Cargando resumen general para empleado:', id_usuario, 'desde', fechaInicio, 'hasta', fechaFin);
     try {
         const params = new URLSearchParams({
             action: 'resumen_general',
             fecha_inicio: fechaInicio,
-            fecha_fin: fechaFin,
-            empleado_id: id_usuario
+            fecha_fin: fechaFin
         });
 
         const url = `${API_BASE_URL}/reportes_personal.php?${params.toString()}`;
         const data = await hacerSolicitudAutenticada(url);
 
-        // CORRECCIÓN: Verificar si los datos están vacíos
-        const tieneActividad = data.total_actividades > 0 && data.tiempo_total !== '00:00:00';
-
-        if (!tieneActividad) {
-            console.log('No hay actividad para el período seleccionado');
-            // Mostrar mensaje de "sin datos"
-            document.getElementById('tiempoTotalHoras').textContent = 'Sin datos';
-            document.getElementById('totalActividades').textContent = '0';
-            document.getElementById('productividadPercent').textContent = '0%';
-
-            // Mostrar mensaje informativo
-            mostrarMensajeSinDatos();
-        } else {
-            // Actualizar elementos del DOM con datos reales
-            document.getElementById('tiempoTotalHoras').textContent = formatearTiempo(data.tiempo_total);
-            document.getElementById('totalActividades').textContent = data.total_actividades.toLocaleString();
-            document.getElementById('productividadPercent').textContent = `${data.porcentaje_productivo}%`;
-
-            // Ocultar mensaje de sin datos si existe
-            ocultarMensajeSinDatos();
+        if (!data.success) {
+            throw new Error(data.error || 'Error desconocido al cargar resumen');
         }
 
-        // Guardar datos para exportación
-        datosExportacion.resumen = data;
-        datosExportacion.fechaInicio = fechaInicio;
-        datosExportacion.fechaFin = fechaFin;
+        return data.data;
 
     } catch (error) {
-        console.error('Error cargando resumen general:', error);
-        document.getElementById('tiempoTotalHoras').textContent = 'Error';
-        document.getElementById('totalActividades').textContent = '0';
-        document.getElementById('productividadPercent').textContent = '0%';
-        throw error;
+        console.error('Error en resumen general:', error);
+        return {
+            tiempo_total: '00:00:00',
+            dias_trabajados: 0,
+            total_actividades: 0,
+            porcentaje_productivo: 0
+        };
     }
 }
 
@@ -373,7 +378,8 @@ async function cargarDistribucionTiempo(id_usuario, fechaInicio, fechaFin) {
             porcentaje: 0
         };
 
-        const tieneActividad = productiva.porcentaje > 0 || distractora.porcentaje > 0 || neutral.porcentaje > 0;
+        const tieneActividad = productiva.porcentaje > 0 || distractora.porcentaje > 0 || neutral
+            .porcentaje > 0;
 
         if (!tieneActividad) {
             console.log('No hay distribución de tiempo para mostrar');
