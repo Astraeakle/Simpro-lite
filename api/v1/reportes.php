@@ -134,92 +134,107 @@ function handleTest() {
 // Función para reporte comparativo de equipo
 function handleReporteComparativoEquipo() {
     try {
+        // Get user data from cookie
+        $userData = verificarAutenticacionCookie();
+        if (!$userData) {
+            sendError('No autorizado', 401);
+            return;
+        }
+
+        $userId = $userData['id_usuario'];
+        $userRole = $userData['rol'] ?? 'empleado';
+        
+        // Get request parameters
         $supervisorId = intval($_GET['supervisor_id'] ?? 0);
         $empleadoId = intval($_GET['empleado_id'] ?? 0);
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
         
-        logError("Reporte comparativo - Supervisor: $supervisorId, Empleado: $empleadoId, Fechas: $fechaInicio a $fechaFin");
-        
-        // Validar fechas
+        // Validate dates
         if (!validateDate($fechaInicio) || !validateDate($fechaFin)) {
             sendError('Formato de fecha inválido');
+            return;
         }
-        
-        if ($supervisorId <= 0) {
-            sendError('ID de supervisor inválido');
+
+        // Validate supervisor ID matches logged in user unless admin
+        if ($userRole !== 'admin' && $supervisorId !== $userId) {
+            sendError('No tienes permiso para ver estos datos', 403);
+            return;
         }
-        
-        // Obtener conexión a la base de datos
+
+        // Get database connection
         $db = obtenerConexionBD();
-        
         if (!$db) {
             logError("No se pudo conectar a la base de datos");
             sendError('Error de conexión a base de datos', 500);
+            return;
         }
-        
-        // Consulta directa sin procedimiento almacenado
-        $whereEmpleado = "";
-        $params = [$supervisorId, $fechaInicio, $fechaFin];
-        
-        if ($empleadoId > 0) {
-            $whereEmpleado = " AND u.id_usuario = ?";
-            $params[] = $empleadoId;
-        }
-        
-        $query = "
-            SELECT 
-                u.id_usuario,
-                u.nombre_completo,
-                u.area,
+
+        // Base query parts
+        $select = "SELECT 
+            u.id_usuario,
+            u.nombre_completo,
+            u.area,
+            COALESCE(
+                TIME_FORMAT(SEC_TO_TIME(SUM(aa.tiempo_segundos)), '%H:%i:%s'), 
+                '00:00:00'
+            ) as tiempo_total_mes,
+            COUNT(DISTINCT DATE(aa.fecha_hora_inicio)) as dias_activos_mes,
+            ROUND(
                 COALESCE(
-                    TIME_FORMAT(SEC_TO_TIME(SUM(aa.tiempo_segundos)), '%H:%i:%s'),
-                    '00:00:00'
-                ) as tiempo_total_mes,
-                COUNT(DISTINCT DATE(aa.fecha_hora_inicio)) as dias_activos_mes,
-                ROUND(
-                    COALESCE(
-                        (SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END) / 
-                         NULLIF(SUM(aa.tiempo_segundos), 0)) * 100,
-                        0
-                    ),
-                    2
-                ) as porcentaje_productivo
-            FROM usuarios u
+                    (SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END) / 
+                    NULLIF(SUM(aa.tiempo_segundos), 0)) * 100,
+                    0
+                ),
+                2
+            ) as porcentaje_productivo";
+
+        $from = "FROM usuarios u
             LEFT JOIN actividad_apps aa ON u.id_usuario = aa.id_usuario 
-                AND aa.fecha_hora_inicio BETWEEN ? AND ?
-            WHERE u.supervisor_id = ?
-            AND u.estado = 'activo'
-            $whereEmpleado
-            GROUP BY u.id_usuario, u.nombre_completo, u.area
-            ORDER BY u.nombre_completo
-        ";
-        
-        // Reordenar parámetros para la consulta
-        $queryParams = [$fechaInicio, $fechaFin, $supervisorId];
+                AND aa.fecha_hora_inicio BETWEEN :fecha_inicio AND :fecha_fin";
+
+        $where = "WHERE u.estado = 'activo'";
+        $group = "GROUP BY u.id_usuario, u.nombre_completo, u.area";
+        $order = "ORDER BY u.nombre_completo";
+
+        // Role-specific conditions
+        $params = [
+            ':fecha_inicio' => $fechaInicio,
+            ':fecha_fin' => $fechaFin
+        ];
+
+        if ($userRole === 'supervisor') {
+            $where .= " AND u.supervisor_id = :supervisor_id";
+            $params[':supervisor_id'] = $supervisorId;
+        } elseif ($userRole === 'admin') {
+            $where .= " AND u.rol != 'admin'"; // Admins don't see other admins
+        } else {
+            sendError('No tienes permisos para esta acción', 403);
+            return;
+        }
+
+        // Filter by specific employee if requested
         if ($empleadoId > 0) {
-            $queryParams[] = $empleadoId;
+            $where .= " AND u.id_usuario = :empleado_id";
+            $params[':empleado_id'] = $empleadoId;
         }
+
+        // Build final query
+        $query = "$select $from $where $group $order";
         
+        // Prepare and execute query
         $stmt = $db->prepare($query);
-        
-        if (!$stmt) {
-            logError("Error preparando consulta: " . $db->errorInfo()[2]);
-            sendError('Error en la consulta', 500);
-        }
-        
-        $resultado = $stmt->execute($queryParams);
-        
+        $resultado = $stmt->execute($params);
+
         if (!$resultado) {
             logError("Error ejecutando consulta: " . print_r($stmt->errorInfo(), true));
             sendError('Error ejecutando consulta', 500);
+            return;
         }
-        
+
         $empleados = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        logError("Empleados encontrados: " . count($empleados));
-        
-        // Preparar respuesta
+
+        // Prepare response
         $data = [
             'empleados' => $empleados,
             'fecha_inicio' => $fechaInicio,
@@ -227,9 +242,9 @@ function handleReporteComparativoEquipo() {
             'supervisor_id' => $supervisorId,
             'empleado_id' => $empleadoId
         ];
-        
+
         sendJsonResponse(['success' => true, 'data' => $data]);
-        
+
     } catch (Exception $e) {
         logError("Error en reporte comparativo: " . $e->getMessage());
         sendError('Error interno del servidor: ' . $e->getMessage(), 500);

@@ -511,91 +511,103 @@ function cargarTiempoTrabajado() {
 
 // Función para mostrar gráfico de productividad
 function mostrarGraficoProductividad(data) {
-    const chartCanvas = document.getElementById('productividadChart');
+    try {
+        // Get or create chart canvas
+        let chartCanvas = document.getElementById('productividadChart');
+        const chartContainer = chartCanvas ? chartCanvas.parentElement : document.querySelector('.chart-container');
 
-    // Verificar si el canvas existe
-    if (!chartCanvas) {
-        console.error('No se encontró el elemento canvas para el gráfico');
-        // Intentar crear el canvas si no existe
-        const chartContainer = document.querySelector('.chart-container');
-        if (chartContainer) {
-            chartContainer.innerHTML = '<canvas id="productividadChart"></canvas>';
-            chartCanvas = document.getElementById('productividadChart');
-        } else {
+        if (!chartContainer) {
+            console.error('No se encontró el contenedor del gráfico');
             return;
         }
-    }
 
-    const chartContainer = chartCanvas.parentElement;
+        // Destroy previous chart if exists
+        if (productividadChart) {
+            productividadChart.destroy();
+            productividadChart = null;
+        }
 
-    // Destruir gráfico anterior si existe
-    if (productividadChart) {
-        productividadChart.destroy();
-        productividadChart = null;
-    }
+        // Create canvas if it doesn't exist
+        if (!chartCanvas) {
+            chartContainer.innerHTML = '<canvas id="productividadChart"></canvas>';
+            chartCanvas = document.getElementById('productividadChart');
+        }
 
-    if (!data || !data.empleados || data.empleados.length === 0) {
-        chartContainer.innerHTML =
-            '<p class="text-muted text-center py-4">No hay datos de productividad para mostrar</p>';
-        return;
-    }
+        // Handle no data case
+        if (!data || !data.empleados || data.empleados.length === 0) {
+            chartContainer.innerHTML =
+                '<p class="text-muted text-center py-4">No hay datos de productividad para mostrar</p>';
+            return;
+        }
 
-    // Preparar datos para el gráfico
-    const labels = data.empleados.map(e => e.nombre_completo);
-    const productividad = data.empleados.map(e => parseFloat(e.porcentaje_productivo) || 0);
-    const backgroundColors = productividad.map(p => {
-        if (p >= 80) return 'rgba(40, 167, 69, 0.7)';
-        if (p >= 60) return 'rgba(23, 162, 184, 0.7)';
-        if (p >= 40) return 'rgba(255, 193, 7, 0.7)';
-        return 'rgba(220, 53, 69, 0.7)';
-    });
+        // Prepare data for chart
+        const labels = data.empleados.map(e => e.nombre_completo);
+        const productividad = data.empleados.map(e => {
+            const prod = parseFloat(e.porcentaje_productivo);
+            return isNaN(prod) ? 0 : prod;
+        });
 
-    // Crear nuevo gráfico
-    productividadChart = new Chart(chartCanvas, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '% Productividad',
-                data: productividad,
-                backgroundColor: backgroundColors,
-                borderColor: backgroundColors.map(c => c.replace('0.7', '1')),
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                        display: true,
-                        text: 'Porcentaje de Productividad'
-                    }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Empleados'
-                    }
-                }
+        const backgroundColors = productividad.map(p => {
+            if (p >= 80) return 'rgba(40, 167, 69, 0.7)';
+            if (p >= 60) return 'rgba(23, 162, 184, 0.7)';
+            if (p >= 40) return 'rgba(255, 193, 7, 0.7)';
+            return 'rgba(220, 53, 69, 0.7)';
+        });
+
+        // Create new chart
+        productividadChart = new Chart(chartCanvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '% Productividad',
+                    data: productividad,
+                    backgroundColor: backgroundColors,
+                    borderColor: backgroundColors.map(c => c.replace('0.7', '1')),
+                    borderWidth: 1
+                }]
             },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `Productividad: ${context.raw}%`;
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Porcentaje de Productividad'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Empleados'
                         }
                     }
                 },
-                legend: {
-                    display: false
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Productividad: ${context.raw}%`;
+                            }
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
                 }
             }
+        });
+
+    } catch (error) {
+        console.error('Error al mostrar gráfico de productividad:', error);
+        const chartContainer = document.querySelector('.chart-container');
+        if (chartContainer) {
+            chartContainer.innerHTML = '<p class="text-danger text-center py-4">Error al cargar el gráfico</p>';
         }
-    });
+    }
 }
 
 // Función para actualizar tabla de tiempo trabajado
