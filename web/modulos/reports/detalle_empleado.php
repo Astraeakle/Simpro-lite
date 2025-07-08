@@ -134,6 +134,68 @@ if ($empleadoId) {
         </div>
     </div>
 
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Distribución de Tiempo</h6>
+            <div class="dropdown no-arrow">
+                <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                    aria-labelledby="dropdownMenuLink">
+                    <div class="dropdown-header">Opciones:</div>
+                    <a class="dropdown-item" href="#" onclick="actualizarReportes()">
+                        <i class="fas fa-sync-alt fa-sm fa-fw mr-2 text-gray-400"></i>
+                        Actualizar
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="chart-container position-relative" style="height: 300px;">
+                <canvas id="graficoProductividad"></canvas>
+            </div>
+            <div class="mt-4 text-center">
+                <span class="badge badge-productiva mr-3 px-3 py-2" id="productivaPercent">
+                    <i class="fas fa-spinner fa-spin"></i> Cargando...
+                </span>
+                <span class="badge badge-distractora mr-3 px-3 py-2" id="distractoraPercent">
+                    <i class="fas fa-spinner fa-spin"></i> Cargando...
+                </span>
+                <span class="badge badge-neutral px-3 py-2" id="neutralPercent">
+                    <i class="fas fa-spinner fa-spin"></i> Cargando...
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Aplicaciones Más Usadas</h6>
+            <small class="text-muted">Top 10 aplicaciones por tiempo de uso</small>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th class="border-0">Aplicación</th>
+                            <th class="border-0">Tiempo de Uso</th>
+                            <th class="border-0">Categoría</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaTopApps">
+                        <tr>
+                            <td colspan="3" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="sr-only">Cargando...</span>
+                                </div>
+                                <p class="mt-2 mb-0 text-muted">Cargando datos...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>

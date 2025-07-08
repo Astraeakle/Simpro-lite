@@ -194,16 +194,6 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--badge-text);
 }
 
-.badge-success {
-  background-color: var(--success-color);
-}
-.badge-danger {
-  background-color: var(--danger-color);
-}
-.badge-secondary {
-  background-color: var(--muted-color);
-}
-
 /* -------------------
    Navegación horizontal
 ------------------- */

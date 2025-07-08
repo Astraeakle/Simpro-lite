@@ -41,9 +41,11 @@ function cargarDatosEmpleado(empleadoId) {
 }
 
 function cargarResumenesIniciales(empleadoId, fechaInicio, fechaFin) {
-    console.log(`[DEBUG] Cargando resúmenes para ${empleadoId} (${fechaInicio} a ${fechaFin})`);
+    console.log('[DEBUG] Cargando todos los resúmenes');
     cargarResumenGeneral(empleadoId, fechaInicio, fechaFin);
     cargarResumenCompleto(empleadoId, fechaInicio, fechaFin);
+    cargarGraficoProductividad(empleadoId, fechaInicio, fechaFin);
+    cargarTopApps(empleadoId, fechaInicio, fechaFin);
 }
 
 function cargarResumenGeneral(empleadoId, fechaInicio, fechaFin) {
@@ -308,6 +310,217 @@ function actualizarReportes() {
         cargarResumenesIniciales(empleadoId, fechaInicio, fechaFin);
     }
 }
+
+// Función para cargar y mostrar el gráfico de productividad
+function cargarGraficoProductividad(empleadoId, fechaInicio, fechaFin) {
+    console.log('[DEBUG] Cargando gráfico de productividad');
+    
+    fetch(`/simpro-lite/api/v1/reportes_empleado.php?empleado_id=${empleadoId}&accion=distribucion&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`)
+        .then(response => {
+            console.log('[DEBUG] Respuesta distribución:', response);
+            if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log('[DEBUG] Datos distribución:', data);
+            
+            if (data.success) {
+                actualizarGraficoProductividad(data.data);
+                actualizarPorcentajes(data.data);
+            } else {
+                console.error('[ERROR] Datos de distribución no válidos');
+                mostrarErrorGrafico();
+            }
+        })
+        .catch(error => {
+            console.error('[ERROR] Al cargar distribución:', error);
+            mostrarErrorGrafico();
+        });
+}
+
+// Función para actualizar el gráfico
+function actualizarGraficoProductividad(distribucion) {
+    const ctx = document.getElementById('graficoProductividad');
+    if (!ctx) return;
+
+    // Verificar si el gráfico existe antes de destruirlo
+    if (window.graficoProductividad && typeof window.graficoProductividad.destroy === 'function') {
+        window.graficoProductividad.destroy();
+    }
+
+    // Preparar datos para el gráfico
+    const labels = distribucion.map(item => item.categoria.charAt(0).toUpperCase() + item.categoria.slice(1));
+    const datos = distribucion.map(item => parseFloat(item.porcentaje));
+    const colores = ['#28a745', '#dc3545', '#6c757d']; // Verde, Rojo, Gris
+
+    // Crear nuevo gráfico
+    window.graficoProductividad = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: datos,
+                backgroundColor: colores,
+                borderWidth: 1,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.label}: ${context.raw}%`;
+                        }
+                    }
+                }
+            },
+            cutout: '70%'
+        }
+    });
+}
+
+// Función para actualizar los porcentajes
+// Función mejorada para actualizar porcentajes
+function actualizarPorcentajes(distribucion) {
+    // Asegurarnos de que tenemos los tres tipos de categorías
+    const categorias = ['productiva', 'distractora', 'neutral'];
+    
+    categorias.forEach(categoria => {
+        const elemento = document.getElementById(`${categoria}Percent`);
+        if (elemento) {
+            // Buscar la categoría en los datos o usar 0% si no existe
+            const dato = distribucion.find(item => item.categoria === categoria) || {porcentaje: '0.00'};
+            elemento.innerHTML = `
+                <i class="fas fa-${getIconoCategoria(categoria)} mr-1"></i>
+                ${dato.porcentaje}% ${categoria.charAt(0).toUpperCase() + categoria.slice(1)}
+            `;
+        }
+    });
+}
+
+function getIconoCategoria(categoria) {
+    switch(categoria) {
+        case 'productiva': return 'check-circle';
+        case 'distractora': return 'times-circle';
+        case 'neutral': return 'minus-circle';
+        default: return 'circle';
+    }
+}
+
+// Función para mostrar error en el gráfico
+function mostrarErrorGrafico() {
+    const contenedor = document.querySelector('.chart-container');
+    if (contenedor) {
+        contenedor.innerHTML = `
+            <div class="alert alert-warning text-center py-4">
+                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                <p class="mb-0">No se pudieron cargar los datos de distribución</p>
+            </div>
+        `;
+    }
+    
+    ['productiva', 'distractora', 'neutral'].forEach(categoria => {
+        const elemento = document.getElementById(`${categoria}Percent`);
+        if (elemento) {
+            elemento.innerHTML = 'Error al cargar';
+        }
+    });
+}
+
+// Función para cargar las aplicaciones más usadas
+function cargarTopApps(empleadoId, fechaInicio, fechaFin) {
+    console.log('[DEBUG] Cargando top apps');
+    
+    fetch(`/simpro-lite/api/v1/reportes_empleado.php?empleado_id=${empleadoId}&accion=top_apps&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&limite=10`)
+        .then(response => {
+            console.log('[DEBUG] Respuesta top apps:', response);
+            if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log('[DEBUG] Datos top apps:', data);
+            
+            if (data.success) {
+                actualizarTablaTopApps(data.data);
+            } else {
+                console.error('[ERROR] Datos de top apps no válidos');
+                mostrarErrorTabla();
+            }
+        })
+        .catch(error => {
+            console.error('[ERROR] Al cargar top apps:', error);
+            mostrarErrorTabla();
+        });
+}
+
+// Función modificada para actualizar la tabla sin barras de progreso
+function actualizarTablaTopApps(apps) {
+    const tabla = document.getElementById('tablaTopApps');
+    if (!tabla) return;
+
+    if (apps.length === 0) {
+        tabla.innerHTML = `
+            <tr>
+                <td colspan="3" class="text-center py-4">
+                    <i class="far fa-folder-open fa-2x mb-2 text-muted"></i>
+                    <p class="mb-0 text-muted">No hay datos de aplicaciones para el período seleccionado</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    let html = '';
+    apps.forEach(app => {
+        const colorCategoria = app.categoria === 'productiva' ? 'productiva' : 
+                              app.categoria === 'distractora' ? 'distractora' : 'neutral';
+        
+        html += `
+            <tr>
+                <td class="align-middle">
+                    <span class="font-weight-bold">${app.aplicacion}</span>
+                </td>
+                <td class="align-middle">
+                    <span class="text-primary font-weight-bold">${app.tiempo_total}</span>
+                </td>
+                <td class="align-middle">
+                    <span class="badge badge-${colorCategoria}">
+                        <i class="fas fa-${getIconoCategoria(app.categoria)} mr-1"></i>
+                        ${app.categoria.charAt(0).toUpperCase() + app.categoria.slice(1)}
+                    </span>
+                </td>
+            </tr>
+        `;
+    });
+
+    tabla.innerHTML = html;
+}
+
+// Función para mostrar error en la tabla
+function mostrarErrorTabla() {
+    const tabla = document.getElementById('tablaTopApps');
+    if (tabla) {
+        tabla.innerHTML = `
+            <tr>
+                <td colspan="3" class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle text-warning mr-2"></i>
+                    <span class="text-warning">Error al cargar las aplicaciones</span>
+                </td>
+            </tr>
+        `;
+    }
+}
+
 
 function procesarExportacion() {
     const urlParams = new URLSearchParams(window.location.search);
