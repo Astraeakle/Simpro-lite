@@ -186,9 +186,6 @@ if ($rol !== 'supervisor') {
                                 <button class="btn btn-primary me-md-2" onclick="verReportesEquipo()">
                                     <i class="fas fa-chart-line"></i> Ver Reportes Detallados
                                 </button>
-                                <button class="btn btn-success me-md-2" onclick="exportarReporteEquipo()">
-                                    <i class="fas fa-file-excel"></i> Exportar a Excel
-                                </button>
                             </div>
                         </div>
                     </div>

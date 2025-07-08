@@ -534,9 +534,6 @@ function filtrarEmpleados() {
         window.supervisor.filtrarEmpleados();
     }
 }
-function exportarReporteEquipo() {
-    alert('Funcionalidad de exportación en desarrollo');
-}
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
