@@ -1,5 +1,21 @@
 <?php
-// File: web/modulos/reports/detalle_empleado.php?>
+require_once __DIR__ . '/../../config/database.php';
+
+$empleadoId = $_GET['empleado_id'] ?? null;
+$empleado = null;
+
+if ($empleadoId) {
+    try {
+        $pdo = Database::getConnection();
+        $stmt = $pdo->prepare("SELECT id_usuario, nombre_usuario, nombre_completo, area FROM usuarios WHERE id_usuario = :id_usuario");
+        $stmt->bindParam(':id_usuario', $empleadoId, PDO::PARAM_INT);
+        $stmt->execute();
+        $empleado = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('Error al obtener datos del empleado: ' . $e->getMessage());
+    }
+}
+?>
 <div class="container-fluid py-4">
     <nav aria-label="breadcrumb" class="mb-4">
         <ol class="breadcrumb">
@@ -9,7 +25,7 @@
                 </a>
             </li>
             <li class="breadcrumb-item active" aria-current="page">
-                Detalle de <?= htmlspecialchars($empleado['nombre_completo']) ?>
+                Detalle de <?= htmlspecialchars($empleado['nombre_completo'] ?? 'Empleado') ?>
             </li>
         </ol>
     </nav>
@@ -17,8 +33,9 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-user-tie text-primary"></i>
-            Detalle de Productividad: <?= htmlspecialchars($empleado['nombre_completo']) ?>
-            <small class="text-muted d-block mt-1">Área: <?= htmlspecialchars($empleado['area']) ?></small>
+            Detalle de Productividad: <?= htmlspecialchars($empleado['nombre_completo'] ?? 'Empleado') ?>
+            <small class="text-muted d-block mt-1">Área:
+                <?= htmlspecialchars($empleado['area'] ?? 'No especificada') ?></small>
         </h1>
         <div>
             <button type="button" class="btn btn-outline-primary btn-sm" onclick="actualizarReportes()">
