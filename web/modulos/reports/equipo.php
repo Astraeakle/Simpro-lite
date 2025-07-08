@@ -1079,8 +1079,7 @@ async function exportarPDFProfesional(datos) {
         }
 
         y += 15;
-
-        // --- TIEMPO TRABAJADO DIARIO ---
+        // --- DETALLE DE TIEMPO TRABAJADO ---
         if (y > pageHeight - 100) {
             pdf.addPage('landscape');
             y = margen;
@@ -1092,6 +1091,9 @@ async function exportarPDFProfesional(datos) {
             align: 'center'
         });
         y += 10;
+
+        // Obtener todos los empleados (incluso sin registros)
+        const todosEmpleados = datos.comparativo.empleados || [];
 
         if (datos.tiempoTrabajado.dias.length > 0) {
             // Configurar columnas
@@ -1136,7 +1138,7 @@ async function exportarPDFProfesional(datos) {
             pdf.line(margen, y, pageWidth - margen, y);
             y += 10;
 
-            // Agrupar días por empleado para mejor visualización
+            // Agrupar días por empleado
             const datosPorEmpleado = {};
             datos.tiempoTrabajado.dias.forEach(dia => {
                 if (!datosPorEmpleado[dia.nombre_empleado]) {
@@ -1145,7 +1147,7 @@ async function exportarPDFProfesional(datos) {
                 datosPorEmpleado[dia.nombre_empleado].push(dia);
             });
 
-            // Filas de datos
+            // Filas de datos (solo empleados con registros)
             pdf.setFont('helvetica', 'normal');
             Object.entries(datosPorEmpleado).forEach(([nombreEmpleado, dias]) => {
                 // Encabezado de empleado
@@ -1172,20 +1174,20 @@ async function exportarPDFProfesional(datos) {
 
                     if (porcentajeNum >= 80) {
                         estado = 'ALTO';
-                        colorEstado = [0, 128, 0]; // Verde
+                        colorEstado = [0, 128, 0];
                     } else if (porcentajeNum >= 60) {
                         estado = 'MEDIO';
-                        colorEstado = [70, 130, 180]; // Azul
+                        colorEstado = [70, 130, 180];
                     } else if (porcentajeNum >= 40) {
                         estado = 'BAJO';
-                        colorEstado = [218, 165, 32]; // Amarillo
+                        colorEstado = [218, 165, 32];
                     } else {
                         estado = 'CRÍTICO';
-                        colorEstado = [220, 53, 69]; // Rojo
+                        colorEstado = [220, 53, 69];
                     }
 
                     // Datos de la fila
-                    x = margen + 10; // Sangría para distinguir del nombre
+                    x = margen + 10;
                     pdf.text(dia.fecha || 'N/A', x, y);
                     x += columnasDiarias[1].width;
                     pdf.text(tiempoTotal, x, y);
@@ -1203,40 +1205,7 @@ async function exportarPDFProfesional(datos) {
                     y += 8;
                 });
 
-                // Espacio entre empleados
                 y += 5;
-            });
-
-            // Resumen por empleado
-            y += 10;
-            pdf.setFont('helvetica', 'bold');
-            pdf.text('RESUMEN DE PRODUCTIVIDAD POR EMPLEADO', centerX, y, {
-                align: 'center'
-            });
-            y += 10;
-
-            Object.entries(datosPorEmpleado).forEach(([nombreEmpleado, dias]) => {
-                if (y > pageHeight - 30) {
-                    pdf.addPage('landscape');
-                    y = margen;
-                }
-
-                // Cálculos CORREGIDOS
-                const totalSegundos = dias.reduce((sum, dia) => sum + (Number(dia.tiempo_total) || 0), 0);
-                const totalProductivoSegundos = dias.reduce((sum, dia) => sum + (Number(dia
-                    .tiempo_productivo) || 0), 0);
-
-                // Cálculo seguro del porcentaje
-                let porcentajeTotal = 0;
-                if (totalSegundos > 0) {
-                    porcentajeTotal = (totalProductivoSegundos / totalSegundos * 100);
-                }
-
-                // Formateo CORREGIDO
-                pdf.text(
-                    `${nombreEmpleado}: ${formatTime(totalSegundos)} totales (${porcentajeTotal.toFixed(1)}% productivo)`,
-                    margen, y);
-                y += 8;
             });
         } else {
             pdf.setFontSize(10);
@@ -1244,6 +1213,102 @@ async function exportarPDFProfesional(datos) {
             pdf.text('No se encontraron registros de tiempo trabajado', margen, y);
             y += 8;
         }
+
+        // --- RESUMEN COMPLETO DE TODOS LOS EMPLEADOS ---
+        if (y > pageHeight - 100) {
+            pdf.addPage('landscape');
+            y = margen;
+        }
+
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('RESUMEN COMPLETO DE PRODUCTIVIDAD (TODOS LOS EMPLEADOS)', centerX, y, {
+            align: 'center'
+        });
+        y += 15;
+
+        // Crear mapa de datos por empleado para búsqueda rápida
+        const mapaProductividad = {};
+        if (datos.tiempoTrabajado.dias && datos.tiempoTrabajado.dias.length > 0) {
+            datos.tiempoTrabajado.dias.forEach(dia => {
+                if (!mapaProductividad[dia.nombre_empleado]) {
+                    mapaProductividad[dia.nombre_empleado] = {
+                        total: 0,
+                        productivo: 0
+                    };
+                }
+                mapaProductividad[dia.nombre_empleado].total += Number(dia.tiempo_total) || 0;
+                mapaProductividad[dia.nombre_empleado].productivo += Number(dia.tiempo_productivo) || 0;
+            });
+        }
+
+        // Mostrar todos los empleados, incluso sin registros
+        pdf.setFont('helvetica', 'normal');
+        todosEmpleados.forEach(empleado => {
+            if (y > pageHeight - 30) {
+                pdf.addPage('landscape');
+                y = margen;
+            }
+
+            const nombre = empleado.nombre_completo || 'Nombre no disponible';
+            const area = empleado.area || 'Sin área asignada';
+
+            // Obtener datos de productividad (si existen)
+            const datosEmpleado = mapaProductividad[nombre] || {
+                total: 0,
+                productivo: 0
+            };
+            const totalSegundos = datosEmpleado.total;
+            const totalProductivo = datosEmpleado.productivo;
+
+            // Calcular porcentaje
+            let porcentaje = 0;
+            let estado = 'SIN REGISTROS';
+            let colorEstado = [150, 150, 150]; // Gris para sin registros
+
+            if (totalSegundos > 0) {
+                porcentaje = (totalProductivo / totalSegundos) * 100;
+
+                // Determinar estado solo si hay registros
+                if (porcentaje >= 80) {
+                    estado = 'ALTO';
+                    colorEstado = [0, 128, 0];
+                } else if (porcentaje >= 60) {
+                    estado = 'MEDIO';
+                    colorEstado = [70, 130, 180];
+                } else if (porcentaje >= 40) {
+                    estado = 'BAJO';
+                    colorEstado = [218, 165, 32];
+                } else {
+                    estado = 'CRÍTICO';
+                    colorEstado = [220, 53, 69];
+                }
+            }
+
+            // Mostrar línea de resumen
+            pdf.setTextColor(0, 0, 0);
+            pdf.text(`${nombre} (${area}):`, margen, y);
+
+            if (totalSegundos > 0) {
+                pdf.text(`${formatTime(totalSegundos)} totales`, margen + 100, y);
+                pdf.text(`${porcentaje.toFixed(1)}% productivo`, margen + 170, y);
+                pdf.setTextColor(...colorEstado);
+                pdf.text(estado, margen + 240, y);
+            } else {
+                pdf.setTextColor(...colorEstado);
+                pdf.text('SIN REGISTROS DE ACTIVIDAD', margen + 100, y);
+            }
+
+            pdf.setTextColor(0, 0, 0);
+            y += 8;
+        });
+
+        // Añadir nota importante sobre empleados sin actividad
+        y += 10;
+        pdf.setFontSize(10);
+        pdf.setTextColor(220, 53, 69); // Rojo para alerta
+        pdf.text('NOTA: Los empleados sin registros de actividad requieren revisión inmediata.', margen, y);
+        pdf.setTextColor(0, 0, 0);
 
         // --- PIE DE PÁGINA ---
         pdf.setFontSize(8);
