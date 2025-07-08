@@ -765,6 +765,6 @@ function verDetalleEmpleado(empleadoId, nombreEmpleado) {
     const fechaFin = document.getElementById('fechaFin').value;
 
     window.location.href =
-        `/simpro-lite/web/index.php?modulo=reports&vista=personal&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        `/simpro-lite/web/index.php?modulo=reports&vista=detalle_empleado&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
 }
 </script>

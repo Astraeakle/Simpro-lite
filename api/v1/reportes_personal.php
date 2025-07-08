@@ -18,16 +18,13 @@ function sendJsonResponse($data, $statusCode = 200) {
     echo json_encode($data);
     exit();
 }
-// Función auxiliar para manejar errores
 function sendError($message, $statusCode = 400) {
     sendJsonResponse(['error' => $message], $statusCode);
 }
-// Función auxiliar para logging
 function logError($message) {
     error_log("[REPORTES] " . date('Y-m-d H:i:s') . " - " . $message);
 }
 try {
-    // RUTAS CORREGIDAS
     require_once __DIR__ . '/../../web/config/database.php';
     require_once __DIR__ . '/jwt_helper.php';
     
