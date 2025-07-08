@@ -121,14 +121,22 @@ $fechaFinDefault = date('Y-m-d');
             <div class="d-flex">
                 <div class="dropdown me-2">
                     <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownExportar"
-                        data-bs-toggle="dropdown">
-                        <i class="fas fa-download"></i> Exportar Reporte
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-download me-1"></i> Exportar Reporte
                     </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="#" onclick="exportarReporte('pdf')"><i
-                                    class="fas fa-file-pdf"></i> PDF</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="exportarReporte('excel')"><i
-                                    class="fas fa-file-excel"></i> Excel</a></li>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownExportar">
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center" onclick=" exportarReporte('pdf')">
+                                <i class="fas fa-file-pdf text-danger me-2"></i>
+                                <span>PDF</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center" onclick="exportarReporte('excel')">
+                                <i class="fas fa-file-excel text-success me-2"></i>
+                                <span>Excel</span>
+                            </a>
+                        </li>
                     </ul>
                 </div>
                 <button class="btn btn-sm btn-outline-primary" onclick="actualizarReportes()">
@@ -269,9 +277,17 @@ $fechaFinDefault = date('Y-m-d');
         </div>
     </div>
 </div>
+<!-- Para PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Para Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Para gráficos en PDF (opcional) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.1.0/chartjs-plugin-datalabels.min.js">
+</script>
 <script>
 // Variables globales
 const supervisorId = <?= json_encode($userId) ?>;
@@ -279,6 +295,9 @@ const userRole = <?= json_encode($userRole) ?>;
 const baseUrl = '/simpro-lite/api/v1/reportes.php';
 let productividadChart = null;
 let loadingModal = null;
+const {
+    jsPDF
+} = window.jspdf;
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM cargado, inicializando reportes de equipo...');
@@ -290,25 +309,6 @@ document.addEventListener('DOMContentLoaded', function() {
     aplicarFiltros();
 });
 
-// Función para exportar reporte
-function exportarReporte(formato) {
-    const empleadoId = document.getElementById('filtroEmpleado').value;
-    const fechaInicio = document.getElementById('fechaInicio').value;
-    const fechaFin = document.getElementById('fechaFin').value;
-
-    let url =
-        `/simpro-lite/web/modulos/reports/exportar.php?formato=${formato}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
-
-    if (empleadoId) {
-        url += `&empleado_id=${empleadoId}`;
-    }
-
-    if (userRole === 'supervisor') {
-        url += `&supervisor_id=${supervisorId}`;
-    }
-
-    window.open(url, '_blank');
-}
 
 // Función para mostrar/ocultar modal de carga
 function mostrarCarga(mostrar) {
@@ -601,7 +601,7 @@ function mostrarGraficoProductividad(data) {
                                     label += ' (Sin actividad registrada)';
                                 } else {
                                     label +=
-                                    ` | Tiempo total: ${emp.tiempo_total_formateado || '00:00:00'}`;
+                                        ` | Tiempo total: ${emp.tiempo_total_formateado || '00:00:00'}`;
                                 }
                                 return label;
                             },
@@ -795,5 +795,894 @@ function verDetalleEmpleado(empleadoId, nombreEmpleado) {
 
     window.location.href =
         `/simpro-lite/web/index.php?modulo=reports&vista=detalle_empleado&empleado_id=${empleadoId}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+}
+
+// Función principal de exportación
+function exportarReporte(formato) {
+    try {
+        mostrarCarga(true, `Preparando reporte en formato ${formato.toUpperCase()}...`);
+
+        const empleadoId = document.getElementById('filtroEmpleado').value;
+        const fechaInicio = document.getElementById('fechaInicio').value;
+        const fechaFin = document.getElementById('fechaFin').value;
+        const nombreEmpleado = empleadoId ?
+            document.getElementById('filtroEmpleado').options[document.getElementById('filtroEmpleado').selectedIndex]
+            .text.split('(')[0].trim() :
+            'TODOS LOS EMPLEADOS';
+
+        // Validación de fechas
+        if (!fechaInicio || !fechaFin) {
+            throw new Error('Debe seleccionar un rango de fechas válido');
+        }
+
+        // Recolectar todos los datos necesarios
+        Promise.all([
+            fetchData('reporte_comparativo_equipo', empleadoId, fechaInicio, fechaFin),
+            fetchData('productividad_por_empleado', empleadoId, fechaInicio, fechaFin),
+            fetchData('tiempo_trabajado_empleado', empleadoId, fechaInicio, fechaFin)
+        ]).then(([comparativo, productividad, tiempoTrabajado]) => {
+            const datosExportacion = {
+                fechaInicio,
+                fechaFin,
+                empleadoId,
+                nombreEmpleado,
+                comparativo: comparativo.data || {
+                    empleados: []
+                },
+                productividad: productividad.data || {
+                    empleados: []
+                },
+                tiempoTrabajado: tiempoTrabajado.data || {
+                    dias: []
+                },
+                chartImage: productividadChart ? productividadChart.toBase64Image() : null,
+                fechaGeneracion: new Date().toLocaleString('es-PE', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })
+            };
+
+            if (formato === 'pdf') {
+                exportarPDFProfesional(datosExportacion);
+            } else {
+                exportarExcelAnalitico(datosExportacion);
+            }
+        }).catch(error => {
+            mostrarCarga(false);
+            mostrarError(`Error al preparar datos: ${error.message}`);
+            console.error('Error en exportarReporte:', error);
+        });
+
+    } catch (error) {
+        mostrarCarga(false);
+        mostrarError(`Error al exportar: ${error.message}`);
+        console.error('Error en exportarReporte:', error);
+    }
+}
+
+async function exportarPDFProfesional(datos) {
+    try {
+        const {
+            jsPDF
+        } = window.jspdf;
+        const pdf = new jsPDF('landscape');
+        const margen = 10;
+        let y = margen;
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const contentWidth = pageWidth - (margen * 2);
+        const centerX = pageWidth / 2;
+
+        // --- ENCABEZADO ---
+        pdf.setFillColor(13, 71, 131); // Azul corporativo
+        pdf.rect(0, 0, pageWidth, 20, 'F');
+
+        // Logo (opcional)
+        // pdf.addImage(logoData, 'PNG', margen, 5, 30, 10);
+
+        // Título
+        pdf.setFontSize(16);
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('REPORTE DE PRODUCTIVIDAD - GM INGENIEROS Y CONSULTORES S.A.C.', centerX, 15, {
+            align: 'center'
+        });
+
+        // --- INFORMACIÓN GENERAL ---
+        y = 30;
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+
+        // Cuadro de información
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setFillColor(240, 240, 240);
+        pdf.roundedRect(margen, y, contentWidth, 25, 2, 2, 'FD');
+
+        // Texto informativo
+        pdf.text(`Empleado: ${datos.nombreEmpleado}`, margen + 5, y + 8);
+        pdf.text(`Período: ${formatearFecha(datos.fechaInicio)} - ${formatearFecha(datos.fechaFin)}`, margen + 5,
+            y + 16);
+        pdf.text(`Generado: ${datos.fechaGeneracion}`, pageWidth - margen - 5, y + 8, {
+            align: 'right'
+        });
+
+        y += 35;
+
+        // --- GRÁFICO DE PRODUCTIVIDAD ---
+        if (datos.chartImage) {
+            // Verificar espacio antes de agregar nueva sección
+            if (y > pageHeight - 100) {
+                pdf.addPage('landscape');
+                y = margen;
+            }
+
+            pdf.setFontSize(12);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('ANÁLISIS DE PRODUCTIVIDAD POR EMPLEADO', centerX, y, {
+                align: 'center'
+            });
+            y += 8;
+
+            try {
+                pdf.addImage(datos.chartImage, 'PNG', margen, y, contentWidth, 80);
+                y += 90;
+            } catch (error) {
+                console.error('Error al agregar gráfico:', error);
+                y += 10;
+            }
+        }
+
+
+        // --- TABLA COMPARATIVA ---
+        if (y > pageHeight - 100) {
+            pdf.addPage('landscape');
+            y = margen;
+        }
+
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('COMPARATIVA DE PRODUCTIVIDAD', centerX, y, {
+            align: 'center'
+        });
+        y += 10;
+
+        if (datos.comparativo.empleados.length > 0) {
+            // Configuración de la tabla
+            const columnas = [{
+                    header: 'Empleado',
+                    width: 60
+                },
+                {
+                    header: 'Área',
+                    width: 40
+                },
+                {
+                    header: 'Tiempo Total',
+                    width: 30
+                },
+                {
+                    header: 'Días Activos',
+                    width: 25
+                },
+                {
+                    header: 'Productividad',
+                    width: 45
+                }, // Aumentado para barra + porcentaje
+                {
+                    header: 'Estado',
+                    width: 30
+                }
+            ];
+
+            // Encabezados
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            let x = margen;
+            columnas.forEach(col => {
+                pdf.text(col.header, x, y);
+                x += col.width;
+            });
+            y += 6;
+
+            // Línea divisoria
+            pdf.setDrawColor(100, 100, 100);
+            pdf.line(margen, y, pageWidth - margen, y);
+            y += 10;
+
+            // Filas de datos
+            pdf.setFont('helvetica', 'normal');
+            datos.comparativo.empleados.forEach(empleado => {
+                if (y > pageHeight - 30) {
+                    pdf.addPage('landscape');
+                    y = margen + 20;
+                }
+
+                const prod = parseFloat(empleado.porcentaje_productivo) || 0;
+                const tiempoTotal = empleado.tiempo_total_mes || '00:00:00';
+                const diasActivos = empleado.dias_activos_mes || 0;
+
+                // Determinar estado
+                let estado = '';
+                let colorEstado = [0, 0, 0];
+                if (prod >= 80) {
+                    estado = 'EXCELENTE';
+                    colorEstado = [0, 128, 0]; // Verde
+                } else if (prod >= 60) {
+                    estado = 'BUENO';
+                    colorEstado = [70, 130, 180]; // Azul
+                } else if (prod >= 40) {
+                    estado = 'REGULAR';
+                    colorEstado = [218, 165, 32]; // Amarillo
+                } else {
+                    estado = 'BAJO';
+                    colorEstado = [220, 53, 69]; // Rojo
+                }
+
+                // Datos básicos
+                x = margen;
+                pdf.text(empleado.nombre_completo.substring(0, 25), x, y);
+                x += columnas[0].width;
+                pdf.text(empleado.area || 'N/A', x, y);
+                x += columnas[1].width;
+                pdf.text(tiempoTotal, x, y);
+                x += columnas[2].width;
+                pdf.text(diasActivos.toString(), x, y);
+                x += columnas[3].width;
+
+                // Barra de progreso con porcentaje superpuesto
+                const anchoBarra = 35;
+                const alturaBarra = 6;
+                const posYBarra = y - 4;
+
+                // Fondo de la barra
+                pdf.setDrawColor(200, 200, 200);
+                pdf.rect(x, posYBarra, anchoBarra, alturaBarra, 'D');
+
+                // Barra de progreso coloreada
+                if (prod > 0) {
+                    pdf.setFillColor(...colorEstado);
+                    pdf.rect(x, posYBarra, anchoBarra * (prod / 100), alturaBarra, 'F');
+                }
+
+                // Texto del porcentaje centrado en la barra
+                pdf.setFontSize(8);
+                pdf.setTextColor(0, 0, 0); // Negro para mejor contraste
+                const textWidth = pdf.getStringUnitWidth(`${prod.toFixed(1)}%`) * pdf.internal
+                .getFontSize() / pdf.internal.scaleFactor;
+                const textX = x + (anchoBarra - textWidth) / 2;
+                pdf.text(`${prod.toFixed(1)}%`, textX, y);
+                pdf.setFontSize(10); // Restaurar tamaño de fuente
+
+                x += columnas[4].width;
+
+                // Estado con color
+                pdf.setTextColor(...colorEstado);
+                pdf.text(estado, x, y);
+                pdf.setTextColor(0, 0, 0);
+
+                y += 8;
+            });
+        } else {
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'italic');
+            pdf.text('No se encontraron datos de comparativa', margen, y);
+            y += 8;
+        }
+
+        y += 15;
+
+        // --- TIEMPO TRABAJADO DIARIO ---
+        if (y > pageHeight - 100) {
+            pdf.addPage('landscape');
+            y = margen;
+        }
+
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('DETALLE DE TIEMPO TRABAJADO', centerX, y, {
+            align: 'center'
+        });
+        y += 10;
+
+        if (datos.tiempoTrabajado.dias.length > 0) {
+            // Configurar columnas
+            const columnasDiarias = [{
+                    header: 'Fecha',
+                    width: 30
+                },
+                {
+                    header: 'Tiempo Total',
+                    width: 30
+                },
+                {
+                    header: 'Tiempo Productivo',
+                    width: 30
+                },
+                {
+                    header: '% Productividad',
+                    width: 30
+                },
+                {
+                    header: 'Estado',
+                    width: 30
+                }
+            ];
+
+            // Encabezados
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            let x = margen;
+            columnasDiarias.forEach(col => {
+                pdf.text(col.header, x, y);
+                x += col.width;
+            });
+            y += 6;
+
+            // Línea divisoria
+            pdf.setDrawColor(100, 100, 100);
+            pdf.line(margen, y, pageWidth - margen, y);
+            y += 10;
+
+            // Filas de datos
+            pdf.setFont('helvetica', 'normal');
+            datos.tiempoTrabajado.dias.forEach(dia => {
+                if (y > pageHeight - 100) {
+                    pdf.addPage('landscape');
+                    y = margen;
+                }
+
+                const tiempoTotal = formatTime(dia.tiempo_total) || '00:00:00';
+                const tiempoProd = formatTime(dia.tiempo_productivo) || '00:00:00';
+                const porcentaje = dia.tiempo_productivo > 0 ?
+                    ((dia.tiempo_productivo / dia.tiempo_total) * 100).toFixed(1) : '0.0';
+
+                // Determinar estado
+                let estado = '';
+                let colorEstado = [0, 0, 0];
+                const porcentajeNum = parseFloat(porcentaje);
+
+                if (porcentajeNum >= 80) {
+                    estado = 'ALTO';
+                    colorEstado = [0, 128, 0]; // Verde
+                } else if (porcentajeNum >= 60) {
+                    estado = 'MEDIO';
+                    colorEstado = [70, 130, 180]; // Azul
+                } else if (porcentajeNum >= 40) {
+                    estado = 'BAJO';
+                    colorEstado = [218, 165, 32]; // Amarillo
+                } else {
+                    estado = 'CRÍTICO';
+                    colorEstado = [220, 53, 69]; // Rojo
+                }
+
+                // Datos de la fila
+                x = margen;
+                pdf.text(dia.fecha || 'N/A', x, y);
+                x += columnasDiarias[0].width;
+                pdf.text(tiempoTotal, x, y);
+                x += columnasDiarias[1].width;
+                pdf.text(tiempoProd, x, y);
+                x += columnasDiarias[2].width;
+                pdf.text(`${porcentaje}%`, x, y);
+                x += columnasDiarias[3].width;
+
+                // Estado con color
+                pdf.setTextColor(...colorEstado);
+                pdf.text(estado, x, y);
+                pdf.setTextColor(0, 0, 0);
+
+                y += 8;
+            });
+        } else {
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'italic');
+            pdf.text('No se encontraron registros de tiempo trabajado', margen, y);
+            y += 8;
+        }
+
+        // --- PIE DE PÁGINA ---
+        pdf.setFontSize(8);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text('Sistema de Monitoreo de Productividad Remota - GM Ingenieros y Consultores S.A.C.',
+            centerX, pageHeight - 5, {
+                align: 'center'
+            });
+
+        // Guardar PDF
+        const nombreArchivo =
+            `Reporte_Productividad_${datos.nombreEmpleado.replace(/ /g, '_')}_${datos.fechaInicio}_${datos.fechaFin}.pdf`;
+        pdf.save(nombreArchivo);
+
+        mostrarCarga(false);
+        mostrarAlerta('Reporte PDF generado exitosamente', 'success');
+
+    } catch (error) {
+        mostrarCarga(false);
+        mostrarError(`Error al generar PDF: ${error.message}`);
+        console.error('Error en exportarPDFProfesional:', error);
+    }
+}
+async function exportarExcelAnalitico(datos) {
+    try {
+        if (typeof XLSX === 'undefined') {
+            throw new Error('La librería XLSX no está disponible');
+        }
+
+        mostrarCarga(true, 'Generando reporte Excel...');
+
+        const wb = XLSX.utils.book_new();
+
+        // Configuración de estilos
+        const estilos = {
+            encabezado: {
+                font: {
+                    bold: true,
+                    color: {
+                        rgb: "FFFFFF"
+                    }
+                },
+                fill: {
+                    fgColor: {
+                        rgb: "0D4783"
+                    }
+                },
+                alignment: {
+                    horizontal: 'center',
+                    vertical: 'center'
+                },
+                border: {
+                    top: {
+                        style: 'thin',
+                        color: {
+                            rgb: "000000"
+                        }
+                    },
+                    bottom: {
+                        style: 'thin',
+                        color: {
+                            rgb: "000000"
+                        }
+                    },
+                    left: {
+                        style: 'thin',
+                        color: {
+                            rgb: "000000"
+                        }
+                    },
+                    right: {
+                        style: 'thin',
+                        color: {
+                            rgb: "000000"
+                        }
+                    }
+                }
+            },
+            titulo: {
+                font: {
+                    bold: true,
+                    size: 14
+                },
+                alignment: {
+                    horizontal: 'center'
+                }
+            },
+            formatoCondicional: {
+                ref: "E10:E1000",
+                rules: [{
+                        type: "cellIs",
+                        operator: "greaterThanOrEqual",
+                        value: 80,
+                        style: {
+                            fill: {
+                                fgColor: {
+                                    rgb: "C6EFCE"
+                                }
+                            },
+                            font: {
+                                color: {
+                                    rgb: "006100"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        type: "cellIs",
+                        operator: "greaterThanOrEqual",
+                        value: 60,
+                        style: {
+                            fill: {
+                                fgColor: {
+                                    rgb: "BDD7EE"
+                                }
+                            },
+                            font: {
+                                color: {
+                                    rgb: "000080"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        type: "cellIs",
+                        operator: "greaterThanOrEqual",
+                        value: 40,
+                        style: {
+                            fill: {
+                                fgColor: {
+                                    rgb: "FFEB9C"
+                                }
+                            },
+                            font: {
+                                color: {
+                                    rgb: "9C5700"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        type: "cellIs",
+                        operator: "lessThan",
+                        value: 40,
+                        style: {
+                            fill: {
+                                fgColor: {
+                                    rgb: "FFC7CE"
+                                }
+                            },
+                            font: {
+                                color: {
+                                    rgb: "9C0006"
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        };
+
+        // --- HOJA 1: RESUMEN EJECUTIVO ---
+        const resumenData = [
+            ["REPORTE DE PRODUCTIVIDAD - GM INGENIEROS Y CONSULTORES S.A.C."],
+            [""],
+            ["Empleado:", datos.nombreEmpleado],
+            ["Período:", `${formatearFecha(datos.fechaInicio)} - ${formatearFecha(datos.fechaFin)}`],
+            ["Generado:", datos.fechaGeneracion],
+            [""],
+            ["RESUMEN EJECUTIVO", "", "", "", ""],
+            ["Empleado", "Área", "Tiempo Total", "Días Activos", "Productividad", "Estado"],
+            ...datos.comparativo.empleados.map(empleado => {
+                const prod = parseFloat(empleado.porcentaje_productivo) || 0;
+                let estado = "";
+
+                if (prod >= 80) estado = "EXCELENTE";
+                else if (prod >= 60) estado = "BUENO";
+                else if (prod >= 40) estado = "REGULAR";
+                else estado = "BAJO";
+
+                return [
+                    empleado.nombre_completo,
+                    empleado.area || "N/A",
+                    empleado.tiempo_total_mes || "00:00:00",
+                    empleado.dias_activos_mes || 0,
+                    prod,
+                    estado
+                ];
+            })
+        ];
+
+        const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+        wsResumen["!merges"] = [{
+                s: {
+                    r: 0,
+                    c: 0
+                },
+                e: {
+                    r: 0,
+                    c: 4
+                }
+            },
+            {
+                s: {
+                    r: 7,
+                    c: 0
+                },
+                e: {
+                    r: 7,
+                    c: 4
+                }
+            }
+        ];
+        wsResumen["!conditionalFormatting"] = [estilos.formatoCondicional];
+        XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+
+        // --- HOJA 2: DETALLE DIARIO ---
+        if (datos.tiempoTrabajado.dias.length > 0) {
+            const detalleData = [
+                ["DETALLE DIARIO DE PRODUCTIVIDAD"],
+                [""],
+                ["Empleado", "Fecha", "Tiempo Total", "Tiempo Productivo", "% Productividad", "Estado"],
+                ...datos.tiempoTrabajado.dias.map(dia => {
+                    const tiempoTotal = formatTime(dia.tiempo_total) || "00:00:00";
+                    const tiempoProd = formatTime(dia.tiempo_productivo) || "00:00:00";
+                    const porcentaje = dia.tiempo_productivo > 0 ?
+                        ((dia.tiempo_productivo / dia.tiempo_total) * 100).toFixed(1) : 0;
+                    let estado = "";
+
+                    if (porcentaje >= 80) estado = "ALTO";
+                    else if (porcentaje >= 60) estado = "MEDIO";
+                    else if (porcentaje >= 40) estado = "BAJO";
+                    else estado = "CRÍTICO";
+
+                    return [
+                        dia.nombre_empleado || "N/A",
+                        dia.fecha || "N/A",
+                        tiempoTotal,
+                        tiempoProd,
+                        porcentaje,
+                        estado
+                    ];
+                })
+            ];
+
+            const wsDetalle = XLSX.utils.aoa_to_sheet(detalleData);
+            wsDetalle["!merges"] = [{
+                s: {
+                    r: 0,
+                    c: 0
+                },
+                e: {
+                    r: 0,
+                    c: 5
+                }
+            }];
+            wsDetalle["!conditionalFormatting"] = [{
+                ref: "E4:E1000",
+                rules: estilos.formatoCondicional.rules
+            }];
+            XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle Diario");
+        }
+
+        // --- HOJA 3: DATOS COMPLETOS (TODOS LOS DÍAS) ---
+        const {
+            startDate,
+            endDate,
+            allDays
+        } = generarRangoFechas(datos.fechaInicio, datos.fechaFin);
+        const datosPorEmpleado = agruparDatosPorEmpleado(datos.tiempoTrabajado.dias);
+
+        const datosCompletos = [
+            ["REPORTE COMPLETO POR DÍA"],
+            [""],
+            ["Empleado", "Área", ...allDays],
+            ...datos.comparativo.empleados.map(empleado => {
+                const row = [empleado.nombre_completo, empleado.area || "N/A"];
+                allDays.forEach(fecha => {
+                    const dia = datosPorEmpleado[empleado.nombre_completo]?. [fecha];
+                    row.push(dia ? ((dia.tiempo_productivo / dia.tiempo_total) * 100).toFixed(1) :
+                        0);
+                });
+                return row;
+            })
+        ];
+
+        const wsCompleto = XLSX.utils.aoa_to_sheet(datosCompletos);
+        wsCompleto["!merges"] = [{
+            s: {
+                r: 0,
+                c: 0
+            },
+            e: {
+                r: 0,
+                c: allDays.length + 2
+            }
+        }];
+        wsCompleto["!conditionalFormatting"] = [{
+            ref: XLSX.utils.encode_range({
+                s: {
+                    r: 2,
+                    c: 2
+                },
+                e: {
+                    r: datos.comparativo.empleados.length + 2,
+                    c: allDays.length + 1
+                }
+            }),
+            rules: estilos.formatoCondicional.rules
+        }];
+        XLSX.utils.book_append_sheet(wb, wsCompleto, "Matriz Productividad");
+
+        // --- HOJA 4: ANÁLISIS ESTADÍSTICO ---
+        if (datos.comparativo.empleados.length > 0) {
+            const estadisticasData = crearDatosEstadisticos(datos.comparativo.empleados.length);
+            const wsEstadisticas = XLSX.utils.aoa_to_sheet(estadisticasData);
+
+            wsEstadisticas["!merges"] = [{
+                    s: {
+                        r: 0,
+                        c: 0
+                    },
+                    e: {
+                        r: 0,
+                        c: 2
+                    }
+                },
+                {
+                    s: {
+                        r: 7,
+                        c: 0
+                    },
+                    e: {
+                        r: 7,
+                        c: 2
+                    }
+                }
+            ];
+
+            // Formato de porcentaje
+            for (let i = 12; i <= 15; i++) {
+                wsEstadisticas[`C${i}`] = wsEstadisticas[`C${i}`] || {};
+                wsEstadisticas[`C${i}`].z = "0.00%";
+            }
+
+            XLSX.utils.book_append_sheet(wb, wsEstadisticas, "Estadísticas");
+        }
+
+        // Generar archivo
+        const nombreArchivo =
+            `Reporte_Productividad_${datos.nombreEmpleado.replace(/ /g, '_')}_${datos.fechaInicio}_${datos.fechaFin}.xlsx`;
+        XLSX.writeFile(wb, nombreArchivo);
+
+        mostrarCarga(false);
+        mostrarAlerta('Reporte Excel generado exitosamente', 'success');
+
+    } catch (error) {
+        mostrarCarga(false);
+        mostrarError(`Error al generar Excel: ${error.message}`);
+        console.error('Error en exportarExcelAnalitico:', error);
+    }
+}
+
+// Funciones auxiliares modularizadas
+function generarRangoFechas(fechaInicio, fechaFin) {
+    const startDate = new Date(fechaInicio);
+    const endDate = new Date(fechaFin);
+    const allDays = [];
+
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        allDays.push(new Date(d).toISOString().split('T')[0]);
+    }
+
+    return {
+        startDate,
+        endDate,
+        allDays
+    };
+}
+
+function agruparDatosPorEmpleado(dias) {
+    const datosPorEmpleado = {};
+    dias.forEach(dia => {
+        if (!datosPorEmpleado[dia.nombre_empleado]) {
+            datosPorEmpleado[dia.nombre_empleado] = {};
+        }
+        datosPorEmpleado[dia.nombre_empleado][dia.fecha] = dia;
+    });
+    return datosPorEmpleado;
+}
+
+function crearDatosEstadisticos(numEmpleados) {
+    const filaFinal = 9 + numEmpleados;
+    return [
+        ["ANÁLISIS ESTADÍSTICO"],
+        [""],
+        ["Métrica", "Valor"],
+        ["Promedio Productividad", {
+            f: `AVERAGE(Resumen!E10:E${filaFinal})`
+        }],
+        ["Máxima Productividad", {
+            f: `MAX(Resumen!E10:E${filaFinal})`
+        }],
+        ["Mínima Productividad", {
+            f: `MIN(Resumen!E10:E${filaFinal})`
+        }],
+        ["Desviación Estándar", {
+            f: `STDEV(Resumen!E10:E${filaFinal})`
+        }],
+        ["", ""],
+        ["Distribución de Productividad", "", ""],
+        ["Rango", "Cantidad", "Porcentaje"],
+        ["Excelente (>=80%)", {
+            f: `COUNTIF(Resumen!E10:E${filaFinal},">=80")`
+        }, {
+            f: `B12/${numEmpleados}`
+        }],
+        ["Bueno (60-79%)", {
+            f: `COUNTIFS(Resumen!E10:E${filaFinal},">=60",Resumen!E10:E${filaFinal},"<80")`
+        }, {
+            f: `B13/${numEmpleados}`
+        }],
+        ["Regular (40-59%)", {
+            f: `COUNTIFS(Resumen!E10:E${filaFinal},">=40",Resumen!E10:E${filaFinal},"<60")`
+        }, {
+            f: `B14/${numEmpleados}`
+        }],
+        ["Bajo (<40%)", {
+            f: `COUNTIF(Resumen!E10:E${filaFinal},"<40")`
+        }, {
+            f: `B15/${numEmpleados}`
+        }]
+    ];
+}
+
+// Función auxiliar para obtener datos del API
+function fetchData(action, empleadoId, fechaInicio, fechaFin) {
+    const params = new URLSearchParams({
+        action,
+        supervisor_id: supervisorId,
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin
+    });
+
+    if (empleadoId) {
+        params.append('empleado_id', empleadoId);
+    }
+
+    return fetch(`${baseUrl}?${params.toString()}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+    }).then(response => response.json());
+}
+
+function formatearFecha(fechaStr) {
+    if (!fechaStr) return '';
+    const fecha = new Date(fechaStr);
+    return fecha.toLocaleDateString('es-PE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+// Función para mostrar alertas (similar a mostrarError pero con tipos)
+function mostrarAlerta(mensaje, tipo = 'success') {
+    console.log(`Alerta (${tipo}):`, mensaje);
+
+    // Colores según tipo
+    const colores = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'warning': 'alert-warning',
+        'info': 'alert-info'
+    };
+
+    const clase = colores[tipo] || 'alert-info';
+
+    // Crear alerta Bootstrap
+    const alerta = document.createElement('div');
+    alerta.className = `alert ${clase} alert-dismissible fade show`;
+    alerta.innerHTML = `
+        ${mensaje}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+
+    // Insertar al inicio del container
+    const container = document.querySelector('.container-fluid');
+    if (container) {
+        container.insertBefore(alerta, container.firstChild);
+    }
+
+    // Auto-remover después de 5 segundos
+    setTimeout(() => {
+        const bsAlert = new bootstrap.Alert(alerta);
+        bsAlert.close();
+    }, 5000);
 }
 </script>
