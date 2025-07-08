@@ -512,7 +512,6 @@ function cargarTiempoTrabajado() {
 // Función para mostrar gráfico de productividad
 function mostrarGraficoProductividad(data) {
     try {
-        // Get or create chart canvas
         let chartCanvas = document.getElementById('productividadChart');
         const chartContainer = chartCanvas ? chartCanvas.parentElement : document.querySelector('.chart-container');
 
@@ -540,21 +539,26 @@ function mostrarGraficoProductividad(data) {
             return;
         }
 
-        // Prepare data for chart
+        // Prepare data for chart - include all employees
         const labels = data.empleados.map(e => e.nombre_completo);
         const productividad = data.empleados.map(e => {
             const prod = parseFloat(e.porcentaje_productivo);
             return isNaN(prod) ? 0 : prod;
         });
 
-        const backgroundColors = productividad.map(p => {
-            if (p >= 80) return 'rgba(40, 167, 69, 0.7)';
-            if (p >= 60) return 'rgba(23, 162, 184, 0.7)';
-            if (p >= 40) return 'rgba(255, 193, 7, 0.7)';
+        // Special styling for employees with no activity
+        const backgroundColors = data.empleados.map(e => {
+            const tiempoTotal = parseFloat(e.tiempo_total_segundos) || 0;
+            if (tiempoTotal === 0) return 'rgba(200, 200, 200, 0.7)'; // Gray for no activity
+
+            const prod = parseFloat(e.porcentaje_productivo) || 0;
+            if (prod >= 80) return 'rgba(40, 167, 69, 0.7)';
+            if (prod >= 60) return 'rgba(23, 162, 184, 0.7)';
+            if (prod >= 40) return 'rgba(255, 193, 7, 0.7)';
             return 'rgba(220, 53, 69, 0.7)';
         });
 
-        // Create new chart
+        // Create new chart with custom tooltips
         productividadChart = new Chart(chartCanvas, {
             type: 'bar',
             data: {
@@ -590,7 +594,20 @@ function mostrarGraficoProductividad(data) {
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return `Productividad: ${context.raw}%`;
+                                const emp = data.empleados[context.dataIndex];
+                                let label = `Productividad: ${context.raw}%`;
+
+                                if ((parseFloat(emp.tiempo_total_segundos) || 0) === 0) {
+                                    label += ' (Sin actividad registrada)';
+                                } else {
+                                    label +=
+                                    ` | Tiempo total: ${emp.tiempo_total_formateado || '00:00:00'}`;
+                                }
+                                return label;
+                            },
+                            afterLabel: function(context) {
+                                const emp = data.empleados[context.dataIndex];
+                                return `Días activos: ${emp.dias_activos_mes || 0}`;
                             }
                         }
                     },

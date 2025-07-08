@@ -494,92 +494,98 @@ function validateDate($date, $format = 'Y-m-d') {
 
 function handleProductividadPorEmpleado() {
     try {
+        $userData = verificarAutenticacionCookie();
+        if (!$userData) {
+            sendError('No autorizado', 401);
+            return;
+        }
+
+        $userId = $userData['id_usuario'];
+        $userRole = $userData['rol'] ?? 'empleado';
+        
         $supervisorId = intval($_GET['supervisor_id'] ?? 0);
         $empleadoId = intval($_GET['empleado_id'] ?? 0);
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
         
-        logError("Productividad por empleado - Supervisor: $supervisorId, Empleado: $empleadoId, Fechas: $fechaInicio a $fechaFin");
-        
-        // Validar fechas
         if (!validateDate($fechaInicio) || !validateDate($fechaFin)) {
             sendError('Formato de fecha inválido');
+            return;
         }
-        
-        if ($supervisorId <= 0) {
-            sendError('ID de supervisor inválido');
+
+        // Validate permissions
+        if ($userRole !== 'admin' && $supervisorId !== $userId) {
+            sendError('No tienes permiso para ver estos datos', 403);
+            return;
         }
-        
-        // Obtener conexión a la base de datos
+
         $db = obtenerConexionBD();
-        
         if (!$db) {
             logError("No se pudo conectar a la base de datos");
             sendError('Error de conexión a base de datos', 500);
+            return;
         }
-        
-        // Consulta para obtener productividad por empleado
-        $whereEmpleado = "";
-        $params = [$supervisorId, $fechaInicio, $fechaFin];
-        
-        if ($empleadoId > 0) {
-            $whereEmpleado = " AND u.id_usuario = ?";
-            $params[] = $empleadoId;
-        }
-        
-        $query = "
-            SELECT 
-                u.id_usuario,
-                u.nombre_completo,
-                u.area,
-                COALESCE(SUM(aa.tiempo_segundos), 0) as tiempo_total_segundos,
-                COALESCE(SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END), 0) as tiempo_productivo_segundos,
-                ROUND(
-                    COALESCE(
-                        (SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END) / 
-                         NULLIF(SUM(aa.tiempo_segundos), 0)) * 100,
-                        0
-                    ),
-                    2
-                ) as porcentaje_productivo,
-                TIME_FORMAT(SEC_TO_TIME(SUM(aa.tiempo_segundos)), '%H:%i:%s') as tiempo_total_formateado,
-                TIME_FORMAT(SEC_TO_TIME(SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END)), '%H:%i:%s') as tiempo_productivo_formateado
-            FROM usuarios u
+
+        // Base query - modified to include employees with no activity
+        $select = "SELECT 
+            u.id_usuario,
+            u.nombre_completo,
+            u.area,
+            COALESCE(SUM(aa.tiempo_segundos), 0) as tiempo_total_segundos,
+            COALESCE(SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END), 0) as tiempo_productivo_segundos,
+            ROUND(
+                COALESCE(
+                    (SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END) / 
+                    NULLIF(SUM(aa.tiempo_segundos), 0)) * 100,
+                    0
+                ),
+                2
+            ) as porcentaje_productivo,
+            TIME_FORMAT(SEC_TO_TIME(COALESCE(SUM(aa.tiempo_segundos), 0)), '%H:%i:%s') as tiempo_total_formateado,
+            TIME_FORMAT(SEC_TO_TIME(COALESCE(SUM(CASE WHEN aa.categoria = 'productiva' THEN aa.tiempo_segundos ELSE 0 END), 0)), '%H:%i:%s') as tiempo_productivo_formateado";
+
+        $from = "FROM usuarios u
             LEFT JOIN actividad_apps aa ON u.id_usuario = aa.id_usuario 
-                AND aa.fecha_hora_inicio BETWEEN ? AND ?
-            WHERE u.supervisor_id = ?
-            AND u.estado = 'activo'
-            $whereEmpleado
-            GROUP BY u.id_usuario, u.nombre_completo, u.area
-            HAVING SUM(aa.tiempo_segundos) > 0
-            ORDER BY porcentaje_productivo DESC
-        ";
-        
-        // Reordenar parámetros para la consulta
-        $queryParams = [$fechaInicio, $fechaFin, $supervisorId];
-        if ($empleadoId > 0) {
-            $queryParams[] = $empleadoId;
+                AND aa.fecha_hora_inicio BETWEEN :fecha_inicio AND :fecha_fin";
+
+        $where = "WHERE u.estado = 'activo'";
+        $group = "GROUP BY u.id_usuario, u.nombre_completo, u.area";
+        $order = "ORDER BY porcentaje_productivo DESC";
+
+        $params = [
+            ':fecha_inicio' => $fechaInicio,
+            ':fecha_fin' => $fechaFin
+        ];
+
+        if ($userRole === 'supervisor') {
+            $where .= " AND u.supervisor_id = :supervisor_id";
+            $params[':supervisor_id'] = $supervisorId;
+        } elseif ($userRole === 'admin') {
+            $where .= " AND u.rol != 'admin'";
+        } else {
+            sendError('No tienes permisos para esta acción', 403);
+            return;
         }
+
+        if ($empleadoId > 0) {
+            $where .= " AND u.id_usuario = :empleado_id";
+            $params[':empleado_id'] = $empleadoId;
+        }
+
+        $query = "$select $from $where $group $order";
         
         $stmt = $db->prepare($query);
-        
-        if (!$stmt) {
-            logError("Error preparando consulta productividad: " . $db->errorInfo()[2]);
-            sendError('Error en la consulta', 500);
-        }
-        
-        $resultado = $stmt->execute($queryParams);
-        
+        $resultado = $stmt->execute($params);
+
         if (!$resultado) {
-            logError("Error ejecutando consulta productividad: " . print_r($stmt->errorInfo(), true));
+            logError("Error ejecutando consulta: " . print_r($stmt->errorInfo(), true));
             sendError('Error ejecutando consulta', 500);
+            return;
         }
-        
+
         $empleados = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        logError("Empleados con productividad encontrados: " . count($empleados));
-        
-        // Preparar respuesta
+
+        // Prepare response
         $data = [
             'empleados' => $empleados,
             'fecha_inicio' => $fechaInicio,
@@ -587,9 +593,9 @@ function handleProductividadPorEmpleado() {
             'supervisor_id' => $supervisorId,
             'empleado_id' => $empleadoId
         ];
-        
+
         sendJsonResponse(['success' => true, 'data' => $data]);
-        
+
     } catch (Exception $e) {
         logError("Error en productividad por empleado: " . $e->getMessage());
         sendError('Error interno del servidor: ' . $e->getMessage(), 500);
