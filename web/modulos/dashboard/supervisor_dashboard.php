@@ -269,7 +269,6 @@ if ($rol !== 'supervisor') {
                                             <th>Área</th>
                                             <th>Teléfono</th>
                                             <th>Estado</th>
-                                            <th>Supervisor Actual</th>
                                             <th>Acción</th>
                                         </tr>
                                     </thead>

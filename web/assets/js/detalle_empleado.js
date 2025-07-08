@@ -1,74 +1,120 @@
 // File: web/assets/js/detalle_empleado.js
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('[DEBUG] Script detalle_empleado.js iniciado');
+    
     const urlParams = new URLSearchParams(window.location.search);
     const empleadoId = urlParams.get('empleado_id');
     const fechaInicio = urlParams.get('fecha_inicio') || document.getElementById('fecha_inicio').value;
     const fechaFin = urlParams.get('fecha_fin') || document.getElementById('fecha_fin').value;
     
+    console.log('[DEBUG] Parámetros:', {empleadoId, fechaInicio, fechaFin});
+
     if (empleadoId) {
         cargarDatosEmpleado(empleadoId);
         cargarResumenesIniciales(empleadoId, fechaInicio, fechaFin);
+    } else {
+        console.error('[ERROR] No se encontró empleado_id en la URL');
     }
 });
 
 function cargarDatosEmpleado(empleadoId) {
+    console.log(`[DEBUG] Cargando datos del empleado ${empleadoId}`);
+    
     fetch(`/simpro-lite/api/v1/reportes_empleado.php?empleado_id=${empleadoId}&accion=empleado_info`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('[DEBUG] Respuesta del servidor (empleado_info):', response.status);
+            if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+            return response.json();
+        })
         .then(data => {
-            if (data.success) {
-                const empleado = data.data;
-                document.title = `Detalle - ${empleado.nombre_completo}`;
-                
+            console.log('[DEBUG] Datos recibidos (empleado_info):', data);
+            if (data.success && data.data) {
+                document.title = `Detalle - ${data.data.nombre_completo}`;
                 document.querySelectorAll('h1 small').forEach(el => {
-                    el.textContent = `Área: ${empleado.area}`;
+                    el.textContent = `Área: ${data.data.area}`;
                 });
             }
         })
         .catch(error => {
-            console.error('Error al cargar datos del empleado:', error);
+            console.error('[ERROR] Al cargar datos del empleado:', error);
         });
 }
 
 function cargarResumenesIniciales(empleadoId, fechaInicio, fechaFin) {
+    console.log(`[DEBUG] Cargando resúmenes para ${empleadoId} (${fechaInicio} a ${fechaFin})`);
     cargarResumenGeneral(empleadoId, fechaInicio, fechaFin);
     cargarResumenCompleto(empleadoId, fechaInicio, fechaFin);
 }
 
 function cargarResumenGeneral(empleadoId, fechaInicio, fechaFin) {
+    console.log(`[DEBUG] Cargando resumen general para ${empleadoId}`);
+    
     fetch(`/simpro-lite/api/v1/reportes_empleado.php?empleado_id=${empleadoId}&accion=resumen&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('[DEBUG] Respuesta del servidor (resumen):', response.status);
+            if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+            return response.json();
+        })
         .then(data => {
-            if (data.success) {
-                const resumen = data.data;
-                
-                document.getElementById('tiempoTotalHoras').innerHTML = resumen.tiempo_total || '00:00:00';
-                document.getElementById('productividadPercent').innerHTML = `${resumen.porcentaje_productivo}%`;
-                document.getElementById('totalActividades').innerHTML = resumen.total_actividades || '0';
-            }
+            console.log('[DEBUG] Datos recibidos (resumen):', data);
+            
+            // Mostrar los datos aunque estén vacíos
+            const resumen = data.data || {
+                tiempo_total: '00:00:00',
+                porcentaje_productivo: '0.00',
+                total_actividades: '0'
+            };
+            
+            document.getElementById('tiempoTotalHoras').textContent = resumen.tiempo_total;
+            document.getElementById('productividadPercent').textContent = `${resumen.porcentaje_productivo}%`;
+            document.getElementById('totalActividades').textContent = resumen.total_actividades;
+            
+            console.log('[DEBUG] UI actualizada con:', resumen);
         })
         .catch(error => {
-            console.error('Error al cargar resumen general:', error);
-            document.getElementById('tiempoTotalHoras').innerHTML = 'Error';
-            document.getElementById('productividadPercent').innerHTML = 'Error';
-            document.getElementById('totalActividades').innerHTML = 'Error';
+            console.error('[ERROR] Al cargar resumen general:', error);
+            // Mostrar valores por defecto en caso de error
+            document.getElementById('tiempoTotalHoras').textContent = '00:00:00';
+            document.getElementById('productividadPercent').textContent = '0%';
+            document.getElementById('totalActividades').textContent = '0';
         });
 }
 
+
 function cargarResumenCompleto(empleadoId, fechaInicio, fechaFin) {
+    console.log(`Cargando resumen completo para empleado ${empleadoId}`);
+    
     fetch(`/simpro-lite/api/v1/reportes_empleado.php?empleado_id=${empleadoId}&accion=resumen_completo&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('Respuesta de resumen completo:', response);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log('Datos de resumen completo:', data);
             if (data.success) {
                 const resumen = data.data;
-                
+                console.log('Iniciando carga de componentes adicionales...');
                 cargarGraficoDistribucion(empleadoId, fechaInicio, fechaFin);
                 cargarTopApps(empleadoId, fechaInicio, fechaFin);
                 cargarTiempoDiario(empleadoId, fechaInicio, fechaFin);
+            } else {
+                console.error('Error en resumen completo:', data.message);
             }
         })
         .catch(error => {
             console.error('Error al cargar resumen completo:', error);
         });
+}
+
+function mostrarErrorEnUI(tipo) {
+    console.error(`Mostrando error en UI para ${tipo}`);
+    const mensaje = 'Error al cargar datos';
+    document.getElementById('tiempoTotalHoras').innerHTML = mensaje;
+    document.getElementById('productividadPercent').innerHTML = mensaje;
+    document.getElementById('totalActividades').innerHTML = mensaje;
 }
 
 function cargarGraficoDistribucion(empleadoId, fechaInicio, fechaFin) {
