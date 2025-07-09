@@ -878,57 +878,61 @@ async function exportarPDFProfesional(datos) {
             jsPDF
         } = window.jspdf;
         const pdf = new jsPDF('landscape');
-        const margen = 10;
+        const margen = 15;
         let y = margen;
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
         const contentWidth = pageWidth - (margen * 2);
         const centerX = pageWidth / 2;
 
-        // --- ENCABEZADO ---
-        pdf.setFillColor(13, 71, 131); // Azul corporativo
-        pdf.rect(0, 0, pageWidth, 20, 'F');
+        // Cargar el logo
+        const logoBase64 = await cargarLogoComoBase64('/simpro-lite/web/assets/img/logo_nav_gm.png');
 
-        // Logo (opcional)
-        // pdf.addImage(logoData, 'PNG', margen, 5, 30, 10);
+        // --- ENCABEZADO ---
+        // Logo
+        pdf.addImage(logoBase64, 'PNG', margen, 10, 60, 15);
 
         // Título
         pdf.setFontSize(16);
-        pdf.setTextColor(255, 255, 255);
+        pdf.setTextColor(44, 57, 66); // Gris oscuro
         pdf.setFont('helvetica', 'bold');
-        pdf.text('REPORTE DE PRODUCTIVIDAD - GM INGENIEROS Y CONSULTORES S.A.C.', centerX, 15, {
+        pdf.text('REPORTE DE PRODUCTIVIDAD', centerX, 20, {
             align: 'center'
         });
 
+        pdf.setFontSize(12);
+        pdf.text('GM INGENIEROS Y CONSULTORES S.A.C.', centerX, 27, {
+            align: 'center'
+        });
+
+        // Línea decorativa
+        pdf.setDrawColor(123, 203, 72); // Verde
+        pdf.setLineWidth(0.5);
+        pdf.line(margen, 32, pageWidth - margen, 32);
+
         // --- INFORMACIÓN GENERAL ---
-        y = 30;
-        pdf.setTextColor(0, 0, 0);
+        y = 40;
         pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(44, 57, 66); // Gris oscuro
 
         // Cuadro de información
+        pdf.setFillColor(242, 242, 242); // Gris claro
+        pdf.roundedRect(margen, y, contentWidth, 20, 2, 2, 'F');
         pdf.setDrawColor(200, 200, 200);
-        pdf.setFillColor(240, 240, 240);
-        pdf.roundedRect(margen, y, contentWidth, 25, 2, 2, 'FD');
+        pdf.roundedRect(margen, y, contentWidth, 20, 2, 2, 'D');
 
         // Texto informativo
         pdf.text(`Empleado: ${datos.nombreEmpleado}`, margen + 5, y + 8);
         pdf.text(`Período: ${formatearFecha(datos.fechaInicio)} - ${formatearFecha(datos.fechaFin)}`, margen + 5,
-            y + 16);
+            y + 15);
         pdf.text(`Generado: ${datos.fechaGeneracion}`, pageWidth - margen - 5, y + 8, {
             align: 'right'
         });
 
-        y += 35;
+        y += 30;
 
         // --- GRÁFICO DE PRODUCTIVIDAD ---
         if (datos.chartImage) {
-            // Verificar espacio antes de agregar nueva sección
-            if (y > pageHeight - 100) {
-                pdf.addPage('landscape');
-                y = margen;
-            }
-
             pdf.setFontSize(12);
             pdf.setFont('helvetica', 'bold');
             pdf.text('ANÁLISIS DE PRODUCTIVIDAD POR EMPLEADO', centerX, y, {
@@ -945,7 +949,6 @@ async function exportarPDFProfesional(datos) {
             }
         }
 
-
         // --- TABLA COMPARATIVA ---
         if (y > pageHeight - 100) {
             pdf.addPage('landscape');
@@ -960,92 +963,80 @@ async function exportarPDFProfesional(datos) {
         y += 10;
 
         if (datos.comparativo.empleados.length > 0) {
-            // Configuración de la tabla
-            const columnas = [{
-                    header: 'Empleado',
-                    width: 60
-                },
-                {
-                    header: 'Área',
-                    width: 40
-                },
-                {
-                    header: 'Tiempo Total',
-                    width: 30
-                },
-                {
-                    header: 'Días Activos',
-                    width: 25
-                },
-                {
-                    header: 'Productividad',
-                    width: 45
-                }, // Aumentado para barra + porcentaje
-                {
-                    header: 'Estado',
-                    width: 30
-                }
-            ];
+            // Encabezados de tabla
+            pdf.setFillColor(44, 57, 66); // Gris oscuro
+            pdf.rect(margen, y, contentWidth, 10, 'F');
+            pdf.setTextColor(242, 242, 242); // Gris claro
+
+            const columnWidths = [70, 40, 30, 25, 45, 30];
+            let x = margen;
 
             // Encabezados
-            pdf.setFontSize(9);
-            pdf.setFont('helvetica', 'bold');
-            let x = margen;
-            columnas.forEach(col => {
-                pdf.text(col.header, x, y);
-                x += col.width;
+            const headers = ["Empleado", "Área", "Tiempo Total", "Días Activos", "Productividad", "Estado"];
+            headers.forEach((header, i) => {
+                pdf.text(header, x + columnWidths[i] / 2, y + 7, {
+                    align: 'center'
+                });
+                x += columnWidths[i];
             });
-            y += 6;
 
-            // Línea divisoria
-            pdf.setDrawColor(100, 100, 100);
-            pdf.line(margen, y, pageWidth - margen, y);
             y += 10;
 
             // Filas de datos
             pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(44, 57, 66); // Gris oscuro
+
             datos.comparativo.empleados.forEach(empleado => {
-                if (y > pageHeight - 30) {
+                if (y > pageHeight - 20) {
                     pdf.addPage('landscape');
-                    y = margen + 20;
+                    y = margen + 10;
                 }
 
                 const prod = parseFloat(empleado.porcentaje_productivo) || 0;
                 const tiempoTotal = empleado.tiempo_total_mes || '00:00:00';
                 const diasActivos = empleado.dias_activos_mes || 0;
 
-                // Determinar estado
-                let estado = '';
-                let colorEstado = [0, 0, 0];
+                // Determinar estado y color
+                let estado = "";
+                let colorEstado = [44, 57, 66]; // Gris oscuro por defecto
+
                 if (prod >= 80) {
-                    estado = 'EXCELENTE';
-                    colorEstado = [0, 128, 0]; // Verde
+                    estado = "EXCELENTE";
+                    colorEstado = [0, 128, 0]; // Verde oscuro
                 } else if (prod >= 60) {
-                    estado = 'BUENO';
-                    colorEstado = [70, 130, 180]; // Azul
+                    estado = "BUENO";
+                    colorEstado = [123, 203, 72]; // Verde corporativo
                 } else if (prod >= 40) {
-                    estado = 'REGULAR';
-                    colorEstado = [218, 165, 32]; // Amarillo
+                    estado = "REGULAR";
+                    colorEstado = [255, 193, 7]; // Amarillo
                 } else {
-                    estado = 'BAJO';
+                    estado = "BAJO";
                     colorEstado = [220, 53, 69]; // Rojo
                 }
 
-                // Datos básicos
+                // Dibujar fila
                 x = margen;
-                pdf.text(empleado.nombre_completo.substring(0, 25), x, y);
-                x += columnas[0].width;
-                pdf.text(empleado.area || 'N/A', x, y);
-                x += columnas[1].width;
-                pdf.text(tiempoTotal, x, y);
-                x += columnas[2].width;
-                pdf.text(diasActivos.toString(), x, y);
-                x += columnas[3].width;
 
-                // Barra de progreso con porcentaje superpuesto
+                // Empleado
+                pdf.text(empleado.nombre_completo.substring(0, 25), x + 3, y + 7);
+                x += columnWidths[0];
+
+                // Área
+                pdf.text(empleado.area || 'N/A', x + 3, y + 7);
+                x += columnWidths[1];
+
+                // Tiempo Total
+                pdf.text(tiempoTotal, x + 3, y + 7);
+                x += columnWidths[2];
+
+                // Días Activos
+                pdf.text(diasActivos.toString(), x + 3, y + 7);
+                x += columnWidths[3];
+
+                // Barra de productividad
                 const anchoBarra = 35;
                 const alturaBarra = 6;
-                const posYBarra = y - 4;
+                const posYBarra = y + 4;
 
                 // Fondo de la barra
                 pdf.setDrawColor(200, 200, 200);
@@ -1057,23 +1048,26 @@ async function exportarPDFProfesional(datos) {
                     pdf.rect(x, posYBarra, anchoBarra * (prod / 100), alturaBarra, 'F');
                 }
 
-                // Texto del porcentaje centrado en la barra
+                // Texto del porcentaje
                 pdf.setFontSize(8);
-                pdf.setTextColor(0, 0, 0); // Negro para mejor contraste
-                const textWidth = pdf.getStringUnitWidth(`${prod.toFixed(1)}%`) * pdf.internal
-                    .getFontSize() / pdf.internal.scaleFactor;
-                const textX = x + (anchoBarra - textWidth) / 2;
-                pdf.text(`${prod.toFixed(1)}%`, textX, y);
-                pdf.setFontSize(10); // Restaurar tamaño de fuente
+                pdf.setTextColor(44, 57, 66); // Gris oscuro
+                pdf.text(`${prod.toFixed(1)}%`, x + anchoBarra / 2, y + 7, {
+                    align: 'center'
+                });
+                pdf.setFontSize(10);
 
-                x += columnas[4].width;
+                x += columnWidths[4];
 
                 // Estado con color
                 pdf.setTextColor(...colorEstado);
-                pdf.text(estado, x, y);
-                pdf.setTextColor(0, 0, 0);
+                pdf.text(estado, x + 3, y + 7);
+                pdf.setTextColor(44, 57, 66); // Gris oscuro
 
-                y += 8;
+                // Línea divisoria
+                pdf.setDrawColor(242, 242, 242); // Gris claro
+                pdf.line(margen, y + 10, pageWidth - margen, y + 10);
+
+                y += 10;
             });
         } else {
             pdf.setFontSize(10);
@@ -1083,6 +1077,7 @@ async function exportarPDFProfesional(datos) {
         }
 
         y += 15;
+
         // --- DETALLE DE TIEMPO TRABAJADO ---
         if (y > pageHeight - 100) {
             pdf.addPage('landscape');
@@ -1096,53 +1091,31 @@ async function exportarPDFProfesional(datos) {
         });
         y += 10;
 
-        // Obtener todos los empleados (incluso sin registros)
-        const todosEmpleados = datos.comparativo.empleados || [];
-
         if (datos.tiempoTrabajado.dias.length > 0) {
-            // Configurar columnas
-            const columnasDiarias = [{
-                    header: 'Empleado',
-                    width: 50
-                },
-                {
-                    header: 'Fecha',
-                    width: 30
-                },
-                {
-                    header: 'Tiempo Total',
-                    width: 30
-                },
-                {
-                    header: 'Tiempo Productivo',
-                    width: 30
-                },
-                {
-                    header: '% Productivo',
-                    width: 25
-                },
-                {
-                    header: 'Estado',
-                    width: 25
-                }
-            ];
+            // Encabezados de tabla
+            pdf.setFillColor(44, 57, 66); // Gris oscuro
+            pdf.rect(margen, y, contentWidth, 10, 'F');
+            pdf.setTextColor(242, 242, 242); // Gris claro
+
+            const columnWidths = [50, 30, 30, 30, 25, 25];
+            let x = margen;
 
             // Encabezados
-            pdf.setFontSize(9);
-            pdf.setFont('helvetica', 'bold');
-            let x = margen;
-            columnasDiarias.forEach(col => {
-                pdf.text(col.header, x, y);
-                x += col.width;
+            const headers = ["Empleado", "Fecha", "Tiempo Total", "Tiempo Productivo", "% Productivo", "Estado"];
+            headers.forEach((header, i) => {
+                pdf.text(header, x + columnWidths[i] / 2, y + 7, {
+                    align: 'center'
+                });
+                x += columnWidths[i];
             });
-            y += 6;
 
-            // Línea divisoria
-            pdf.setDrawColor(100, 100, 100);
-            pdf.line(margen, y, pageWidth - margen, y);
             y += 10;
 
-            // Agrupar días por empleado
+            // Filas de datos
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(44, 57, 66); // Gris oscuro
+
+            // Agrupar por empleado
             const datosPorEmpleado = {};
             datos.tiempoTrabajado.dias.forEach(dia => {
                 if (!datosPorEmpleado[dia.nombre_empleado]) {
@@ -1151,64 +1124,71 @@ async function exportarPDFProfesional(datos) {
                 datosPorEmpleado[dia.nombre_empleado].push(dia);
             });
 
-            // Filas de datos (solo empleados con registros)
-            pdf.setFont('helvetica', 'normal');
+            // Mostrar datos
             Object.entries(datosPorEmpleado).forEach(([nombreEmpleado, dias]) => {
                 // Encabezado de empleado
                 pdf.setFont('helvetica', 'bold');
-                pdf.text(nombreEmpleado, margen, y);
-                y += 8;
+                pdf.text(nombreEmpleado, margen, y + 7);
+                y += 10;
                 pdf.setFont('helvetica', 'normal');
 
                 dias.forEach(dia => {
-                    if (y > pageHeight - 30) {
+                    if (y > pageHeight - 20) {
                         pdf.addPage('landscape');
-                        y = margen + 20;
+                        y = margen + 10;
                     }
 
-                    const tiempoTotal = formatTime(dia.tiempo_total) || '00:00:00';
-                    const tiempoProd = formatTime(dia.tiempo_productivo) || '00:00:00';
+                    const tiempoTotal = formatTime(dia.tiempo_total) || "00:00:00";
+                    const tiempoProd = formatTime(dia.tiempo_productivo) || "00:00:00";
                     const porcentaje = dia.tiempo_productivo > 0 ?
-                        ((dia.tiempo_productivo / dia.tiempo_total) * 100).toFixed(1) : '0.0';
+                        ((dia.tiempo_productivo / dia.tiempo_total) * 100).toFixed(1) : "0.0";
 
-                    // Determinar estado
-                    let estado = '';
-                    let colorEstado = [0, 0, 0];
+                    // Determinar estado y color
+                    let estado = "";
+                    let colorEstado = [44, 57, 66]; // Gris oscuro por defecto
                     const porcentajeNum = parseFloat(porcentaje);
 
                     if (porcentajeNum >= 80) {
-                        estado = 'ALTO';
-                        colorEstado = [0, 128, 0];
+                        estado = "ALTO";
+                        colorEstado = [123, 203, 72]; // Verde corporativo
                     } else if (porcentajeNum >= 60) {
-                        estado = 'MEDIO';
-                        colorEstado = [70, 130, 180];
+                        estado = "MEDIO";
+                        colorEstado = [154, 205, 50]; // Verde más claro
                     } else if (porcentajeNum >= 40) {
-                        estado = 'BAJO';
-                        colorEstado = [218, 165, 32];
+                        estado = "BAJO";
+                        colorEstado = [255, 193, 7]; // Amarillo
                     } else {
-                        estado = 'CRÍTICO';
-                        colorEstado = [220, 53, 69];
+                        estado = "CRÍTICO";
+                        colorEstado = [220, 53, 69]; // Rojo
                     }
 
                     // Datos de la fila
                     x = margen + 10;
-                    pdf.text(dia.fecha || 'N/A', x, y);
-                    x += columnasDiarias[1].width;
-                    pdf.text(tiempoTotal, x, y);
-                    x += columnasDiarias[2].width;
-                    pdf.text(tiempoProd, x, y);
-                    x += columnasDiarias[3].width;
-                    pdf.text(`${porcentaje}%`, x, y);
-                    x += columnasDiarias[4].width;
+                    pdf.text(dia.fecha || 'N/A', x, y + 7);
+                    x += columnWidths[1];
+
+                    pdf.text(tiempoTotal, x, y + 7);
+                    x += columnWidths[2];
+
+                    pdf.text(tiempoProd, x, y + 7);
+                    x += columnWidths[3];
+
+                    pdf.text(`${porcentaje}%`, x, y + 7);
+                    x += columnWidths[4];
 
                     // Estado con color
                     pdf.setTextColor(...colorEstado);
-                    pdf.text(estado, x, y);
-                    pdf.setTextColor(0, 0, 0);
+                    pdf.text(estado, x, y + 7);
+                    pdf.setTextColor(44, 57, 66); // Gris oscuro
 
-                    y += 8;
+                    // Línea divisoria
+                    pdf.setDrawColor(242, 242, 242); // Gris claro
+                    pdf.line(margen, y + 10, pageWidth - margen, y + 10);
+
+                    y += 10;
                 });
 
+                // Espacio entre empleados
                 y += 5;
             });
         } else {
@@ -1218,7 +1198,7 @@ async function exportarPDFProfesional(datos) {
             y += 8;
         }
 
-        // --- RESUMEN COMPLETO DE TODOS LOS EMPLEADOS ---
+        // --- RESUMEN ESTADÍSTICO ---
         if (y > pageHeight - 100) {
             pdf.addPage('landscape');
             y = margen;
@@ -1226,101 +1206,85 @@ async function exportarPDFProfesional(datos) {
 
         pdf.setFontSize(12);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('RESUMEN COMPLETO DE PRODUCTIVIDAD (TODOS LOS EMPLEADOS)', centerX, y, {
+        pdf.text('RESUMEN ESTADÍSTICO', centerX, y, {
             align: 'center'
         });
         y += 15;
 
-        // Crear mapa de datos por empleado para búsqueda rápida
-        const mapaProductividad = {};
-        if (datos.tiempoTrabajado.dias && datos.tiempoTrabajado.dias.length > 0) {
-            datos.tiempoTrabajado.dias.forEach(dia => {
-                if (!mapaProductividad[dia.nombre_empleado]) {
-                    mapaProductividad[dia.nombre_empleado] = {
-                        total: 0,
-                        productivo: 0
-                    };
-                }
-                mapaProductividad[dia.nombre_empleado].total += Number(dia.tiempo_total) || 0;
-                mapaProductividad[dia.nombre_empleado].productivo += Number(dia.tiempo_productivo) || 0;
-            });
-        }
+        if (datos.comparativo.empleados.length > 0) {
+            // Calcular estadísticas
+            const productividades = datos.comparativo.empleados.map(e => parseFloat(e.porcentaje_productivo) || 0);
+            const promedio = productividades.reduce((a, b) => a + b, 0) / productividades.length;
+            const maximo = Math.max(...productividades);
+            const minimo = Math.min(...productividades);
+            const desviacion = Math.sqrt(productividades.map(x => Math.pow(x - promedio, 2)).reduce((a, b) => a +
+                b) / productividades.length);
 
-        // Mostrar todos los empleados, incluso sin registros
-        pdf.setFont('helvetica', 'normal');
-        todosEmpleados.forEach(empleado => {
-            if (y > pageHeight - 30) {
-                pdf.addPage('landscape');
-                y = margen;
-            }
+            // Distribución
+            const excelente = productividades.filter(p => p >= 80).length;
+            const bueno = productividades.filter(p => p >= 60 && p < 80).length;
+            const regular = productividades.filter(p => p >= 40 && p < 60).length;
+            const bajo = productividades.filter(p => p < 40).length;
 
-            const nombre = empleado.nombre_completo || 'Nombre no disponible';
-            const area = empleado.area || 'Sin área asignada';
+            // Tabla de estadísticas
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'bold');
 
-            // Obtener datos de productividad (si existen)
-            const datosEmpleado = mapaProductividad[nombre] || {
-                total: 0,
-                productivo: 0
-            };
-            const totalSegundos = datosEmpleado.total;
-            const totalProductivo = datosEmpleado.productivo;
+            // Encabezados
+            pdf.text('Métrica', margen, y);
+            pdf.text('Valor', margen + 60, y);
+            pdf.text('Distribución Productividad', margen + 120, y);
+            pdf.text('Cantidad', margen + 240, y);
+            pdf.text('%', margen + 290, y);
 
-            // Calcular porcentaje
-            let porcentaje = 0;
-            let estado = 'SIN REGISTROS';
-            let colorEstado = [150, 150, 150]; // Gris para sin registros
-
-            if (totalSegundos > 0) {
-                porcentaje = (totalProductivo / totalSegundos) * 100;
-
-                // Determinar estado solo si hay registros
-                if (porcentaje >= 80) {
-                    estado = 'ALTO';
-                    colorEstado = [0, 128, 0];
-                } else if (porcentaje >= 60) {
-                    estado = 'MEDIO';
-                    colorEstado = [70, 130, 180];
-                } else if (porcentaje >= 40) {
-                    estado = 'BAJO';
-                    colorEstado = [218, 165, 32];
-                } else {
-                    estado = 'CRÍTICO';
-                    colorEstado = [220, 53, 69];
-                }
-            }
-
-            // Mostrar línea de resumen
-            pdf.setTextColor(0, 0, 0);
-            pdf.text(`${nombre} (${area}):`, margen, y);
-
-            if (totalSegundos > 0) {
-                pdf.text(`${formatTime(totalSegundos)} totales`, margen + 100, y);
-                pdf.text(`${porcentaje.toFixed(1)}% productivo`, margen + 170, y);
-                pdf.setTextColor(...colorEstado);
-                pdf.text(estado, margen + 240, y);
-            } else {
-                pdf.setTextColor(...colorEstado);
-                pdf.text('SIN REGISTROS DE ACTIVIDAD', margen + 100, y);
-            }
-
-            pdf.setTextColor(0, 0, 0);
             y += 8;
-        });
+            pdf.setFont('helvetica', 'normal');
 
-        // Añadir nota importante sobre empleados sin actividad
-        y += 10;
-        pdf.setFontSize(10);
-        pdf.setTextColor(220, 53, 69); // Rojo para alerta
-        pdf.text('NOTA: Los empleados sin registros de actividad requieren revisión inmediata.', margen, y);
-        pdf.setTextColor(0, 0, 0);
+            // Datos
+            pdf.text('Promedio', margen, y);
+            pdf.text(`${promedio.toFixed(2)}%`, margen + 60, y);
+            pdf.text('Excelente (≥80%)', margen + 120, y);
+            pdf.text(excelente.toString(), margen + 240, y);
+            pdf.text(`${(excelente / productividades.length * 100).toFixed(1)}%`, margen + 290, y);
+
+            y += 8;
+            pdf.text('Máximo', margen, y);
+            pdf.text(`${maximo.toFixed(2)}%`, margen + 60, y);
+            pdf.text('Bueno (60-79%)', margen + 120, y);
+            pdf.text(bueno.toString(), margen + 240, y);
+            pdf.text(`${(bueno / productividades.length * 100).toFixed(1)}%`, margen + 290, y);
+
+            y += 8;
+            pdf.text('Mínimo', margen, y);
+            pdf.text(`${minimo.toFixed(2)}%`, margen + 60, y);
+            pdf.text('Regular (40-59%)', margen + 120, y);
+            pdf.text(regular.toString(), margen + 240, y);
+            pdf.text(`${(regular / productividades.length * 100).toFixed(1)}%`, margen + 290, y);
+
+            y += 8;
+            pdf.text('Desviación Estándar', margen, y);
+            pdf.text(`${desviacion.toFixed(2)}%`, margen + 60, y);
+            pdf.text('Bajo (<40%)', margen + 120, y);
+            pdf.text(bajo.toString(), margen + 240, y);
+            pdf.text(`${(bajo / productividades.length * 100).toFixed(1)}%`, margen + 290, y);
+        }
 
         // --- PIE DE PÁGINA ---
         pdf.setFontSize(8);
         pdf.setTextColor(100, 100, 100);
         pdf.text('Sistema de Monitoreo de Productividad Remota - GM Ingenieros y Consultores S.A.C.',
-            centerX, pageHeight - 5, {
+            centerX, pageHeight - 10, {
                 align: 'center'
             });
+
+        // Número de página
+        const pageCount = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            pdf.setPage(i);
+            pdf.text(`Página ${i} de ${pageCount}`, pageWidth - margen - 20, pageHeight - 10, {
+                align: 'right'
+            });
+        }
 
         // Guardar PDF
         const nombreArchivo =
@@ -1336,6 +1300,7 @@ async function exportarPDFProfesional(datos) {
         console.error('Error en exportarPDFProfesional:', error);
     }
 }
+
 async function exportarExcelAnalitico(datos) {
     try {
         if (typeof XLSX === 'undefined') {
@@ -1346,47 +1311,54 @@ async function exportarExcelAnalitico(datos) {
 
         const wb = XLSX.utils.book_new();
 
-        // Configuración de estilos
+        // Convertir el logo a base64 (debes cargarlo previamente)
+        const logoBase64 = await cargarLogoComoBase64('/simpro-lite/web/assets/img/logo_nav_gm.png');
+
+        // Configuración de estilos corporativos
         const estilos = {
             encabezado: {
+                fill: {
+                    patternType: 'solid',
+                    fgColor: {
+                        rgb: "2C3942"
+                    } // Gris oscuro
+                },
                 font: {
                     bold: true,
                     color: {
-                        rgb: "FFFFFF"
-                    }
-                },
-                fill: {
-                    fgColor: {
-                        rgb: "0D4783"
-                    }
+                        rgb: "F2F2F2"
+                    }, // Gris claro
+                    name: 'Arial',
+                    size: 12
                 },
                 alignment: {
                     horizontal: 'center',
-                    vertical: 'center'
+                    vertical: 'center',
+                    wrapText: true
                 },
                 border: {
                     top: {
                         style: 'thin',
                         color: {
-                            rgb: "000000"
+                            rgb: "7BCB48"
                         }
-                    },
+                    }, // Verde
                     bottom: {
                         style: 'thin',
                         color: {
-                            rgb: "000000"
+                            rgb: "7BCB48"
                         }
                     },
                     left: {
                         style: 'thin',
                         color: {
-                            rgb: "000000"
+                            rgb: "7BCB48"
                         }
                     },
                     right: {
                         style: 'thin',
                         color: {
-                            rgb: "000000"
+                            rgb: "7BCB48"
                         }
                     }
                 }
@@ -1394,117 +1366,136 @@ async function exportarExcelAnalitico(datos) {
             titulo: {
                 font: {
                     bold: true,
+                    color: {
+                        rgb: "2C3942"
+                    }, // Gris oscuro
                     size: 14
                 },
                 alignment: {
                     horizontal: 'center'
                 }
             },
-            formatoCondicional: {
-                ref: "E10:E1000",
-                rules: [{
-                        type: "cellIs",
-                        operator: "greaterThanOrEqual",
-                        value: 80,
-                        style: {
-                            fill: {
-                                fgColor: {
-                                    rgb: "C6EFCE"
-                                }
-                            },
-                            font: {
-                                color: {
-                                    rgb: "006100"
-                                }
-                            }
+            subencabezado: {
+                fill: {
+                    patternType: 'solid',
+                    fgColor: {
+                        rgb: "7BCB48"
+                    } // Verde
+                },
+                font: {
+                    bold: true,
+                    color: {
+                        rgb: "FFFFFF"
+                    }, // Blanco
+                    name: 'Arial',
+                    size: 10
+                }
+            },
+            datos: {
+                font: {
+                    name: 'Arial',
+                    size: 10,
+                    color: {
+                        rgb: "2C3942"
+                    } // Gris oscuro
+                },
+                alignment: {
+                    horizontal: 'left',
+                    vertical: 'center'
+                }
+            },
+            bordes: {
+                border: {
+                    top: {
+                        style: 'thin',
+                        color: {
+                            rgb: "D9D9D9"
                         }
                     },
-                    {
-                        type: "cellIs",
-                        operator: "greaterThanOrEqual",
-                        value: 60,
-                        style: {
-                            fill: {
-                                fgColor: {
-                                    rgb: "BDD7EE"
-                                }
-                            },
-                            font: {
-                                color: {
-                                    rgb: "000080"
-                                }
-                            }
+                    bottom: {
+                        style: 'thin',
+                        color: {
+                            rgb: "D9D9D9"
                         }
                     },
-                    {
-                        type: "cellIs",
-                        operator: "greaterThanOrEqual",
-                        value: 40,
-                        style: {
-                            fill: {
-                                fgColor: {
-                                    rgb: "FFEB9C"
-                                }
-                            },
-                            font: {
-                                color: {
-                                    rgb: "9C5700"
-                                }
-                            }
+                    left: {
+                        style: 'thin',
+                        color: {
+                            rgb: "D9D9D9"
                         }
                     },
-                    {
-                        type: "cellIs",
-                        operator: "lessThan",
-                        value: 40,
-                        style: {
-                            fill: {
-                                fgColor: {
-                                    rgb: "FFC7CE"
-                                }
-                            },
-                            font: {
-                                color: {
-                                    rgb: "9C0006"
-                                }
-                            }
+                    right: {
+                        style: 'thin',
+                        color: {
+                            rgb: "D9D9D9"
                         }
                     }
-                ]
+                }
             }
         };
 
         // --- HOJA 1: RESUMEN EJECUTIVO ---
         const resumenData = [
-            ["REPORTE DE PRODUCTIVIDAD - GM INGENIEROS Y CONSULTORES S.A.C."],
-            [""],
-            ["Empleado:", datos.nombreEmpleado],
-            ["Período:", `${formatearFecha(datos.fechaInicio)} - ${formatearFecha(datos.fechaFin)}`],
-            ["Generado:", datos.fechaGeneracion],
-            [""],
-            ["RESUMEN EJECUTIVO", "", "", "", ""],
+            ["REPORTE DE PRODUCTIVIDAD", "", "", "", "", ""],
+            ["GM INGENIEROS Y CONSULTORES S.A.C.", "", "", "", "", ""],
+            ["", "", "", "", "", ""],
+            ["Empleado:", datos.nombreEmpleado, "", "Período:",
+                `${formatearFecha(datos.fechaInicio)} - ${formatearFecha(datos.fechaFin)}`, ""
+            ],
+            ["Generado:", datos.fechaGeneracion, "", "Supervisor:", datos.supervisorNombre || "N/A", ""],
+            ["", "", "", "", "", ""],
+            ["RESUMEN EJECUTIVO", "", "", "", "", ""],
             ["Empleado", "Área", "Tiempo Total", "Días Activos", "Productividad", "Estado"],
             ...datos.comparativo.empleados.map(empleado => {
                 const prod = parseFloat(empleado.porcentaje_productivo) || 0;
                 let estado = "";
+                let colorEstado = "";
 
-                if (prod >= 80) estado = "EXCELENTE";
-                else if (prod >= 60) estado = "BUENO";
-                else if (prod >= 40) estado = "REGULAR";
-                else estado = "BAJO";
+                if (prod >= 80) {
+                    estado = "EXCELENTE";
+                    colorEstado = "2C3942"; // Gris oscuro
+                } else if (prod >= 60) {
+                    estado = "BUENO";
+                    colorEstado = "7BCB48"; // Verde
+                } else if (prod >= 40) {
+                    estado = "REGULAR";
+                    colorEstado = "FFC000"; // Amarillo
+                } else {
+                    estado = "BAJO";
+                    colorEstado = "FF0000"; // Rojo
+                }
 
                 return [
                     empleado.nombre_completo,
                     empleado.area || "N/A",
                     empleado.tiempo_total_mes || "00:00:00",
                     empleado.dias_activos_mes || 0,
-                    prod,
+                    prod / 100, // Para formato de porcentaje
                     estado
                 ];
             })
         ];
 
         const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+
+        // Aplicar estilos
+        wsResumen["!cols"] = [{
+                width: 30
+            }, {
+                width: 20
+            }, {
+                width: 15
+            },
+            {
+                width: 15
+            }, {
+                width: 15
+            }, {
+                width: 15
+            }
+        ];
+
+        // Combinar celdas para títulos
         wsResumen["!merges"] = [{
                 s: {
                     r: 0,
@@ -1512,39 +1503,127 @@ async function exportarExcelAnalitico(datos) {
                 },
                 e: {
                     r: 0,
-                    c: 4
+                    c: 5
                 }
             },
             {
                 s: {
-                    r: 7,
+                    r: 1,
                     c: 0
                 },
                 e: {
-                    r: 7,
-                    c: 4
+                    r: 1,
+                    c: 5
+                }
+            },
+            {
+                s: {
+                    r: 6,
+                    c: 0
+                },
+                e: {
+                    r: 6,
+                    c: 5
                 }
             }
         ];
-        wsResumen["!conditionalFormatting"] = [estilos.formatoCondicional];
+
+        // Formato condicional para productividad
+        wsResumen["!conditionalFormatting"] = [{
+            ref: "E10:E1000",
+            rules: [{
+                    type: "cellIs",
+                    operator: "greaterThanOrEqual",
+                    value: 0.8,
+                    style: {
+                        fill: {
+                            fgColor: {
+                                rgb: "E6F4EA"
+                            }
+                        }, // Verde muy claro
+                        font: {
+                            color: {
+                                rgb: "2C3942"
+                            }
+                        }
+                    }
+                },
+                {
+                    type: "cellIs",
+                    operator: "greaterThanOrEqual",
+                    value: 0.6,
+                    style: {
+                        fill: {
+                            fgColor: {
+                                rgb: "F0F8E6"
+                            }
+                        },
+                        font: {
+                            color: {
+                                rgb: "2C3942"
+                            }
+                        }
+                    }
+                },
+                {
+                    type: "cellIs",
+                    operator: "greaterThanOrEqual",
+                    value: 0.4,
+                    style: {
+                        fill: {
+                            fgColor: {
+                                rgb: "FFF8E1"
+                            }
+                        },
+                        font: {
+                            color: {
+                                rgb: "2C3942"
+                            }
+                        }
+                    }
+                },
+                {
+                    type: "cellIs",
+                    operator: "lessThan",
+                    value: 0.4,
+                    style: {
+                        fill: {
+                            fgColor: {
+                                rgb: "FFEBEE"
+                            }
+                        },
+                        font: {
+                            color: {
+                                rgb: "2C3942"
+                            }
+                        }
+                    }
+                }
+            ]
+        }];
+
+        // Agregar logo (requiere manipulación adicional con librerías como ExcelJS)
+        // En XLSX.js es más complicado, pero podemos agregar una celda con referencia al logo
+
         XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
         // --- HOJA 2: DETALLE DIARIO ---
         if (datos.tiempoTrabajado.dias.length > 0) {
             const detalleData = [
                 ["DETALLE DIARIO DE PRODUCTIVIDAD"],
-                [""],
+                ["", "", "", "", "", ""],
                 ["Empleado", "Fecha", "Tiempo Total", "Tiempo Productivo", "% Productividad", "Estado"],
                 ...datos.tiempoTrabajado.dias.map(dia => {
                     const tiempoTotal = formatTime(dia.tiempo_total) || "00:00:00";
                     const tiempoProd = formatTime(dia.tiempo_productivo) || "00:00:00";
                     const porcentaje = dia.tiempo_productivo > 0 ?
-                        ((dia.tiempo_productivo / dia.tiempo_total) * 100).toFixed(1) : 0;
+                        (dia.tiempo_productivo / dia.tiempo_total) : 0;
                     let estado = "";
+                    let colorEstado = "";
 
-                    if (porcentaje >= 80) estado = "ALTO";
-                    else if (porcentaje >= 60) estado = "MEDIO";
-                    else if (porcentaje >= 40) estado = "BAJO";
+                    if (porcentaje >= 0.8) estado = "ALTO";
+                    else if (porcentaje >= 0.6) estado = "MEDIO";
+                    else if (porcentaje >= 0.4) estado = "BAJO";
                     else estado = "CRÍTICO";
 
                     return [
@@ -1559,6 +1638,24 @@ async function exportarExcelAnalitico(datos) {
             ];
 
             const wsDetalle = XLSX.utils.aoa_to_sheet(detalleData);
+
+            // Aplicar estilos
+            wsDetalle["!cols"] = [{
+                    width: 25
+                }, {
+                    width: 12
+                }, {
+                    width: 15
+                },
+                {
+                    width: 15
+                }, {
+                    width: 15
+                }, {
+                    width: 15
+                }
+            ];
+
             wsDetalle["!merges"] = [{
                 s: {
                     r: 0,
@@ -1569,97 +1666,94 @@ async function exportarExcelAnalitico(datos) {
                     c: 5
                 }
             }];
-            wsDetalle["!conditionalFormatting"] = [{
-                ref: "E4:E1000",
-                rules: estilos.formatoCondicional.rules
-            }];
+
             XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle Diario");
         }
 
-        // --- HOJA 3: DATOS COMPLETOS (TODOS LOS DÍAS) ---
-        const {
-            startDate,
-            endDate,
-            allDays
-        } = generarRangoFechas(datos.fechaInicio, datos.fechaFin);
-        const datosPorEmpleado = agruparDatosPorEmpleado(datos.tiempoTrabajado.dias);
-
-        const datosCompletos = [
-            ["REPORTE COMPLETO POR DÍA"],
-            [""],
-            ["Empleado", "Área", ...allDays],
-            ...datos.comparativo.empleados.map(empleado => {
-                const row = [empleado.nombre_completo, empleado.area || "N/A"];
-                allDays.forEach(fecha => {
-                    const dia = datosPorEmpleado[empleado.nombre_completo]?. [fecha];
-                    row.push(dia ? ((dia.tiempo_productivo / dia.tiempo_total) * 100).toFixed(1) :
-                        0);
-                });
-                return row;
-            })
+        // --- HOJA 3: RESUMEN ESTADÍSTICO ---
+        const estadisticasData = [
+            ["RESUMEN ESTADÍSTICO"],
+            ["", "", "", "", "", ""],
+            ["Métrica", "Valor", "", "Distribución Productividad", "Cantidad", "%"],
+            ["Promedio", {
+                    f: `AVERAGE(Resumen!E10:E${9+datos.comparativo.empleados.length})`
+                }, "", "Excelente (≥80%)",
+                {
+                    f: `COUNTIF(Resumen!E10:E${9+datos.comparativo.empleados.length},">=0.8")`
+                },
+                {
+                    f: `E4/${datos.comparativo.empleados.length}`
+                }
+            ],
+            ["Máximo", {
+                    f: `MAX(Resumen!E10:E${9+datos.comparativo.empleados.length})`
+                }, "", "Bueno (60-79%)",
+                {
+                    f: `COUNTIFS(Resumen!E10:E${9+datos.comparativo.empleados.length},">=0.6",Resumen!E10:E${9+datos.comparativo.empleados.length},"<0.8")`
+                },
+                {
+                    f: `E5/${datos.comparativo.empleados.length}`
+                }
+            ],
+            ["Mínimo", {
+                    f: `MIN(Resumen!E10:E${9+datos.comparativo.empleados.length})`
+                }, "", "Regular (40-59%)",
+                {
+                    f: `COUNTIFS(Resumen!E10:E${9+datos.comparativo.empleados.length},">=0.4",Resumen!E10:E${9+datos.comparativo.empleados.length},"<0.6")`
+                },
+                {
+                    f: `E6/${datos.comparativo.empleados.length}`
+                }
+            ],
+            ["Desviación Estándar", {
+                    f: `STDEV(Resumen!E10:E${9+datos.comparativo.empleados.length})`
+                }, "", "Bajo (<40%)",
+                {
+                    f: `COUNTIF(Resumen!E10:E${9+datos.comparativo.empleados.length},"<0.4")`
+                },
+                {
+                    f: `E7/${datos.comparativo.empleados.length}`
+                }
+            ]
         ];
 
-        const wsCompleto = XLSX.utils.aoa_to_sheet(datosCompletos);
-        wsCompleto["!merges"] = [{
+        const wsEstadisticas = XLSX.utils.aoa_to_sheet(estadisticasData);
+
+        // Aplicar estilos
+        wsEstadisticas["!cols"] = [{
+                width: 25
+            }, {
+                width: 15
+            }, {
+                width: 5
+            },
+            {
+                width: 25
+            }, {
+                width: 15
+            }, {
+                width: 15
+            }
+        ];
+
+        wsEstadisticas["!merges"] = [{
             s: {
                 r: 0,
                 c: 0
             },
             e: {
                 r: 0,
-                c: allDays.length + 2
+                c: 5
             }
         }];
-        wsCompleto["!conditionalFormatting"] = [{
-            ref: XLSX.utils.encode_range({
-                s: {
-                    r: 2,
-                    c: 2
-                },
-                e: {
-                    r: datos.comparativo.empleados.length + 2,
-                    c: allDays.length + 1
-                }
-            }),
-            rules: estilos.formatoCondicional.rules
-        }];
-        XLSX.utils.book_append_sheet(wb, wsCompleto, "Matriz Productividad");
 
-        // --- HOJA 4: ANÁLISIS ESTADÍSTICO ---
-        if (datos.comparativo.empleados.length > 0) {
-            const estadisticasData = crearDatosEstadisticos(datos.comparativo.empleados.length);
-            const wsEstadisticas = XLSX.utils.aoa_to_sheet(estadisticasData);
-
-            wsEstadisticas["!merges"] = [{
-                    s: {
-                        r: 0,
-                        c: 0
-                    },
-                    e: {
-                        r: 0,
-                        c: 2
-                    }
-                },
-                {
-                    s: {
-                        r: 7,
-                        c: 0
-                    },
-                    e: {
-                        r: 7,
-                        c: 2
-                    }
-                }
-            ];
-
-            // Formato de porcentaje
-            for (let i = 12; i <= 15; i++) {
-                wsEstadisticas[`C${i}`] = wsEstadisticas[`C${i}`] || {};
-                wsEstadisticas[`C${i}`].z = "0.00%";
-            }
-
-            XLSX.utils.book_append_sheet(wb, wsEstadisticas, "Estadísticas");
+        // Formato de porcentaje
+        for (let i = 4; i <= 7; i++) {
+            wsEstadisticas[`F${i}`] = wsEstadisticas[`F${i}`] || {};
+            wsEstadisticas[`F${i}`].z = "0.00%";
         }
+
+        XLSX.utils.book_append_sheet(wb, wsEstadisticas, "Estadísticas");
 
         // Generar archivo
         const nombreArchivo =
@@ -1674,6 +1768,24 @@ async function exportarExcelAnalitico(datos) {
         mostrarError(`Error al generar Excel: ${error.message}`);
         console.error('Error en exportarExcelAnalitico:', error);
     }
+}
+
+// Función auxiliar para cargar el logo como base64
+function cargarLogoComoBase64(ruta) {
+    return new Promise((resolve, reject) => {
+        // Implementación para cargar la imagen y convertirla a base64
+        // Esto depende de cómo manejes las imágenes en tu aplicación
+        // Ejemplo simplificado:
+        fetch(ruta)
+            .then(response => response.blob())
+            .then(blob => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            })
+            .catch(reject);
+    });
 }
 
 // Funciones auxiliares modularizadas
