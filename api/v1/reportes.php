@@ -604,30 +604,50 @@ function handleProductividadPorEmpleado() {
 
 function handleTiempoTrabajadoPorEmpleado() {
     try {
+        $userData = verificarAutenticacionCookie();
+        if (!$userData) {
+            sendError('No autorizado', 401);
+            return;
+        }
+
+        $userId = $userData['id_usuario'];
+        $userRole = $userData['rol'] ?? 'empleado';
+        
         $supervisorId = intval($_GET['supervisor_id'] ?? 0);
         $empleadoId = intval($_GET['empleado_id'] ?? 0);
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
         
-        logError("Tiempo trabajado por empleado - Supervisor: $supervisorId, Empleado: $empleadoId, Fechas: $fechaInicio a $fechaFin");
+        logError("Tiempo trabajado por empleado - Usuario: $userId, Rol: $userRole, Supervisor: $supervisorId, Empleado: $empleadoId, Fechas: $fechaInicio a $fechaFin");
         
         if (!validateDate($fechaInicio) || !validateDate($fechaFin)) {
             sendError('Formato de fecha inválido');
         }
         
-        if ($supervisorId <= 0) {
-            sendError('ID de supervisor inválido');
-        }
-        
         $db = obtenerConexionBD();
         
-        $whereEmpleado = "";
-        $params = [$fechaInicio, $fechaFin, $supervisorId];
+        $whereConditions = [];
+        $params = [$fechaInicio, $fechaFin];
+        
+        // Construir condiciones WHERE según el rol
+        if ($userRole === 'supervisor') {
+            $whereConditions[] = "u.supervisor_id = ?";
+            $params[] = $supervisorId;
+        } elseif ($userRole === 'admin') {
+            // Admin puede ver todos los empleados no admin
+            $whereConditions[] = "u.rol != 'admin'";
+        } else {
+            sendError('No tienes permisos para esta acción', 403);
+            return;
+        }
         
         if ($empleadoId > 0) {
-            $whereEmpleado = " AND u.id_usuario = ?";
+            $whereConditions[] = "u.id_usuario = ?";
             $params[] = $empleadoId;
         }
+        
+        // Unir condiciones WHERE
+        $whereClause = $whereConditions ? "WHERE " . implode(" AND ", $whereConditions) : "";
         
         $query = "
             SELECT 
@@ -641,11 +661,9 @@ function handleTiempoTrabajadoPorEmpleado() {
             FROM usuarios u
             LEFT JOIN actividad_apps aa ON u.id_usuario = aa.id_usuario 
                 AND aa.fecha_hora_inicio BETWEEN ? AND ?
-            WHERE u.supervisor_id = ?
-            AND u.estado = 'activo'
-            $whereEmpleado
-            AND aa.fecha_hora_inicio IS NOT NULL
+            $whereClause
             GROUP BY u.id_usuario, u.nombre_completo, u.area, DATE(aa.fecha_hora_inicio)
+            HAVING tiempo_total > 0
             ORDER BY u.nombre_completo, fecha DESC
         ";
         
