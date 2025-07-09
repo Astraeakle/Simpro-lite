@@ -470,10 +470,14 @@ function cargarTiempoTrabajado() {
 
     const params = new URLSearchParams({
         action: 'tiempo_trabajado_empleado',
-        supervisor_id: supervisorId,
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin
     });
+
+    // Solo agregar supervisor_id si el rol no es admin
+    if (userRole !== 'admin') {
+        params.append('supervisor_id', supervisorId);
+    }
 
     if (empleadoId) {
         params.append('empleado_id', empleadoId);
