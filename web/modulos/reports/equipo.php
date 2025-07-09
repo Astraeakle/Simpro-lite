@@ -889,26 +889,41 @@ async function exportarPDFProfesional(datos) {
         const logoBase64 = await cargarLogoComoBase64('/simpro-lite/web/assets/img/logo_nav_gm.png');
 
         // --- ENCABEZADO ---
-        // Logo
-        pdf.addImage(logoBase64, 'PNG', margen, 10, 60, 15);
+        // Altura del encabezado (calculada para mantener proporción logo)
+        const headerHeight = 30; // Reducido para mejor proporción
 
-        // Título
+        // Fondo del encabezado (gris #646467)
+        pdf.setFillColor(100, 100, 103);
+        pdf.rect(0, 0, pageWidth, headerHeight, 'F');
+
+        // Calcular dimensiones del logo manteniendo proporción 512x99
+        const logoWidth = 60; // Ancho deseado
+        const logoHeight = (logoWidth * 99) / 512; // Altura proporcional (≈11.6)
+        const logoY = (headerHeight - logoHeight) / 2; // Centrar verticalmente
+
+        // Agregar logo manteniendo proporciones originales
+        pdf.addImage(logoBase64, 'PNG', margen, logoY, logoWidth, logoHeight);
+
+        // Texto del título (blanco sobre fondo gris)
         pdf.setFontSize(16);
-        pdf.setTextColor(44, 57, 66); // Gris oscuro
+        pdf.setTextColor(255, 255, 255);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('REPORTE DE PRODUCTIVIDAD', centerX, 20, {
+
+        // Centrar texto verticalmente en el encabezado
+        const textY = headerHeight / 2 + 4; // Ajuste fino para centrado visual
+
+        pdf.text('REPORTE DE PRODUCTIVIDAD', centerX, textY - 5, {
             align: 'center'
         });
-
         pdf.setFontSize(12);
-        pdf.text('GM INGENIEROS Y CONSULTORES S.A.C.', centerX, 27, {
+        pdf.text('GM INGENIEROS Y CONSULTORES S.A.C.', centerX, textY + 5, {
             align: 'center'
         });
 
-        // Línea decorativa
-        pdf.setDrawColor(123, 203, 72); // Verde
-        pdf.setLineWidth(0.5);
-        pdf.line(margen, 32, pageWidth - margen, 32);
+        // Línea verde que delimita el encabezado
+        pdf.setDrawColor(123, 203, 72); // Verde corporativo #7BCB48
+        pdf.setLineWidth(0.8); // Ligeramente más gruesa
+        pdf.line(margen, headerHeight, pageWidth - margen, headerHeight);
 
         // --- INFORMACIÓN GENERAL ---
         y = 40;
