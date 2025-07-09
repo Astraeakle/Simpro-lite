@@ -1306,14 +1306,10 @@ async function exportarExcelAnalitico(datos) {
         if (typeof XLSX === 'undefined') {
             throw new Error('La librería XLSX no está disponible');
         }
-
         mostrarCarga(true, 'Generando reporte Excel...');
-
         const wb = XLSX.utils.book_new();
-
         // Convertir el logo a base64 (debes cargarlo previamente)
         const logoBase64 = await cargarLogoComoBase64('/simpro-lite/web/assets/img/logo_nav_gm.png');
-
         // Configuración de estilos corporativos
         const estilos = {
             encabezado: {
@@ -1442,7 +1438,7 @@ async function exportarExcelAnalitico(datos) {
             ["Empleado:", datos.nombreEmpleado, "", "Período:",
                 `${formatearFecha(datos.fechaInicio)} - ${formatearFecha(datos.fechaFin)}`, ""
             ],
-            ["Generado:", datos.fechaGeneracion, "", "Supervisor:", datos.supervisorNombre || "N/A", ""],
+            ["Generado:", datos.fechaGeneracion, "", "", ""],
             ["", "", "", "", "", ""],
             ["RESUMEN EJECUTIVO", "", "", "", "", ""],
             ["Empleado", "Área", "Tiempo Total", "Días Activos", "Productividad", "Estado"],
@@ -1602,9 +1598,6 @@ async function exportarExcelAnalitico(datos) {
             ]
         }];
 
-        // Agregar logo (requiere manipulación adicional con librerías como ExcelJS)
-        // En XLSX.js es más complicado, pero podemos agregar una celda con referencia al logo
-
         XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
         // --- HOJA 2: DETALLE DIARIO ---
@@ -1671,48 +1664,52 @@ async function exportarExcelAnalitico(datos) {
         }
 
         // --- HOJA 3: RESUMEN ESTADÍSTICO ---
+        const primeraFilaDatos = 9; // Fila donde empiezan los datos en la hoja Resumen
+        const totalEmpleados = datos.comparativo.empleados.length;
+        const ultimaFila = primeraFilaDatos + totalEmpleados - 1;
+
         const estadisticasData = [
             ["RESUMEN ESTADÍSTICO"],
             ["", "", "", "", "", ""],
             ["Métrica", "Valor", "", "Distribución Productividad", "Cantidad", "%"],
             ["Promedio", {
-                    f: `AVERAGE(Resumen!E10:E${9+datos.comparativo.empleados.length})`
+                    f: `AVERAGE(Resumen!E${primeraFilaDatos}:E${ultimaFila})`
                 }, "", "Excelente (≥80%)",
                 {
-                    f: `COUNTIF(Resumen!E10:E${9+datos.comparativo.empleados.length},">=0.8")`
+                    f: `COUNTIF(Resumen!E${primeraFilaDatos}:E${ultimaFila},">=0.8")`
                 },
                 {
-                    f: `E4/${datos.comparativo.empleados.length}`
+                    f: `E4/${totalEmpleados}`
                 }
             ],
             ["Máximo", {
-                    f: `MAX(Resumen!E10:E${9+datos.comparativo.empleados.length})`
+                    f: `MAX(Resumen!E${primeraFilaDatos}:E${ultimaFila})`
                 }, "", "Bueno (60-79%)",
                 {
-                    f: `COUNTIFS(Resumen!E10:E${9+datos.comparativo.empleados.length},">=0.6",Resumen!E10:E${9+datos.comparativo.empleados.length},"<0.8")`
+                    f: `COUNTIFS(Resumen!E${primeraFilaDatos}:E${ultimaFila},">=0.6",Resumen!E${primeraFilaDatos}:E${ultimaFila},"<0.8")`
                 },
                 {
-                    f: `E5/${datos.comparativo.empleados.length}`
+                    f: `E5/${totalEmpleados}`
                 }
             ],
             ["Mínimo", {
-                    f: `MIN(Resumen!E10:E${9+datos.comparativo.empleados.length})`
+                    f: `MIN(Resumen!E${primeraFilaDatos}:E${ultimaFila})`
                 }, "", "Regular (40-59%)",
                 {
-                    f: `COUNTIFS(Resumen!E10:E${9+datos.comparativo.empleados.length},">=0.4",Resumen!E10:E${9+datos.comparativo.empleados.length},"<0.6")`
+                    f: `COUNTIFS(Resumen!E${primeraFilaDatos}:E${ultimaFila},">=0.4",Resumen!E${primeraFilaDatos}:E${ultimaFila},"<0.6")`
                 },
                 {
-                    f: `E6/${datos.comparativo.empleados.length}`
+                    f: `E6/${totalEmpleados}`
                 }
             ],
             ["Desviación Estándar", {
-                    f: `STDEV(Resumen!E10:E${9+datos.comparativo.empleados.length})`
+                    f: `STDEV(Resumen!E${primeraFilaDatos}:E${ultimaFila})`
                 }, "", "Bajo (<40%)",
                 {
-                    f: `COUNTIF(Resumen!E10:E${9+datos.comparativo.empleados.length},"<0.4")`
+                    f: `COUNTIF(Resumen!E${primeraFilaDatos}:E${ultimaFila},"<0.4")`
                 },
                 {
-                    f: `E7/${datos.comparativo.empleados.length}`
+                    f: `E7/${totalEmpleados}`
                 }
             ]
         ];
